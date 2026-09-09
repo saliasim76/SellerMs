@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}الأمان{% else %}Security{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}الأمان{% else %}Security{% endif %}</li>
+{% endblock %}
+{% block content %}
+<style>
+  .sec-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px;max-width:560px;}
+  .sec-head{padding:14px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-weight:700;color:#1e293b;}
+  .sec-body{padding:18px;}
+  .sec-btn{background:#2563eb;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+  .sec-btn:hover{filter:brightness(1.08);}
+  .sec-pill{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+  .sec-on{background:#dcfce7;color:#15803d;}
+  .sec-off{background:#fee2e2;color:#dc2626;}
+</style>
+
+<div style="padding:8px 4px 16px;">
+  <h2 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:4px;">{% if ar %}الأمان{% else %}Security{% endif %}</h2>
+  <p style="font-size:13px;color:#64748b;margin:0;">{% if ar %}إدارة كلمة المرور والمصادقة الثنائية لحسابك{% else %}Manage your password and two-factor authentication{% endif %}</p>
+</div>
+
+<div class="sec-card">
+  <div class="sec-head"><i class="fas fa-key me-2"></i>{% if ar %}تغيير كلمة المرور{% else %}Change Password{% endif %}</div>
+  <div class="sec-body">
+    <form method="POST" action="{{ url_for('account.change_password') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-2">
+        <label class="form-label small fw-bold">{% if ar %}كلمة المرور الحالية{% else %}Current Password{% endif %}</label>
+        <input type="password" name="current_password" class="form-control form-control-sm" required>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small fw-bold">{% if ar %}كلمة المرور الجديدة{% else %}New Password{% endif %}</label>
+        <input type="password" name="new_password" class="form-control form-control-sm" minlength="8" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-bold">{% if ar %}تأكيد كلمة المرور الجديدة{% else %}Confirm New Password{% endif %}</label>
+        <input type="password" name="confirm_password" class="form-control form-control-sm" minlength="8" required>
+      </div>
+      <button type="submit" class="sec-btn">{% if ar %}تحديث كلمة المرور{% else %}Update Password{% endif %}</button>
+    </form>
+  </div>
+</div>
+
+<div class="sec-card">
+  <div class="sec-head"><i class="fas fa-shield-halved me-2"></i>{% if ar %}المصادقة الثنائية{% else %}Two-Factor Authentication{% endif %}</div>
+  <div class="sec-body">
+    {% if current_user.totp_enabled %}
+      <p><span class="sec-pill sec-on">{% if ar %}مفعّلة{% else %}Enabled{% endif %}</span></p>
+      <p style="font-size:13px;color:#64748b;">{% if ar %}حسابك محمي برمز تحقق من تطبيق مصادقة.{% else %}Your account is protected by a code from an authenticator app.{% endif %}</p>
+      <form method="POST" action="{{ url_for('account.disable_2fa') }}" onsubmit="return confirm('{% if ar %}هل تريد إيقاف المصادقة الثنائية؟{% else %}Disable two-factor authentication?{% endif %}');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-2" style="max-width:280px;">
+          <label class="form-label small fw-bold">{% if ar %}كلمة المرور للتأكيد{% else %}Password to confirm{% endif %}</label>
+          <input type="password" name="password" class="form-control form-control-sm" required>
+        </div>
+        <button type="submit" class="btn btn-outline-danger btn-sm">{% if ar %}إيقاف المصادقة الثنائية{% else %}Disable Two-Factor Authentication{% endif %}</button>
+      </form>
+    {% else %}
+      <p><span class="sec-pill sec-off">{% if ar %}غير مفعّلة{% else %}Disabled{% endif %}</span></p>
+      <p style="font-size:13px;color:#64748b;">{% if ar %}أضف طبقة حماية إضافية باستخدام تطبيق مصادقة (مثل Google Authenticator).{% else %}Add an extra layer of protection using an authenticator app (e.g. Google Authenticator, Authy).{% endif %}</p>
+      <a href="{{ url_for('account.setup_2fa') }}" class="sec-btn" style="text-decoration:none;display:inline-block;">{% if ar %}تفعيل المصادقة الثنائية{% else %}Enable Two-Factor Authentication{% endif %}</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="sec-card">
+  <div class="sec-head"><i class="fas fa-signature me-2"></i>{% if ar %}التوقيع الرقمي{% else %}Digital Signature{% endif %}</div>
+  <div class="sec-body">
+    <p style="font-size:13px;color:#64748b;">{% if ar %}ارفع صورة توقيعك لاستخدامها على المستندات المطبوعة التي تنشئها.{% else %}Upload an image of your signature to appear on print documents you create.{% endif %}</p>
+    {% if current_user.signature_path %}
+      <div style="margin-bottom:12px;">
+        <img src="{{ url_for('account.view_signature', user_id=current_user.id) }}" alt="signature" style="max-width:200px;max-height:90px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;padding:6px;background:#fff;">
+      </div>
+      <form method="POST" action="{{ url_for('account.remove_signature') }}" onsubmit="return confirm('{% if ar %}هل تريد حذف التوقيع؟{% else %}Remove your signature?{% endif %}');" style="display:inline-block;margin-inline-end:8px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">{% if ar %}حذف التوقيع{% else %}Remove Signature{% endif %}</button>
+      </form>
+    {% endif %}
+    <form method="POST" action="{{ url_for('account.save_signature') }}" enctype="multipart/form-data" style="display:inline-block;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="signature" accept=".jpg,.jpeg,.png" required style="font-size:13px;" title="{% if ar %}اختر صورة التوقيع{% else %}Choose signature image{% endif %}">
+      <button type="submit" class="sec-btn" style="margin-top:8px;">{% if ar %}حفظ التوقيع{% else %}Save Signature{% endif %}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

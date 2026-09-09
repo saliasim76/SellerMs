@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}دفتر الاستلام العام{% else %}GRL Account{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}دفتر الاستلام العام{% else %}GRL Account{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.ag-theme-alpine{--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-row-hover-color:#eff6ff;--ag-selected-row-background-color:#dbeafe;--ag-header-height:44px;--ag-row-height:42px;}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11.5px;text-transform:uppercase;}
+.je-page{padding:4px 2px;}
+.je-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.je-title{font-size:20px;font-weight:800;color:#1e3a5f;margin:0;}
+.je-toolbar{display:flex;gap:8px;margin-inline-start:auto;flex-wrap:wrap;}
+.jbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #d1d5db;background:#fff;color:#374151;}
+.jbtn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+.grid-wrap{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;}
+.je-act{width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin:0 2px;}
+.je-act-view{background:#eff6ff;color:#2563eb;}
+.je-modal-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.je-modal-hdr h5{margin:0;color:#fff;font-weight:700;font-size:15px;}
+.modal-content{border-radius:12px;overflow:hidden;}
+.je-body{padding:18px 22px;max-height:70vh;overflow-y:auto;}
+.je-fld{margin-bottom:10px;}
+.je-fld label{display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:3px;}
+.je-fld .val{font-size:14px;color:#111827;font-weight:600;}
+.je-table{width:100%;border-collapse:collapse;font-size:12px;min-width:820px;margin-top:8px;}
+.je-table th{background:#1e3a5f;color:#fff;padding:8px 7px;font-size:10.5px;text-transform:uppercase;text-align:left;}
+.je-table td{padding:7px 8px;border-bottom:1px solid #f1f5f9;}
+.je-table tfoot td{background:#f1f5f9;font-weight:700;}
+.st-badge{padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#dbeafe;color:#1e40af;}
+.je-row-selected{background:#fee2e2 !important;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="je-page">
+  <div class="je-head">
+    <h2 class="je-title">{% if ar %}دفتر الاستلام العام (GRL){% else %}GRL Account{% endif %}</h2>
+    <div class="je-toolbar">
+      <input type="text" id="grlSearch" class="jbtn" style="cursor:text;" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="grlSearch()">
+      <button class="jbtn" onclick="loadGRL()"><i class="fas fa-sync-alt"></i>{% if ar %}تحديث{% else %}Refresh{% endif %}</button>
+      <button class="jbtn" onclick="grlDeleteSelected()" style="color:#dc2626;border-color:#fca5a5;"><i class="fas fa-trash"></i>{% if ar %}حذف{% else %}Delete{% endif %}</button>
+    </div>
+  </div>
+  <div class="grid-wrap"><div id="grlAcctGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:580px;"></div></div>
+</div>
+
+{# ══ VIEW-ONLY DETAIL MODAL ══ #}
+<div class="modal fade" id="grlAcctModal" tabindex="-1">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <div class="je-modal-hdr">
+      <h5 id="grlAcctModalTitle"><i class="fas fa-book me-2"></i>{% if ar %}قيد GRL{% else %}GRL Entry{% endif %}</h5>
+      <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="je-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+        <div class="je-fld"><label>{% if ar %}رقم GRL{% else %}GRL No{% endif %}</label><div class="val" id="v_grl_no">—</div></div>
+        <div class="je-fld"><label>{% if ar %}المصدر{% else %}Origion{% endif %}</label><div class="val" id="v_origion">—</div></div>
+        <div class="je-fld"><label>{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</label><div class="val" id="v_posting">—</div></div>
+        <div class="je-fld"><label>{% if ar %}تاريخ الاستحقاق{% else %}Due Date{% endif %}</label><div class="val" id="v_due">—</div></div>
+        <div class="je-fld"><label>{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</label><div class="val" id="v_document">—</div></div>
+      </div>
+      <div class="je-fld"><label>{% if ar %}البيان{% else %}Narration{% endif %}</label><div class="val" id="v_narration">—</div></div>
+
+      <table class="je-table">
+        <thead><tr>
+          <th>{% if ar %}الكود{% else %}Code{% endif %}</th>
+          <th>{% if ar %}اسم الحساب{% else %}Account Name{% endif %}</th>
+          <th>{% if ar %}حساب التحكم{% else %}Control Account{% endif %}</th>
+          <th>{% if ar %}رقم مرجع المورد{% else %}Reference Code{% endif %}</th>
+          <th>{% if ar %}مدين{% else %}Debit{% endif %}</th>
+          <th>{% if ar %}دائن{% else %}Credit{% endif %}</th>
+          <th>{% if ar %}البيان{% else %}Narration{% endif %}</th>
+        </tr></thead>
+        <tbody id="grlAcctDetailBody"></tbody>
+        <tfoot><tr>
+          <td colspan="4" style="text-align:right;">{% if ar %}الإجمالي{% else %}Total{% endif %}</td>
+          <td id="v_totDebit">0.00</td><td id="v_totCredit">0.00</td><td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div style="padding:14px 22px;background:#f8fafc;border-top:1.5px solid #e2e8f0;display:flex;justify-content:flex-end;">
+      <button class="jbtn" data-bs-dismiss="modal">{% if ar %}إغلاق{% else %}Close{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+let grlAcctApi;
+
+function grlAcctActions(p){
+  const id=(p.data||{}).id;
+  return '<button class="je-act je-act-view" title="'+(IS_AR?'عرض':'View')+'" onclick="viewGRLAcct('+id+')"><i class="fas fa-eye"></i></button>';
+}
+// Each GRL header's detail lines are flattened into consecutive rows (see
+// grl_data()); selecting a line must select the whole header since Delete
+// always acts on the header as one unit. A custom checkbox (shown only on
+// each group's first row) toggles the whole id-group at once -- simpler and
+// unambiguous vs. syncing ag-Grid's own multi-row selection.
+let grlSelectedIds = new Set();
+function grlSelCell(p){
+  if(!p.data.__first) return '';
+  const id=p.data.id;
+  if(p.data.has_child){
+    return '<input type="checkbox" disabled title="'+(IS_AR?'تم العثور على سجل فرعي - لا يمكن الحذف':'Child record found - cannot delete')+'">';
+  }
+  const checked = grlSelectedIds.has(String(id)) ? 'checked' : '';
+  return '<input type="checkbox" onclick="grlToggleGroup('+id+',this.checked)" '+checked+'>';
+}
+function grlToggleGroup(id, checked){
+  if(checked) grlSelectedIds.add(String(id)); else grlSelectedIds.delete(String(id));
+  if(grlAcctApi) grlAcctApi.redrawRows();
+}
+const COLS=[
+  {headerName:'', field:'__sel', width:44, cellRenderer:grlSelCell,
+    sortable:false, filter:false, pinned:IS_AR?'right':'left'},
+  {headerName:IS_AR?'معرّف GRL':'GRL Id', field:'id', width:90},
+  {headerName:IS_AR?'رقم GRL':'GRL No', field:'grl_no', width:150, pinned:IS_AR?'right':'left',
+    cellRenderer:p=>p.value?'<span class="st-badge">'+p.value+'</span>':''},
+  {headerName:IS_AR?'المصدر':'Origion', field:'origion', width:150},
+  {headerName:IS_AR?'بند السطر':'Line Item', field:'detail_id', width:100},
+  {headerName:IS_AR?'الكود':'Code', field:'code', width:140},
+  {headerName:IS_AR?'حساب التحكم':'Control Account', field:'control_account', width:130},
+  {headerName:IS_AR?'رقم مرجع المورد':'Reference Code', field:'reference_code', width:140},
+  {headerName:IS_AR?'اسم الحساب':'Account Name', field:'account_name', minWidth:170, flex:1},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting', field:'posting_date', width:130},
+  {headerName:IS_AR?'مدين':'Debit', field:'debit', width:115, valueFormatter:p=>Number(p.value||0).toFixed(2)},
+  {headerName:IS_AR?'دائن':'Credit', field:'credit', width:115, valueFormatter:p=>Number(p.value||0).toFixed(2)},
+  {headerName:IS_AR?'البيان':'Narration', field:'line_narration', minWidth:150},
+  {headerName:IS_AR?'عرض':'View', width:80, cellRenderer:grlAcctActions, sortable:false, filter:false, pinned:IS_AR?'left':'right'},
+];
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  agGrid.createGrid(document.getElementById('grlAcctGrid'), {
+    columnDefs:COLS, rowData:[], pagination:true, paginationPageSize:25, paginationPageSizeSelector:[25,50,100],
+    defaultColDef:{sortable:true,resizable:true,filter:true}, enableRtl:IS_AR,
+    localeText: IS_AR ? {noRowsToShow:'لا توجد قيود'} : {noRowsToShow:'No GRL entries'},
+    rowClassRules:{'je-row-selected': p=>grlSelectedIds.has(String(p.data.id))},
+    onGridReady:p=>{ grlAcctApi=p.api; if(window.GridKit){GridKit.enhance(p,'grlAcctGrid',{storageKey:'grl_account',exportName:'GRL Account'});} loadGRL(); },
+  });
+});
+function loadGRL(){
+  if(!grlAcctApi) return;
+  grlSelectedIds.clear();
+  fetch('/grl-account/data').then(r=>r.json()).then(d=>{
+    d.forEach((row,i)=>{ row.__first = (i===0 || d[i-1].id !== row.id); });
+    grlAcctApi.setGridOption('rowData',d);
+  });
+}
+function grlSearch(){ if(grlAcctApi) grlAcctApi.setGridOption('quickFilterText', document.getElementById('grlSearch').value); }
+
+const GRL_CSRF = '{{ csrf_token() }}';
+function grlDeleteSelected(){
+  const ids = Array.from(grlSelectedIds);
+  if(!ids.length){ alert(IS_AR?'الرجاء تحديد قيد واحد على الأقل':'Please select at least one GRL entry'); return; }
+  if(!confirm(IS_AR?'هل تريد حذف القيود المحددة؟':'Delete the selected GRL entries?')) return;
+  Promise.all(ids.map(id=>fetch('/grl-account/'+id+'/delete',{method:'POST',headers:{'X-CSRFToken':GRL_CSRF}})
+    .then(r=>r.json().then(d=>({id,...d})))
+    .catch(()=>({id, ok:false, error: IS_AR?'فشل الاتصال بالخادم':'Server request failed'}))))
+    .then(results=>{
+      const failed = results.filter(r=>!r.ok);
+      if(failed.length){
+        alert(failed.map(f=>f.error||(IS_AR?'فشل الحذف':'Delete failed')).join('\n'));
+      }
+      loadGRL();
+    })
+    .catch(err=>alert(IS_AR?'فشل الحذف':'Delete failed: '+err));
+}
+
+function _set(id,v){ document.getElementById(id).textContent = (v===''||v==null)?'—':v; }
+function viewGRLAcct(id){
+  fetch('/grl-account/'+id+'/json').then(r=>r.json()).then(d=>{
+    _set('v_grl_no', d.grl_no); _set('v_origion', d.origion);
+    _set('v_posting', d.posting_date); _set('v_due', d.due_date); _set('v_document', d.document_date);
+    _set('v_narration', d.narration);
+    const tb=document.getElementById('grlAcctDetailBody'); tb.innerHTML='';
+    let td=0,tc=0;
+    (d.details||[]).forEach(x=>{
+      td+=Number(x.debit)||0; tc+=Number(x.credit)||0;
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td>'+(x.code||'')+'</td><td>'+(x.account_name||'')+'</td><td>'+(x.control_account||'')+'</td><td>'+(x.reference_code||'')+'</td>'+
+        '<td>'+Number(x.debit||0).toFixed(2)+'</td><td>'+Number(x.credit||0).toFixed(2)+'</td><td>'+(x.narration||'')+'</td>';
+      tb.appendChild(tr);
+    });
+    if(!(d.details||[]).length) tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:14px;">'+(IS_AR?'لا توجد أسطر':'No lines')+'</td></tr>';
+    document.getElementById('v_totDebit').textContent=td.toFixed(2);
+    document.getElementById('v_totCredit').textContent=tc.toFixed(2);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('grlAcctModal')).show();
+  });
+}
+</script>
+{% endblock %}

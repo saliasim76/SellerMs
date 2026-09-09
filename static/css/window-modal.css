@@ -1,0 +1,258 @@
+/* ══════════════════════════════════════════════════════════════════
+   window-modal.css
+   Desktop-application window behaviour for every Bootstrap modal:
+   title bar with minimize / maximize / close, dragging, resizing,
+   and a taskbar for minimized windows.
+
+   Applied globally from base.html — individual templates need no change.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Title bar ─────────────────────────────────────────────────── */
+/* Normal cursor while just hovering -- it only switches to a drag cursor
+   once a drag is actually under way (body.wm-drag-active, set by
+   window-modal.js on mousedown), matching how a real desktop title bar
+   behaves rather than hinting "draggable" on every hover. */
+.wm-titlebar {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wm-titlebar.wm-no-drag { cursor: default; }
+
+/* Window control buttons, right aligned in the header. */
+.wm-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 10px;
+}
+.wm-btn {
+  width: 30px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  opacity: .75;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  transition: background .12s ease, opacity .12s ease;
+}
+.wm-btn:hover  { opacity: 1; background: rgba(255, 255, 255, .18); }
+.wm-btn:focus  { outline: 2px solid rgba(255, 255, 255, .55); outline-offset: -2px; }
+.wm-btn-close:hover { background: #dc2626; color: #fff; opacity: 1; }
+
+/* Headers that are light rather than coloured. */
+.wm-titlebar.wm-light .wm-btn:hover { background: rgba(15, 23, 42, .08); }
+.wm-titlebar.wm-light .wm-btn-close:hover { background: #dc2626; color: #fff; }
+
+/* Hide the stock Bootstrap close button — we render our own set.
+   Applies to whichever element we detected as the title bar, whatever
+   class it happens to use (.modal-header, .pur-hdr, .emp-modal-header ...). */
+.wm-titlebar > .btn-close,
+.wm-titlebar .btn-close { display: none !important; }
+
+/* Many custom headers use `justify-content: space-between`, which would
+   strand the controls in the middle. Forcing the cluster to the end works
+   for both `space-between` and default `flex-start` headers. */
+.wm-titlebar { justify-content: flex-start !important; }
+.wm-titlebar > .wm-controls { margin-inline-start: auto; }
+
+/* RTL: the cluster still hugs the trailing edge. */
+html[dir="rtl"] .wm-controls { padding-left: 0; padding-right: 10px; }
+
+/* ── Dragging ──────────────────────────────────────────────────── */
+/* Bootstrap's own .modal.fade .modal-dialog rule keeps `transition:
+   transform .3s ease-out` active at all times, not just during the
+   fade-in -- without disabling it here too, every position snap this
+   file makes to .modal-dialog (the first-drag margin compensation below,
+   and every mousemove update) plays out as a visible 0.3s glide instead
+   of applying instantly, which reads as "jumps left, then drifts back". */
+.wm-dragging { transition: none !important; }
+.wm-dragging .modal-dialog { transition: none !important; }
+.wm-dragging .modal-content { box-shadow: 0 24px 60px rgba(15, 23, 42, .32); }
+body.wm-drag-active { cursor: move; user-select: none; }
+
+/* A dragged dialog is positioned by transform, so kill the default margin
+   centering only once dragging has begun. */
+.modal-dialog.wm-moved { margin: 0 !important; }
+
+/* ── Maximized ─────────────────────────────────────────────────── */
+/* Maximize expands only the workspace. The left navigation (and an
+   optional top bar) stay visible, per ERP spec. The offsets are driven by
+   CSS variables that window-modal.js updates from the live sidebar width,
+   so a collapsed sidebar still lines up. Falls back to full viewport when
+   no sidebar is present. */
+:root { --wm-work-left: 0px; --wm-work-top: 0px; }
+.modal-dialog.wm-maximized {
+  position: fixed !important;
+  top: var(--wm-work-top, 0px) !important;
+  inset-inline-start: var(--wm-work-left, 0px) !important;
+  inset-inline-end: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+  display: flex;
+}
+html[dir="rtl"] .modal-dialog.wm-maximized {
+  /* inset-inline-* already flips for RTL; nothing extra needed. */
+}
+.modal-dialog.wm-maximized .modal-content {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+.modal-dialog.wm-maximized .modal-body { flex: 1 1 auto; overflow: auto; max-height: none; }
+
+/* ── Resizing ──────────────────────────────────────────────────── */
+.modal-content { position: relative; }
+.wm-resizer {
+  position: absolute;
+  z-index: 5;
+  background: transparent;
+}
+.wm-resizer-e  { top: 8px; bottom: 8px; right: -3px; width: 8px;  cursor: ew-resize; }
+.wm-resizer-s  { left: 8px; right: 8px; bottom: -3px; height: 8px; cursor: ns-resize; }
+.wm-resizer-se { right: -3px; bottom: -3px; width: 16px; height: 16px; cursor: nwse-resize; }
+.wm-resizer-se::after {
+  content: '';
+  position: absolute;
+  right: 4px; bottom: 4px;
+  width: 7px; height: 7px;
+  border-right: 2px solid rgba(148, 163, 184, .8);
+  border-bottom: 2px solid rgba(148, 163, 184, .8);
+}
+.modal-dialog.wm-maximized .wm-resizer { display: none; }
+body.wm-resize-active { user-select: none; }
+
+/* ── Taskbar for minimized windows ─────────────────────────────── */
+#wmTaskbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 1080;                     /* above the backdrop (1050) */
+  display: flex;
+  gap: 8px;
+  padding: 0 12px;
+  pointer-events: none;              /* only the chips are clickable */
+}
+#wmTaskbar:empty { display: none; }
+
+.wm-task {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 280px;
+  padding: 8px 10px 8px 14px;
+  margin-bottom: 10px;
+  border: 1px solid #e2e8f0;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: #fff;
+  box-shadow: 0 -4px 18px rgba(15, 23, 42, .14);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  transition: transform .12s ease, background .12s ease;
+}
+.wm-task:hover { transform: translateY(-2px); background: #f8fafc; }
+.wm-task > i { color: #2563eb; font-size: 12px; }
+.wm-task-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wm-task-close {
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.wm-task-close:hover { background: #fee2e2; color: #b91c1c; }
+
+/* A chip stays in the taskbar for the window's whole lifetime; these two
+   states distinguish "the window you're looking at", "an open window sat
+   behind another one" and "minimized" from each other. */
+.wm-task-active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.wm-task-active > i { color: #1d4ed8; }
+.wm-task-minimized { background: #f8fafc; color: #64748b; }
+.wm-task-minimized > i { color: #94a3b8; }
+
+/* "Minimise all" -- only rendered while at least one window is open. */
+.wm-taskbar-minall {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: #1e293b;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wm-taskbar-minall:hover { background: #0f172a; }
+.wm-taskbar-minall > i { font-size: 11px; }
+
+/* A minimized modal stays "open" (so its state survives) but is invisible
+   and must not eat clicks. */
+.modal.wm-minimized { opacity: 0 !important; pointer-events: none !important; }
+.modal-backdrop.wm-minimized { opacity: 0 !important; pointer-events: none !important; }
+
+/* ── Responsive: no dragging / resizing on small screens ───────── */
+@media (max-width: 767.98px) {
+  .wm-titlebar { cursor: default; }
+  .wm-resizer  { display: none; }
+  .modal-dialog.wm-moved { margin: .5rem auto !important; transform: none !important; }
+  .wm-task { max-width: 180px; }
+}
+
+/* ── Nested-modal stacking ─────────────────────────────────────────
+   Lower modals in a nested stack stay visible but non-interactive, so the
+   user always sees the parent behind the active child. The top-most modal
+   is untouched. Pointer-events are disabled on the dialog only (not the
+   backdrop) so a click on a lower window's backdrop still dismisses top. */
+.modal.wm-inactive .modal-dialog { pointer-events: none; }
+.modal.wm-inactive .modal-content { filter: brightness(0.97); }
+.modal.wm-inactive .modal-content::after {
+  content: ""; position: absolute; inset: 0; z-index: 6;
+  background: rgba(15, 23, 42, 0.04); border-radius: inherit;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Keep the left navigation VISIBLE and FUNCTIONAL while a modal is open
+   (and especially while maximized). The Bootstrap backdrop normally covers
+   the whole viewport, so even a visible sidebar can't be clicked. We lift
+   the sidebar above the backdrop and let it receive clicks.
+   ══════════════════════════════════════════════════════════════════ */
+body.modal-open .sidebar,
+body.modal-open #sidebar {
+  z-index: 1060 !important;      /* above .modal-backdrop (1050) */
+  pointer-events: auto !important;
+}
+/* When a window-modal is maximized, pull the backdrop in so it starts after
+   the sidebar — the nav stays fully interactive, no dimming over it. */
+body.wm-has-maximized .modal-backdrop {
+  inset-inline-start: var(--wm-work-left, 0px) !important;
+  inset-inline-end: 0 !important;
+  width: auto !important;
+}

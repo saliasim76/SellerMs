@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}تقارير الرواتب{% else %}Payroll Reports{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('payroll.payroll_list') }}">{% if ar %}توحيد الرواتب{% else %}Salary Consolidation{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}التقارير{% else %}Reports{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.rep-wrap{display:flex;gap:16px;align-items:flex-start;}
+.rep-list{flex:0 0 260px;background:white;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;}
+.rep-item{display:block;padding:10px 14px;font-size:13px;color:#374151;text-decoration:none;border-bottom:1px solid #f1f5f9;cursor:pointer;}
+.rep-item:hover{background:#eff6ff;color:#2563eb;}
+.rep-item.active{background:#1e3a5f;color:white;font-weight:600;}
+.rep-main{flex:1;background:white;border:1px solid #e2e8f0;border-radius:10px;padding:18px;min-height:400px;}
+.rep-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.rep-head h3{font-size:17px;color:#1e3a5f;margin:0;}
+.rep-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.rep-tbl th{background:#1e3a5f;color:white;padding:8px 10px;text-align:{% if ar %}right{% else %}left{% endif %};font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;}
+.rep-tbl td{padding:7px 10px;border-bottom:1px solid #f1f5f9;}
+.rep-tbl tr:nth-child(even){background:#fafbfc;}
+.rep-btn{padding:7px 14px;border-radius:7px;border:1.5px solid #d1d5db;background:white;font-size:12.5px;font-weight:600;cursor:pointer;}
+.rep-btn:hover{border-color:#2563eb;color:#2563eb;}
+.rep-empty{text-align:center;color:#9ca3af;padding:60px 0;}
+.rep-filter{font-size:12px;color:#6b7280;margin-bottom:10px;}
+.rep-filter input{padding:5px 9px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12.5px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}تقارير الرواتب{% else %}Payroll Reports{% endif %}</h2>
+
+  <div class="rep-filter">
+    {% if ar %}رقم الكشف (اختياري):{% else %}Payroll ID (optional):{% endif %}
+    <input type="text" id="repPid" value="{{ payroll_id }}" placeholder="PR-000001" oninput="if(curRep)loadReport(curRep)">
+    <span style="margin-inline-start:8px;">{% if ar %}اتركه فارغًا لكل الكشوف{% else %}leave blank for all payrolls{% endif %}</span>
+  </div>
+
+  <div class="rep-wrap">
+    <div class="rep-list">
+      {% for key, en, ar_lbl in reports %}
+      <a class="rep-item" id="ri_{{ key }}" onclick="loadReport('{{ key }}')">{{ loop.index }}. {% if ar %}{{ ar_lbl }}{% else %}{{ en }}{% endif %}</a>
+      {% endfor %}
+    </div>
+    <div class="rep-main">
+      <div class="rep-head">
+        <h3 id="repTitle">{% if ar %}اختر تقريرًا{% else %}Select a report{% endif %}</h3>
+        <button class="rep-btn" onclick="exportRep()" id="repExport" style="display:none;"><i class="fas fa-file-export"></i> CSV</button>
+      </div>
+      <div id="repBody"><div class="rep-empty">{% if ar %}اختر تقريرًا من القائمة{% else %}Choose a report from the list{% endif %}</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+let curRep='', curCols=[], curRows=[], curTitle='';
+const fmtNum = v => (typeof v==='number' ? v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : (v==null?'':v));
+
+function loadReport(key){
+  curRep=key;
+  document.querySelectorAll('.rep-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('ri_'+key).classList.add('active');
+  const pid=document.getElementById('repPid').value.trim();
+  const url='/payroll/reports/'+key+'/data'+(pid?('?payroll_id='+encodeURIComponent(pid)):'');
+  document.getElementById('repBody').innerHTML='<div class="rep-empty">'+(IS_AR?'جار التحميل...':'Loading...')+'</div>';
+  fetch(url).then(r=>r.json()).then(d=>{
+    curCols=d.columns||[]; curRows=d.rows||[]; curTitle=d.title||'';
+    document.getElementById('repTitle').textContent=d.title||'';
+    document.getElementById('repExport').style.display=curRows.length?'inline-block':'none';
+    render();
+  });
+}
+
+function render(){
+  if(!curRows.length){ document.getElementById('repBody').innerHTML='<div class="rep-empty">'+(IS_AR?'لا توجد بيانات':'No data')+'</div>'; return; }
+  let h='<div style="overflow:auto;max-height:600px;"><table class="rep-tbl"><thead><tr>';
+  curCols.forEach(c=>h+='<th>'+c[0]+'</th>');
+  h+='</tr></thead><tbody>';
+  curRows.forEach(r=>{ h+='<tr>'; curCols.forEach(c=>{ h+='<td>'+fmtNum(r[c[1]])+'</td>'; }); h+='</tr>'; });
+  h+='</tbody></table></div>';
+  document.getElementById('repBody').innerHTML=h;
+}
+
+function exportRep(){
+  if(!curRows.length)return;
+  let csv=curCols.map(c=>'"'+c[0]+'"').join(',')+'\n';
+  curRows.forEach(r=>{ csv+=curCols.map(c=>{const v=r[c[1]];return '"'+(v==null?'':String(v).replace(/"/g,'""'))+'"';}).join(',')+'\n'; });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=(curRep||'report')+'.csv'; a.click();
+}
+
+{% if payroll_id %}document.addEventListener('DOMContentLoaded',()=>loadReport('summary'));{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,664 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}مستندات الموظفين{% else %}Employee Documents{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+:root{
+  --blue:#2563eb;--blue-dk:#1d4ed8;--blue-50:#eff6ff;--blue-100:#dbeafe;
+  --navy:#1e3a5f;--green:#16a34a;--green-50:#f0fdf4;
+  --gray-50:#f8fafc;--gray-100:#f1f5f9;--gray-200:#e2e8f0;
+  --gray-300:#d1d5db;--gray-400:#9ca3af;--gray-600:#4b5563;--gray-700:#374151;--gray-900:#111827;
+  --red:#ef4444;--amber:#f59e0b;--purple:#7c3aed;--r-lg:14px;
+  --shadow:0 20px 60px rgba(0,0,0,.18);
+}
+
+/* ── AG-Grid ── */
+.ag-theme-alpine{
+  --ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;
+  --ag-header-background-color:#e5e7eb;--ag-header-foreground-color:#1e293b;
+  --ag-border-color:var(--gray-200);--ag-row-border-color:var(--gray-100);
+  --ag-row-hover-color:var(--blue-50);--ag-selected-row-background-color:var(--blue-100);
+  --ag-header-height:46px;--ag-row-height:46px;--ag-cell-horizontal-padding:12px;
+}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}
+.ag-theme-alpine .ag-row-even{background:#fff;}
+.ag-theme-alpine .ag-row-odd{background:#fafbfc;}
+
+/* ── Row actions ── */
+.pl-act{display:flex;align-items:center;gap:4px;}
+.pl-btn{width:28px;height:28px;border-radius:7px;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;transition:transform .12s,box-shadow .12s;text-decoration:none;}
+.pl-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.2);}
+.pl-view{background:#0ea5e9;color:#fff;}
+.pl-dl  {background:var(--green);color:#fff;}
+.pl-edit{background:var(--amber);color:#fff;}
+.pl-del {background:var(--red);color:#fff;}
+
+/* ── Type pill ── */
+.type-pill{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;background:#ede9fe;color:#5b21b6;}
+
+/* ── Edit modal ── */
+.ed-modal .modal-dialog{max-width:520px;}
+.ed-modal .modal-content{border:none;border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);}
+.ed-hdr{background:linear-gradient(135deg,#5b21b6 0%,var(--purple) 100%);padding:16px 22px;display:flex;align-items:center;justify-content:space-between;}
+.ed-hdr h5{margin:0;color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.ed-hdr .btn-close{filter:brightness(0) invert(1);opacity:.8;}
+.ed-body{padding:22px;}
+.ed-lbl{font-size:11px;font-weight:700;color:var(--gray-700);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px;display:flex;align-items:center;gap:4px;}
+.req{color:var(--red);font-size:14px;}
+.ed-inp{width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--gray-300);border-radius:8px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s;box-sizing:border-box;}
+.ed-inp:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,58,237,.1);}
+.ed-inp.is-invalid{border-color:var(--red);}
+.ed-sel{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:16px;padding-right:34px;}
+.ed-fg{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;}
+@media(max-width:600px){.ed-fg{grid-template-columns:1fr;}}
+.ed-footer{padding:14px 22px;background:var(--gray-50);border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end;gap:8px;}
+.sf-err{font-size:11px;font-weight:600;color:var(--red);margin-top:4px;display:none;align-items:center;gap:4px;}
+.sf-err.show{display:flex;}
+
+/* ── Delete modal ── */
+.del-modal .modal-dialog{max-width:400px;}
+.del-modal .modal-content{border:none;border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}مستندات الموظفين{% else %}Employee Documents{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}مستندات الموظفين{% else %}Employee Documents{% endif %}</h2>
+
+  <!-- Toolbar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="tool-btn tool-btn-blue" onclick="refreshGrid()" title="{% if ar %}تحديث{% else %}Refresh{% endif %}"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn" onclick="exportCSV()" title="{% if ar %}تصدير CSV{% else %}Export CSV{% endif %}"><i class="fas fa-file-export"></i></button>
+      <button class="tool-btn" onclick="clearFilters()" title="{% if ar %}مسح الفلاتر{% else %}Clear Filters{% endif %}"><i class="fas fa-times-circle"></i></button>
+      {% if current_user.is_admin() %}
+      <button onclick="openUploadModal()"
+        style="display:inline-flex;align-items:center;gap:7px;padding:7px 18px;border-radius:8px;border:none;cursor:pointer;background:#7c3aed;color:#fff;font-size:12.5px;font-weight:700;transition:all .15s;"
+        onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
+        <i class="fas fa-plus"></i>
+        {% if ar %}إضافة مستند / Add Document{% else %}Add Document{% endif %}
+      </button>
+      {% endif %}
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="edSelText" style="font-size:12px;font-weight:600;color:var(--gray-400);">0 {% if ar %}سجل{% else %}records{% endif %}</span>
+      <div style="position:relative;">
+        <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:12px;pointer-events:none;"></i>
+        <input id="edSearch" type="text"
+          style="padding:8px 12px 8px 32px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:13px;outline:none;width:240px;"
+          placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}"
+          oninput="edGrid&&edGrid.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
+    <div id="edGridEl" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:560px;"></div>
+  </div>
+
+  <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
+    <span id="edPageInfo" style="font-size:12px;color:var(--gray-400);">–</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;color:var(--gray-400);">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="edGrid&&edGrid.setGridOption('paginationPageSize',+this.value)">
+        <option>10</option><option selected>20</option><option>50</option><option>100</option><option>200</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EDIT DOCUMENT MODAL ══ -->
+<div class="modal fade ed-modal" id="editDocModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="ed-hdr">
+        <h5><i class="fas fa-edit"></i> {% if ar %}تعديل بيانات المستند / Edit Document{% else %}Edit Document / تعديل بيانات المستند{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="ed-body">
+        <input type="hidden" id="ed_doc_id">
+
+        <!-- Read-only info row -->
+        <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:12.5px;color:var(--gray-600);">
+          <span style="font-weight:700;color:var(--navy);">{% if ar %}رقم المستند:{% else %}Doc ID:{% endif %}</span>
+          <span id="ed_info_id" style="font-family:monospace;margin-inline-start:6px;"></span>
+          &nbsp;|&nbsp;
+          <span style="font-weight:700;color:var(--navy);">{% if ar %}الموظف:{% else %}Employee:{% endif %}</span>
+          <span id="ed_info_emp" style="margin-inline-start:6px;"></span>
+          &nbsp;|&nbsp;
+          <span style="font-weight:700;color:var(--navy);">{% if ar %}الملف:{% else %}File:{% endif %}</span>
+          <span id="ed_info_file" style="margin-inline-start:6px;"></span>
+          &nbsp;|&nbsp;
+          <span style="font-weight:700;color:var(--navy);">{% if ar %}رُفع بواسطة:{% else %}Uploaded by:{% endif %}</span>
+          <span id="ed_info_by" style="margin-inline-start:6px;"></span>
+        </div>
+
+        <!-- Doc Type -->
+        <div>
+          <div class="ed-lbl">{% if ar %}نوع المستند / Doc Type{% else %}Doc Type / نوع المستند{% endif %} <span class="req">*</span></div>
+          <select id="ed_type" class="ed-inp ed-sel" onchange="this.classList.remove('is-invalid');document.getElementById('err_ed_type').classList.remove('show')">
+            <option value="">{% if ar %}عام{% else %}General{% endif %}</option>
+            <option value="Passport">{% if ar %}جواز السفر{% else %}Passport{% endif %}</option>
+            <option value="Iqama">{% if ar %}الإقامة{% else %}Iqama{% endif %}</option>
+            <option value="Work Permit">{% if ar %}تصريح العمل{% else %}Work Permit{% endif %}</option>
+            <option value="Contract">{% if ar %}العقد{% else %}Contract{% endif %}</option>
+            <option value="Visa">{% if ar %}التأشيرة{% else %}Visa{% endif %}</option>
+            <option value="Certificate">{% if ar %}الشهادة{% else %}Certificate{% endif %}</option>
+            <option value="Other">{% if ar %}أخرى{% else %}Other{% endif %}</option>
+          </select>
+          <div class="sf-err" id="err_ed_type"><i class="fas fa-exclamation-circle"></i><span>{% if ar %}مطلوب{% else %}Required{% endif %}</span></div>
+        </div>
+      </div>
+      <div class="ed-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+          {% if ar %}إلغاء / Cancel{% else %}Cancel / إلغاء{% endif %}
+        </button>
+        <button type="button" onclick="saveDocEdit()"
+          style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:linear-gradient(135deg,#5b21b6,var(--purple));color:#fff;display:inline-flex;align-items:center;gap:7px;">
+          <i class="fas fa-save"></i>
+          {% if ar %}حفظ التعديلات / Save{% else %}Save Changes / حفظ{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DELETE CONFIRM MODAL ══ -->
+<div class="modal fade del-modal" id="delDocModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0" style="padding:18px 20px 0;">
+        <h6 class="modal-title text-danger fw-bold">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          {% if ar %}تأكيد الحذف / Confirm Delete{% else %}Confirm Delete / تأكيد الحذف{% endif %}
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:12px 20px;">
+        <p id="delDocText" style="font-size:14px;color:var(--gray-700);margin:0;"></p>
+      </div>
+      <div class="modal-footer border-0" style="padding:0 20px 18px;">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDeleteDoc()">{% if ar %}حذف{% else %}Delete{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ UPLOAD DOCUMENT MODAL ══ -->
+<div class="modal fade" id="uploadDocModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:560px;">
+    <div class="modal-content" style="border:none;border-radius:14px;overflow:hidden;box-shadow:0 25px 80px rgba(0,0,0,.22);">
+
+      <div style="background:linear-gradient(135deg,#5b21b6 0%,#7c3aed 100%);padding:16px 22px;display:flex;align-items:center;justify-content:space-between;">
+        <h5 style="margin:0;color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;">
+          <i class="fas fa-paperclip"></i>
+          {% if ar %}إضافة مستند جديد / Add New Document{% else %}Add New Document / إضافة مستند جديد{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter:brightness(0) invert(1);opacity:.8;"></button>
+      </div>
+
+      <div style="padding:22px;">
+
+        <!-- Employee picker: 3 synced dropdowns -- pick any one, the other two follow -->
+        <div class="ed-lbl" style="margin-bottom:5px;">{% if ar %}الموظف / Employee{% else %}Employee / الموظف{% endif %} <span class="req">*</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div>
+            <select id="upl_emp_name" class="ed-inp ed-sel" onchange="onUplEmpFieldChange('name')" style="font-size:12px;" title="{% if ar %}الاسم{% else %}Employee Name{% endif %}">
+              <option value="">{% if ar %}-- الاسم --{% else %}-- Name --{% endif %}</option>
+            </select>
+          </div>
+          <div>
+            <select id="upl_emp_passport" class="ed-inp ed-sel" onchange="onUplEmpFieldChange('passport_number')" style="font-size:12px;" title="{% if ar %}جواز السفر{% else %}Passport Number{% endif %}">
+              <option value="">{% if ar %}-- جواز السفر --{% else %}-- Passport No. --{% endif %}</option>
+            </select>
+          </div>
+          <div>
+            <select id="upl_emp_iqama" class="ed-inp ed-sel" onchange="onUplEmpFieldChange('iqama_number')" style="font-size:12px;" title="{% if ar %}الإقامة{% else %}Iqama Number{% endif %}">
+              <option value="">{% if ar %}-- الإقامة --{% else %}-- Iqama No. --{% endif %}</option>
+            </select>
+          </div>
+        </div>
+        <div class="sf-err" id="err_upl_emp" style="margin-top:-10px;margin-bottom:14px;"><i class="fas fa-exclamation-circle"></i><span>{% if ar %}اختر الموظف{% else %}Select the employee{% endif %}</span></div>
+        <input type="hidden" id="upl_emp_id">
+
+        <!-- Doc Type -->
+        <div style="margin-bottom:16px;">
+          <div class="ed-lbl">{% if ar %}نوع المستند / Doc Type{% else %}Doc Type{% endif %}</div>
+          <select id="upl_type" class="ed-inp ed-sel">
+            <option value="">{% if ar %}عام{% else %}General{% endif %}</option>
+            <option value="Passport">{% if ar %}جواز السفر{% else %}Passport{% endif %}</option>
+            <option value="Iqama">{% if ar %}الإقامة{% else %}Iqama{% endif %}</option>
+            <option value="Work Permit">{% if ar %}تصريح العمل{% else %}Work Permit{% endif %}</option>
+            <option value="Contract">{% if ar %}العقد{% else %}Contract{% endif %}</option>
+            <option value="Visa">{% if ar %}التأشيرة{% else %}Visa{% endif %}</option>
+            <option value="Certificate">{% if ar %}الشهادة{% else %}Certificate{% endif %}</option>
+            <option value="Other">{% if ar %}أخرى{% else %}Other{% endif %}</option>
+          </select>
+        </div>
+
+        <!-- File upload zone -->
+        <div>
+          <div class="ed-lbl">{% if ar %}الملف / File{% else %}File{% endif %} <span class="req">*</span></div>
+          <label id="upl_zone" for="upl_file"
+            style="display:block;border:2px dashed #c4b5fd;border-radius:10px;padding:20px;text-align:center;cursor:pointer;background:#faf5ff;transition:all .15s;">
+            <i class="fas fa-cloud-upload-alt" style="font-size:26px;color:#7c3aed;display:block;margin-bottom:8px;"></i>
+            <div style="font-size:12.5px;font-weight:600;color:#4b5563;">{% if ar %}اسحب الملف هنا أو انقر للتصفح{% else %}Drag & drop or click to browse{% endif %}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:3px;">PDF, JPG, PNG — {% if ar %}حتى 16 ميغابايت{% else %}up to 16 MB{% endif %}</div>
+            <input type="file" id="upl_file" accept=".pdf,.jpg,.jpeg,.png" class="d-none" onchange="onUplFileChosen(this)">
+          </label>
+          <div id="upl_chosen" style="display:none;margin-top:8px;padding:9px 13px;background:#ede9fe;border-radius:8px;font-size:12px;color:#5b21b6;font-weight:600;align-items:center;gap:8px;">
+            <i class="fas fa-file-alt" style="color:#7c3aed;"></i>
+            <span id="upl_chosen_name"></span>
+            <button type="button" onclick="clearUplFile()" style="margin-inline-start:auto;background:none;border:none;color:#7c3aed;cursor:pointer;"><i class="fas fa-times-circle"></i></button>
+          </div>
+          <div class="sf-err" id="err_upl_file"><i class="fas fa-exclamation-circle"></i><span>{% if ar %}الملف مطلوب{% else %}File is required{% endif %}</span></div>
+        </div>
+
+      </div>
+
+      <div style="padding:14px 22px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+          {% if ar %}إلغاء / Cancel{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" id="uplSaveBtn" onclick="submitUpload()"
+          style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;display:inline-flex;align-items:center;gap:7px;">
+          <i class="fas fa-upload"></i>
+          {% if ar %}رفع المستند / Upload{% else %}Upload Document{% endif %}
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+
+<script>
+const CSRF    = '{{ csrf_token() }}';
+const IS_AR   = {{ 'true' if ar else 'false' }};
+const IS_ADMIN= {{ 'true' if current_user.is_admin() else 'false' }};
+const DATA_URL= '{{ url_for("employees.employee_documents_data") }}';
+
+/* ════ CELL RENDERERS ════ */
+function renderType(p){
+  return p.value ? `<span class="type-pill">${p.value}</span>` : `<span class="type-pill">${IS_AR?'عام':'General'}</span>`;
+}
+
+function renderDocName(p){
+  const ext = (p.data.file_path||'').split('.').pop().toLowerCase();
+  const icon = {pdf:'fa-file-pdf',jpg:'fa-file-image',jpeg:'fa-file-image',png:'fa-file-image'}[ext] || 'fa-file-alt';
+  const color= {pdf:'#dc2626',jpg:'#0891b2',jpeg:'#0891b2',png:'#0891b2'}[ext] || '#6b7280';
+  return `<div style="display:flex;align-items:center;gap:7px;">
+    <i class="fas ${icon}" style="color:${color};font-size:15px;flex-shrink:0;"></i>
+    <span style="font-weight:600;">${p.value||'—'}</span>
+  </div>`;
+}
+
+function renderEmpCode(p){
+  const code = p.value || '';
+  return code
+    ? `<span style="background:var(--blue-50);color:var(--blue-dk);padding:1px 7px;border-radius:4px;font-size:10.5px;font-weight:700;font-family:monospace;">${code}</span>`
+    : '—';
+}
+
+/* ════ ACTIONS RENDERER ════ */
+class ActRenderer{
+  init(p){
+    this.el = document.createElement('div');
+    this.el.className = 'pl-act';
+    const id   = p.data.id;
+    const name = (p.data.original_name||'').replace(/'/g,"\\'");
+
+    let html = `
+      <a href="/employees/documents/${id}/view" target="_blank"
+         class="pl-btn pl-view" title="${IS_AR?'عرض':'View'}">
+        <i class="fas fa-eye"></i>
+      </a>
+      <a href="/employees/documents/${id}/download"
+         class="pl-btn pl-dl" title="${IS_AR?'تحميل':'Download'}">
+        <i class="fas fa-download"></i>
+      </a>`;
+
+    if(IS_ADMIN){
+      html += `
+      <button class="pl-btn pl-edit" onclick="openEditModal(${id})"
+        title="${IS_AR?'تعديل':'Edit'}">
+        <i class="fas fa-pencil-alt"></i>
+      </button>
+      <button class="pl-btn pl-del" onclick="openDeleteModal(${id},'${name}')"
+        title="${IS_AR?'حذف':'Delete'}">
+        <i class="fas fa-trash"></i>
+      </button>`;
+    }
+
+    this.el.innerHTML = html;
+  }
+  getGui(){ return this.el; }
+}
+
+/* ════ GRID SETUP ════ */
+const commonFilter = {
+  filter: 'agTextColumnFilter',
+  filterParams: { buttons:['apply','reset','clear'], closeOnApply:true, maxNumConditions:5 }
+};
+const setFilter = {
+  filter: 'agSetColumnFilter',
+  filterParams: { buttons:['apply','reset','clear'] }
+};
+
+const colDefs = [
+  { field:'id', headerName:'ID', width:70, pinned:IS_AR?'right':'left',
+    filter:'agNumberColumnFilter', enableRowGroup:false, enablePivot:false, enableValue:false,
+    filterParams:{buttons:['apply','reset','clear'],closeOnApply:true},
+    cellStyle:{fontFamily:'monospace',color:'var(--gray-400)',fontSize:'11px'} },
+
+  { field:'employee_id', headerName:IS_AR?'م الموظف':'Employee ID', width:100,
+    filter:'agNumberColumnFilter',
+    filterParams:{buttons:['apply','reset','clear'],closeOnApply:true},
+    cellStyle:{fontFamily:'monospace',fontSize:'11px'} },
+
+  { field:'employee_code', headerName:IS_AR?'كود الموظف':'Employee Code', width:140,
+    cellRenderer: renderEmpCode, ...commonFilter },
+
+  { field:'employee_name', headerName:IS_AR?'اسم الموظف':'Employee Name', minWidth:170,
+    cellStyle:{fontSize:'12.5px'}, ...commonFilter },
+
+  { field:'passport_number', headerName:IS_AR?'رقم الجواز':'Passport No.', width:140,
+    cellStyle:{fontFamily:'monospace',fontSize:'11.5px'}, ...commonFilter },
+
+  { field:'iqama_number', headerName:IS_AR?'رقم الإقامة':'Iqama No.', width:140,
+    cellStyle:{fontFamily:'monospace',fontSize:'11.5px'}, ...commonFilter },
+
+  { field:'document_type', headerName:IS_AR?'النوع':'Doc Type', width:180,
+    cellRenderer: renderType, ...setFilter },
+
+  { field:'original_name', headerName:IS_AR?'اسم الملف':'File Name', minWidth:220,
+    cellRenderer: renderDocName, ...commonFilter },
+
+  { field:'uploaded_at', headerName:IS_AR?'رُفع بتاريخ':'Uploaded At', width:155,
+    ...commonFilter },
+
+  { field:'uploaded_by_name', headerName:IS_AR?'رُفع بواسطة':'Uploaded By', width:140,
+    ...commonFilter },
+
+  { field:'_actions', headerName:IS_AR?'إجراءات':'Actions',
+    width: IS_ADMIN ? 140 : 80,
+    pinned: IS_AR ? 'left' : 'right',
+    sortable:false, suppressMenu:true, resizable:false,
+    filter:false, floatingFilter:false, enableRowGroup:false, enablePivot:false, enableValue:false, suppressColumnsToolPanel:true,
+    cellRenderer: ActRenderer,
+    cellStyle:{overflow:'visible',padding:'0 8px'} },
+];
+
+let edGrid;
+document.addEventListener('DOMContentLoaded', () => {
+  edGrid = agGrid.createGrid(document.getElementById('edGridEl'), {
+    columnDefs: colDefs, multiSortKey:'ctrl',
+    rowData: [],
+    pagination: true,
+    paginationPageSize: 20, paginationPageSizeSelector:[20,50,100],
+    alwaysShowHorizontalScroll: true, alwaysShowVerticalScroll: true,
+    sideBar: { toolPanels: [
+      { id:'columns', labelDefault:IS_AR?'الأعمدة':'Columns', labelKey:'columns', iconKey:'columns', toolPanel:'agColumnsToolPanel' },
+      { id:'filters', labelDefault:IS_AR?'الفلاتر':'Filters', labelKey:'filters', iconKey:'filter', toolPanel:'agFiltersToolPanel' }
+    ], defaultToolPanel:'' },
+    rowGroupPanelShow: 'always', pivotPanelShow: 'always', groupDisplayType: 'groupRows',
+    rowSelection: 'multiple',
+    suppressRowClickSelection: true,
+    animateRows: true,
+    enableRtl: IS_AR,
+    defaultColDef: {
+      sortable:true, unSortIcon:true, resizable: true,
+      filter: true, floatingFilter: true, suppressMenu: false,
+      enableRowGroup: true, enablePivot: true, enableValue: true,
+      menuTabs: ['filterMenuTab','columnsMenuTab','generalMenuTab'],
+    },
+    onGridReady(p){
+      if (window.GridKit) { GridKit.enhance(p, 'edGridEl', { storageKey: 'employees_documents', exportName: 'Employee Documents' }); }
+      loadData();
+    },
+    onFilterChanged(){ updateBadge(); },
+    onPaginationChanged(){ updateBadge(); },
+    onSelectionChanged(){ updateBadge(); },
+    getRowStyle(p){ return p.node.rowIndex%2===0 ? {background:'#fff'} : {background:'#fafbfc'}; },
+  });
+});
+
+function loadData(){
+  if(!edGrid) return;
+  var sf = edGrid.getFilterModel ? edGrid.getFilterModel() : null;
+  fetch(DATA_URL)
+    .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d => { edGrid.setGridOption('rowData', d); if(sf && Object.keys(sf).length) edGrid.setFilterModel(sf); updateBadge(); })
+    .catch(e => console.error('loadData error:', e));
+}
+function refreshGrid(){ loadData(); }
+function exportCSV(){ edGrid && edGrid.exportDataAsCsv({fileName:'employee_documents.csv'}); }
+function clearFilters(){ edGrid && edGrid.setFilterModel(null); }
+
+function updateBadge(){
+  if(!edGrid) return;
+  try {
+    const sel   = edGrid.getSelectedRows().length;
+    const disp  = edGrid.getDisplayedRowCount();
+    const total = (edGrid.getGridOption('rowData')||[]).length;
+    document.getElementById('edSelText').textContent = sel > 0
+      ? `${sel} ${IS_AR?'محدد':'selected'}`
+      : `${disp} ${IS_AR?'سجل':'records'}`;
+    const pg  = edGrid.paginationGetCurrentPage()+1;
+    const pgs = edGrid.paginationGetTotalPages();
+    document.getElementById('edPageInfo').textContent =
+      `${disp} / ${total} — ${IS_AR?'صفحة':'Page'} ${pg}/${pgs}`;
+  } catch(e) {}
+}
+
+/* ════ EDIT MODAL ════ */
+function openEditModal(did){
+  fetch(`/employees/documents/${did}/json`)
+    .then(r=>r.json())
+    .then(d=>{
+      document.getElementById('ed_doc_id').value = did;
+      document.getElementById('ed_info_id').textContent   = d.id || did;
+      document.getElementById('ed_info_emp').textContent  = d.employee_name || '—';
+      document.getElementById('ed_info_file').textContent = d.original_name || '—';
+      document.getElementById('ed_info_by').textContent   = d.uploaded_by_name || '—';
+      document.getElementById('ed_type').value = d.document_type || '';
+      document.getElementById('err_ed_type').classList.remove('show');
+      document.getElementById('ed_type').classList.remove('is-invalid');
+      new bootstrap.Modal(document.getElementById('editDocModal')).show();
+    })
+    .catch(()=>alert(IS_AR?'فشل تحميل البيانات':'Failed to load document data'));
+}
+
+async function saveDocEdit(){
+  const did  = document.getElementById('ed_doc_id').value;
+  const type = (document.getElementById('ed_type').value || '').trim();
+
+  const res  = await fetch(`/employees/documents/${did}/edit`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({ document_type: type })
+  });
+  const data = await res.json();
+  if(data.ok){
+    bootstrap.Modal.getInstance(document.getElementById('editDocModal'))?.hide();
+    loadData();
+  } else {
+    alert(data.error || (IS_AR?'فشل الحفظ':'Save failed'));
+  }
+}
+
+/* ════ DELETE ════ */
+let _delDocId = null;
+function openDeleteModal(did, name){
+  _delDocId = did;
+  document.getElementById('delDocText').textContent =
+    (IS_AR ? 'هل تريد حذف المستند: ' : 'Delete document: ') + name;
+  new bootstrap.Modal(document.getElementById('delDocModal')).show();
+}
+
+async function confirmDeleteDoc(){
+  if(!_delDocId) return;
+  const res  = await fetch(`/employees/documents/${_delDocId}/delete`, {
+    method:'POST',
+    headers:{'X-CSRFToken':CSRF}
+  });
+  const data = await res.json();
+  if(data.ok){
+    bootstrap.Modal.getInstance(document.getElementById('delDocModal'))?.hide();
+    _delDocId = null;
+    loadData();
+  } else {
+    alert(IS_AR?'فشل الحذف':'Delete failed');
+  }
+}
+
+/* ════ UPLOAD MODAL: 3 synced Employee dropdowns ════ */
+let _uplEmpList = [];
+const _uplEmpFieldMap = { name:'upl_emp_name', passport_number:'upl_emp_passport', iqama_number:'upl_emp_iqama' };
+
+function _uplEmpOptionsHtml(field, placeholder){
+  const seen = new Set();
+  let opts = '<option value="">' + placeholder + '</option>';
+  _uplEmpList.forEach(e => {
+    const v = e[field];
+    if(!v || seen.has(v)) return;
+    seen.add(v);
+    opts += `<option value="${v.replace(/"/g,'&quot;')}">${v}</option>`;
+  });
+  return opts;
+}
+
+function openUploadModal(){
+  document.getElementById('upl_emp_id').value = '';
+  fetch('/employees/data')
+    .then(r => r.json())
+    .then(data => {
+      _uplEmpList = data || [];
+      document.getElementById('upl_emp_name').innerHTML     = _uplEmpOptionsHtml('name', IS_AR?'-- الاسم --':'-- Name --');
+      document.getElementById('upl_emp_passport').innerHTML = _uplEmpOptionsHtml('passport_number', IS_AR?'-- جواز السفر --':'-- Passport No. --');
+      document.getElementById('upl_emp_iqama').innerHTML    = _uplEmpOptionsHtml('iqama_number', IS_AR?'-- الإقامة --':'-- Iqama No. --');
+    })
+    .catch(() => { _uplEmpList = []; });
+
+  document.getElementById('upl_type').value = '';
+  clearUplFile();
+  ['err_upl_emp','err_upl_file'].forEach(id => {
+    document.getElementById(id)?.classList.remove('show');
+  });
+  Object.values(_uplEmpFieldMap).forEach(id => document.getElementById(id)?.classList.remove('is-invalid'));
+  new bootstrap.Modal(document.getElementById('uploadDocModal')).show();
+}
+
+/* Picking any one of Employee Name / Passport No. / Iqama No. auto-selects
+   the matching values in the other two, and resolves the employee id. */
+function onUplEmpFieldChange(source){
+  document.getElementById('err_upl_emp').classList.remove('show');
+  Object.values(_uplEmpFieldMap).forEach(id => document.getElementById(id)?.classList.remove('is-invalid'));
+
+  const val = document.getElementById(_uplEmpFieldMap[source]).value;
+  const match = val ? _uplEmpList.find(e => e[source] === val) : null;
+  Object.keys(_uplEmpFieldMap).forEach(field => {
+    if(field === source) return;
+    const el = document.getElementById(_uplEmpFieldMap[field]);
+    if(el) el.value = match ? (match[field] || '') : '';
+  });
+  document.getElementById('upl_emp_id').value = match ? match.id : '';
+}
+
+function onUplFileChosen(inp){
+  if(inp.files && inp.files[0]){
+    document.getElementById('upl_chosen').style.display = 'flex';
+    document.getElementById('upl_chosen_name').textContent =
+      inp.files[0].name + ' (' + (inp.files[0].size/1024).toFixed(1) + ' KB)';
+    document.getElementById('err_upl_file').classList.remove('show');
+    document.getElementById('upl_zone').style.borderColor = '#7c3aed';
+    document.getElementById('upl_zone').style.background  = '#ede9fe';
+  }
+}
+function clearUplFile(){
+  const inp = document.getElementById('upl_file');
+  if(inp) inp.value = '';
+  document.getElementById('upl_chosen').style.display = 'none';
+  document.getElementById('upl_chosen_name').textContent = '';
+  document.getElementById('upl_zone').style.borderColor = '#c4b5fd';
+  document.getElementById('upl_zone').style.background  = '#faf5ff';
+}
+
+async function submitUpload(){
+  const typeEl = document.getElementById('upl_type');
+  const fileInp= document.getElementById('upl_file');
+
+  const empId = document.getElementById('upl_emp_id').value;
+  let ok = true;
+
+  if(!empId){
+    document.getElementById('err_upl_emp').classList.add('show');
+    Object.values(_uplEmpFieldMap).forEach(id => document.getElementById(id)?.classList.add('is-invalid'));
+    ok=false;
+  }
+  if(!fileInp.files || !fileInp.files[0]){ document.getElementById('err_upl_file').classList.add('show'); ok=false; }
+  else { document.getElementById('err_upl_file').classList.remove('show'); }
+  if(!ok) return;
+
+  const btn = document.getElementById('uplSaveBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${IS_AR?'جاري الرفع...':'Uploading...'}`;
+
+  const fd = new FormData();
+  fd.append('csrf_token', CSRF);
+  fd.append('document_type', typeEl.value);
+  fd.append('document', fileInp.files[0]);
+
+  try {
+    const res  = await fetch(`/employees/${empId}/documents/upload`, {
+      method:  'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body:    fd,
+    });
+    const data = await res.json();
+    if(data.ok){
+      bootstrap.Modal.getInstance(document.getElementById('uploadDocModal'))?.hide();
+      loadData();
+    } else {
+      alert(data.error || (IS_AR?'فشل رفع الملف':'Upload failed'));
+    }
+  } catch(e){
+    console.error('Upload error:', e);
+    alert(IS_AR?'خطأ في الاتصال':'Connection error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fas fa-upload"></i> ${IS_AR?'رفع المستند':'Upload Document'}`;
+  }
+}
+
+/* Drag-drop on upload zone */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const zone = document.getElementById('upl_zone');
+  if(!zone) return;
+  zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.style.borderColor='#7c3aed'; zone.style.background='#ede9fe'; });
+  zone.addEventListener('dragleave', ()=>{ zone.style.borderColor='#c4b5fd'; zone.style.background='#faf5ff'; });
+  zone.addEventListener('drop', e=>{
+    e.preventDefault();
+    zone.style.borderColor='#c4b5fd'; zone.style.background='#faf5ff';
+    const f = e.dataTransfer.files[0];
+    if(f){
+      try{ const dt=new DataTransfer(); dt.items.add(f); document.getElementById('upl_file').files=dt.files; }catch(ex){}
+      onUplFileChosen(document.getElementById('upl_file'));
+    }
+  });
+});
+</script>
+{% endblock %}

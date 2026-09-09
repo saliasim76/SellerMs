@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}كتالوج وحدات SaaS{% else %}SaaS Module Catalog{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}كتالوج وحدات SaaS{% else %}SaaS Module Catalog{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}كتالوج وحدات SaaS{% else %}SaaS Module Catalog{% endif %}</h2>
+  <p style="color:#6b7280;font-size:13px;margin-top:-8px;margin-bottom:16px;">
+    {% if ar %}الوحدات القابلة للفوترة وأسعارها المعروضة على الموقع الأمامي (proledg). لا تتحكم هذه الشاشة في صلاحيات صفحات النظام.
+    {% else %}The billable modules and prices shown on the front website (proledg). This screen does not control per-page system permissions.{% endif %}
+  </p>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="tool-btn tool-btn-green" data-bs-toggle="modal" data-bs-target="#smModal" onclick="openAdd()"><i class="fas fa-plus"></i></button>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" class="search-input" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="filterRows(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>{% if ar %}الترتيب{% else %}Order{% endif %}</th>
+          <th>{% if ar %}الكود{% else %}Code{% endif %}</th>
+          <th>{% if ar %}الاسم (English){% else %}Name (English){% endif %}</th>
+          <th>{% if ar %}الاسم (Arabic){% else %}Name (Arabic){% endif %}</th>
+          <th>{% if ar %}شهري{% else %}Monthly{% endif %}</th>
+          <th>{% if ar %}سنوي{% else %}Yearly{% endif %}</th>
+          <th>{% if ar %}تجربة{% else %}Trial{% endif %}</th>
+          <th>{% if ar %}يتطلب{% else %}Requires{% endif %}</th>
+          <th style="width:90px">{% if ar %}الحالة{% else %}Status{% endif %}</th>
+          <th style="width:100px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in modules %}
+        <tr class="data-row">
+          <td>{{ loop.index }}</td>
+          <td>{{ m.display_order }}</td>
+          <td><span class="code-badge">{{ m.module_code }}</span></td>
+          <td class="fw-semibold">{{ m.module_name_en }}</td>
+          <td dir="rtl" style="text-align:right">{{ m.module_name_ar or '—' }}</td>
+          <td>SAR {{ '%.2f'|format(m.monthly_price or 0) }}</td>
+          <td>SAR {{ '%.2f'|format(m.yearly_price or 0) }}</td>
+          <td>
+            {% if m.trial_available %}<span class="st-active">{% if ar %}نعم{% else %}Yes{% endif %}</span>
+            {% else %}<span class="st-inactive">{% if ar %}لا{% else %}No{% endif %}</span>{% endif %}
+          </td>
+          <td style="font-size:12px;color:#6b7280;">
+            {%- set req_names = [] -%}
+            {%- for d in m.requires -%}{%- if d.requires_module %}{{ req_names.append(d.requires_module.module_name_en) or '' }}{% endif -%}{%- endfor -%}
+            {{ req_names|join(', ') if req_names else '—' }}
+          </td>
+          <td>
+            <form method="POST" action="{{ url_for('saas_admin.toggle_saas_module_status', id=m.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{% if ar %}تبديل الحالة{% else %}Toggle status{% endif %}">
+                {% if m.status == 'active' %}
+                <span class="st-active">{% if ar %}نشط{% else %}Active{% endif %}</span>
+                {% else %}
+                <span class="st-inactive">{% if ar %}غير نشط{% else %}Inactive{% endif %}</span>
+                {% endif %}
+              </button>
+            </form>
+          </td>
+          <td class="text-center">
+            <button class="action-btn action-btn-edit"
+                    onclick='openEdit({{ m.id }}, {{ m.to_dict()|tojson }})'>
+              <i class="fas fa-pencil-alt"></i>
+            </button>
+            <form method="POST" action="{{ url_for('saas_admin.delete_saas_module', id=m.id) }}" class="d-inline"
+                  onsubmit="return confirm('{% if ar %}هل تريد حذف هذه الوحدة؟{% else %}Delete this module?{% endif %}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="action-btn action-btn-delete" title="{% if ar %}حذف{% else %}Delete{% endif %}">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" class="empty-row"><i class="fas fa-cubes fa-2x mb-2 d-block"></i>{% if ar %}لا توجد وحدات بعد{% else %}No modules yet{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count">{{ modules|length }} {% if ar %}وحدة{% else %}module(s){% endif %}</span>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="smModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="smModalTitle">{% if ar %}إضافة وحدة{% else %}Add Module{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="smForm" method="POST" action="{{ url_for('saas_admin.add_saas_module') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">{% if ar %}كود الوحدة{% else %}Module Code{% endif %} <span style="color:#ef4444">*</span></label>
+              <input type="text" name="module_code" id="sm_code" class="form-control" required placeholder="e.g. accounting">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">{% if ar %}الاسم (English){% else %}Name (English){% endif %} <span style="color:#ef4444">*</span></label>
+              <input type="text" name="module_name_en" id="sm_name_en" class="form-control" dir="ltr" required placeholder="e.g. Accounting">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">{% if ar %}الاسم (Arabic){% else %}Name (Arabic){% endif %}</label>
+              <input type="text" name="module_name_ar" id="sm_name_ar" class="form-control" dir="rtl">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}الوصف (English){% else %}Description (English){% endif %}</label>
+              <textarea name="description_en" id="sm_desc_en" class="form-control" rows="2" dir="ltr"></textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}الوصف (Arabic){% else %}Description (Arabic){% endif %}</label>
+              <textarea name="description_ar" id="sm_desc_ar" class="form-control" rows="2" dir="rtl"></textarea>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}السعر الشهري{% else %}Monthly Price{% endif %}</label>
+              <input type="number" step="0.01" min="0" name="monthly_price" id="sm_monthly" class="form-control" value="0">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}السعر السنوي{% else %}Yearly Price{% endif %}</label>
+              <input type="number" step="0.01" min="0" name="yearly_price" id="sm_yearly" class="form-control" value="0">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}ترتيب العرض{% else %}Display Order{% endif %}</label>
+              <input type="number" step="1" name="display_order" id="sm_order" class="form-control" value="0">
+            </div>
+            <div class="col-md-3 d-flex flex-column justify-content-end">
+              <div class="form-check form-switch mb-1">
+                <input type="checkbox" name="trial_available" id="sm_trial" class="form-check-input" checked value="on">
+                <label for="sm_trial" class="form-check-label fw-semibold">{% if ar %}متاح للتجربة{% else %}Trial Available{% endif %}</label>
+              </div>
+              <div class="form-check form-switch">
+                <input type="checkbox" name="status" id="sm_status" class="form-check-input" checked value="on">
+                <label for="sm_status" class="form-check-label fw-semibold">{% if ar %}نشط{% else %}Active{% endif %}</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold">{% if ar %}يتطلب هذه الوحدات{% else %}Requires these modules{% endif %}</label>
+            <div id="sm_requires" class="d-flex flex-wrap gap-3 p-2" style="border:1px solid #e2e8f0;border-radius:8px;">
+              {% for m in modules %}
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input sm-req-cb" name="requires[]" value="{{ m.id }}" id="sm_req_{{ m.id }}">
+                <label class="form-check-label" for="sm_req_{{ m.id }}" style="font-size:13px;">{{ m.module_name_en }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" class="pl-footer-btn pl-btn-save" onclick="document.getElementById('smForm').submit()">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+
+function _resetRequires() {
+  document.querySelectorAll('.sm-req-cb').forEach(cb => cb.checked = false);
+}
+
+function openAdd() {
+  document.getElementById('smModalTitle').textContent = IS_AR ? 'إضافة وحدة' : 'Add Module';
+  document.getElementById('smForm').action = '{{ url_for("saas_admin.add_saas_module") }}';
+  document.getElementById('smForm').reset();
+  _resetRequires();
+}
+
+function openEdit(id, m) {
+  document.getElementById('smModalTitle').textContent = IS_AR ? 'تعديل الوحدة' : 'Edit Module';
+  document.getElementById('smForm').action = `/saas-admin/modules/${id}/edit`;
+  document.getElementById('sm_code').value = m.module_code;
+  document.getElementById('sm_name_en').value = m.module_name_en;
+  document.getElementById('sm_name_ar').value = m.module_name_ar;
+  document.getElementById('sm_desc_en').value = m.description_en;
+  document.getElementById('sm_desc_ar').value = m.description_ar;
+  document.getElementById('sm_monthly').value = m.monthly_price;
+  document.getElementById('sm_yearly').value = m.yearly_price;
+  document.getElementById('sm_order').value = m.display_order;
+  document.getElementById('sm_trial').checked = !!m.trial_available;
+  document.getElementById('sm_status').checked = m.status === 'active';
+  _resetRequires();
+  (m.requires || []).forEach(rid => {
+    const cb = document.getElementById('sm_req_' + rid);
+    if (cb) cb.checked = true;
+  });
+  new bootstrap.Modal(document.getElementById('smModal')).show();
+}
+
+function filterRows(q) {
+  document.querySelectorAll('.data-row').forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

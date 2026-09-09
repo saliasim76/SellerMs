@@ -1,0 +1,516 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}اختيار الكود التلقائي{% else %}Auto Code Selection{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('coa.level_one_list') }}">{% if ar %}دليل الحسابات{% else %}Chart of Accounts{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}اختيار الكود التلقائي{% else %}Auto Code Selection{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.ag-theme-alpine{--ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#eff6ff;--ag-selected-row-background-color:#dbeafe;--ag-header-height:44px;--ag-row-height:42px;--ag-cell-horizontal-padding:12px;}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;}
+.ag-theme-alpine .ag-row-even{background:#fff;}
+.ag-theme-alpine .ag-row-odd{background:#fafbfc;}
+.acs-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.tool-btn{width:34px;height:34px;border-radius:7px;border:1.5px solid #d1d5db;background:white;color:#6b7280;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;transition:all .12s;}
+.tool-btn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+/* Colored toolbar buttons -- same palette used across the app's other
+   grids (Owners, Employees, Suppliers, Items, ...): green=add, blue=
+   refresh, amber=edit, red=delete, teal=export, gray=clear/neutral. */
+.tool-btn-green{background:#16a34a;color:white;border:none;} .tool-btn-green:hover{background:#15803d;}
+.tool-btn-blue{background:#2563eb;color:white;border:none;} .tool-btn-blue:hover{background:#1d4ed8;}
+.tool-btn-amber{background:#d97706;color:white;border:none;} .tool-btn-amber:hover{background:#b45309;}
+.tool-btn-red{background:#dc2626;color:white;border:none;} .tool-btn-red:hover{background:#b91c1c;}
+.tool-btn-teal{background:#0d9488;color:white;border:none;} .tool-btn-teal:hover{background:#0f766e;}
+.tool-btn-gray{background:#64748b;color:white;border:none;} .tool-btn-gray:hover{background:#475569;}
+.search-form{position:relative;margin-inline-start:auto;}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:12px;z-index:2;}
+.search-input{padding:7px 12px 7px 32px;border:1.5px solid #d1d5db;border-radius:7px;font-size:12px;outline:none;}
+.search-input:focus{border-color:#2563eb;}
+.acs-badge-debit{background:#eff6ff;color:#1d4ed8;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.acs-badge-credit{background:#fff7ed;color:#c2410c;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.acs-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.acs-hdr h5{margin:0;color:white;font-weight:700;font-size:15px;}
+.modal-header .btn-close{filter:brightness(0) invert(1);}
+.modal-content{border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.form-label{font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;}
+.form-control:focus,.form-select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.acs-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#f8fafc;border-top:2px solid #e2e8f0;}
+.btn-f{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+.btn-save{background:linear-gradient(135deg,#16a34a,#15803d);color:white;box-shadow:0 2px 8px rgba(22,163,74,.3);}
+.btn-save:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(22,163,74,.4);}
+.btn-cancel{background:white;color:#374151;border:1.5px solid #d1d5db;}
+.btn-cancel:hover{background:#f9fafb;}
+.proledg-pagination{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;}
+.page-count{font-size:12px;color:#6b7280;font-weight:600;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}اختيار الكود التلقائي{% else %}Auto Code Selection{% endif %}</h2>
+
+  <div class="acs-toolbar">
+    <button class="tool-btn tool-btn-green" onclick="openAdd()" title="{% if ar %}جديد{% else %}New{% endif %}"><i class="fas fa-plus"></i></button>
+    <button class="tool-btn tool-btn-amber" onclick="openEdit()" title="{% if ar %}تعديل{% else %}Edit{% endif %}"><i class="fas fa-pencil-alt"></i></button>
+    <button class="tool-btn tool-btn-red" onclick="del()" title="{% if ar %}حذف{% else %}Delete{% endif %}"><i class="fas fa-trash"></i></button>
+    <button class="tool-btn tool-btn-blue" onclick="loadData()" title="{% if ar %}تحديث{% else %}Refresh{% endif %}"><i class="fas fa-sync-alt"></i></button>
+    <button class="tool-btn tool-btn-teal" onclick="gridApi&&gridApi.exportDataAsCsv({fileName:'auto_code_selection.csv'})" title="Excel/CSV"><i class="fas fa-file-export"></i></button>
+    <button class="tool-btn tool-btn-gray" onclick="gridApi&&gridApi.setFilterModel(null);document.querySelector('.search-input').value='';gridApi.setGridOption('quickFilterText','')" title="Clear Filters"><i class="fas fa-times-circle"></i></button>
+    <div class="search-form">
+      <i class="fas fa-search search-icon"></i>
+      <input type="text" class="search-input" style="width:220px" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">
+    <div id="acsGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:520px;"></div>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count" id="pageInfo">–</span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-muted">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="gridApi&&gridApi.setGridOption('paginationPageSize',+this.value)">
+        <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ══ #}
+<div class="modal fade" id="acsModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content">
+      <div class="acs-hdr">
+        <h5 id="acsModalTitle"><i class="fas fa-plus-circle me-2"></i>{% if ar %}اختيار كود جديد{% else %}New Code Selection{% endif %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <form id="acsForm" onsubmit="event.preventDefault(); save(false);" novalidate>
+        <input type="hidden" id="acs_id">
+
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">{% if ar %}الوحدة / Module{% else %}Module{% endif %}<span class="text-danger">*</span></label>
+            <select id="acs_module" class="form-select" onchange="onModuleChange()"></select>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">{% if ar %}النموذج / Form{% else %}Form{% endif %}<span class="text-danger">*</span></label>
+            <select id="acs_form" class="form-select" disabled></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">{% if ar %}كود المستوى الرابع / Level Four Code{% else %}Level Four Code{% endif %}</label>
+            <input type="text" id="acs_l4_code" class="form-select" list="acs_l4_code_dl" autocomplete="off"
+                   placeholder="{% if ar %}اكتب للبحث...{% else %}Type to search...{% endif %}"
+                   oninput="onL4FieldChange('code')" onfocus="searchFieldFocus(this)" onblur="searchFieldBlur(this)">
+            <datalist id="acs_l4_code_dl"></datalist>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">{% if ar %}الدرج (المستوى الرابع){% else %}Level Four Drawer{% endif %}</label>
+            <input type="text" id="acs_l4_drawer_en" class="form-select" list="acs_l4_drawer_en_dl" autocomplete="off"
+                   placeholder="{% if ar %}اكتب للبحث...{% else %}Type to search...{% endif %}"
+                   oninput="onL4FieldChange('drawer_en')" onfocus="searchFieldFocus(this)" onblur="searchFieldBlur(this)">
+            <datalist id="acs_l4_drawer_en_dl"></datalist>
+          </div>
+          <input type="hidden" id="acs_l4_drawer_ar">
+        </div>
+        <p class="form-text text-muted" style="font-size:11px;margin-top:-8px;">{% if ar %}اختياري -- السياق الأعلى (مثل "نقدية بالبنك") للكود أدناه.{% else %}Optional -- the higher-level heading (e.g. "Cash at Bank") for the code below.{% endif %}</p>
+
+        <div class="mb-3">
+          <label class="form-label">{% if ar %}كود المستوى الخامس / Level Five Code{% else %}Level Five Code{% endif %}<span class="text-danger">*</span></label>
+          <input type="text" id="acs_lv_code" class="form-select" list="acs_lv_code_dl" autocomplete="off"
+                 placeholder="{% if ar %}اكتب للبحث...{% else %}Type to search...{% endif %}"
+                 oninput="onLvFieldChange('code')" onfocus="searchFieldFocus(this)" onblur="searchFieldBlur(this)">
+          <datalist id="acs_lv_code_dl"></datalist>
+        </div>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">{% if ar %}الدرج (إنجليزي){% else %}Drawer Eng{% endif %}</label>
+            <input type="text" id="acs_lv_drawer_en" class="form-select" list="acs_lv_drawer_en_dl" autocomplete="off"
+                   placeholder="{% if ar %}اكتب للبحث...{% else %}Type to search...{% endif %}"
+                   oninput="onLvFieldChange('drawer_en')" onfocus="searchFieldFocus(this)" onblur="searchFieldBlur(this)">
+            <datalist id="acs_lv_drawer_en_dl"></datalist>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">{% if ar %}الدرج (عربي){% else %}Drawer Ar{% endif %}</label>
+            <input type="text" id="acs_lv_drawer_ar" class="form-select" list="acs_lv_drawer_ar_dl" autocomplete="off"
+                   placeholder="{% if ar %}اكتب للبحث...{% else %}Type to search...{% endif %}"
+                   oninput="onLvFieldChange('drawer_ar')" onfocus="searchFieldFocus(this)" onblur="searchFieldBlur(this)">
+            <datalist id="acs_lv_drawer_ar_dl"></datalist>
+          </div>
+        </div>
+        <p class="form-text text-muted" style="font-size:11px;margin-top:-8px;">{% if ar %}اكتب للبحث واختر من القائمة؛ الحقلان الآخران يُملآن تلقائياً عند الاختيار.{% else %}Type to search and pick from the list; the other two fields fill in automatically once selected.{% endif %}</p>
+
+        <div class="mb-3">
+          <label class="form-label">{% if ar %}الطبيعة / Nature{% else %}Nature{% endif %}<span class="text-danger">*</span></label>
+          <div style="display:flex;gap:16px;">
+            <label style="cursor:pointer;"><input type="radio" name="acs_nature" value="Debit" id="acs_nature_debit" checked> {% if ar %}مدين / Debit{% else %}Debit / مدين{% endif %}</label>
+            <label style="cursor:pointer;"><input type="radio" name="acs_nature" value="Credit" id="acs_nature_credit"> {% if ar %}دائن / Credit{% else %}Credit / دائن{% endif %}</label>
+          </div>
+        </div>
+        </form>
+      </div>
+      <div class="acs-footer">
+        <button type="button" class="btn-f btn-cancel" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" class="btn-f btn-save" onclick="save(false)">{% if ar %}حفظ{% else %}Save{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Delete Confirm #}
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog modal-sm"><div class="modal-content" style="border-radius:10px;overflow:hidden;">
+    <div class="modal-header border-0"><h6 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>{% if ar %}تأكيد الحذف{% else %}Confirm Delete{% endif %}</h6>
+    <button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><p id="delTxt" class="fw-semibold mb-0"></p></div>
+    <div class="modal-footer border-0">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+      <button class="btn btn-sm btn-danger" id="delBtn">{% if ar %}حذف{% else %}Delete{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const CSRF  = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if ar else 'false' }};
+let gridApi;
+let _acsModal = null;
+let _delModal = null;
+
+// Shared by every type-to-search <input list=...datalist> field in this
+// modal (Level Four Code/Drawer, Level Five Code/Drawer Eng/Ar): once a
+// value has been picked, the field's text is now a full exact match for
+// one datalist <option>, and browsers filter the datalist popup to only
+// options that match the CURRENT text -- so reopening it to pick a
+// *different* value shows nothing else until that text is cleared first.
+// Clearing on focus re-shows the full list immediately; if the user clicks
+// away without picking a new value, the original one is restored on blur
+// so nothing is lost by just clicking in and back out.
+function searchFieldFocus(el){
+  if (el.readOnly) return;   // locked -- nothing to search for
+  el.dataset.prevValue = el.value;
+  el.value = '';
+}
+function searchFieldBlur(el){
+  if (!el.value && el.dataset.prevValue) { el.value = el.dataset.prevValue; }
+  delete el.dataset.prevValue;
+}
+
+function natureBadge(v){
+  if(v === 'Credit') return '<span class="acs-badge-credit">'+(IS_AR?'دائن':'Credit')+'</span>';
+  return '<span class="acs-badge-debit">'+(IS_AR?'مدين':'Debit')+'</span>';
+}
+
+// Per-row Delete button -- same action-btn/action-btn-delete convention as
+// the Chart of Accounts Level One-Five grids, so a record can be removed
+// directly from its own row instead of having to check its box first and
+// then reach for the toolbar's trash icon.
+class AcsDeleteBtn {
+  init(p) {
+    this.el = document.createElement('div');
+    this.el.style.cssText = 'display:flex;justify-content:center;';
+    this.el.innerHTML = '<button type="button" class="action-btn action-btn-delete" title="' +
+      (IS_AR?'حذف':'Delete') + '"><i class="fas fa-trash"></i></button>';
+    this.el.querySelector('button').addEventListener('click', () => confirmDelete(p.data));
+  }
+  getGui() { return this.el; }
+}
+
+const cols = [
+  {headerName:'#',field:'id',width:65,filter:'agNumberColumnFilter',checkboxSelection:true,headerCheckboxSelection:true,pinned:IS_AR?'right':'left',sortable:true,resizable:false,filterParams:{buttons:['apply','reset','clear'],closeOnApply:true}},
+  {headerName:IS_AR?'الوحدة':'Module',field:'module_name',minWidth:150,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'النموذج':'Form',field:'form_name',minWidth:170,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'كود المستوى الرابع':'Level Four Code',field:'levelfour_code',width:150,cellStyle:{fontFamily:'monospace',color:'#6b7280'},filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'درج المستوى الرابع':'Level Four Drawer',field:'levelfour_drawer_en',minWidth:180,flex:1,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'كود المستوى الخامس':'Level Five Code',field:'levelfive_code',width:170,cellStyle:{fontFamily:'monospace',fontWeight:'700',color:'#2563eb'},filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الدرج (إنجليزي)':'Drawer Eng',field:'levelfive_drawer_en',minWidth:200,flex:1,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الدرج (عربي)':'Drawer Ar',field:'levelfive_drawer_ar',minWidth:180,flex:1,cellStyle:{direction:'rtl'},filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الطبيعة':'Nature',field:'nature',width:120,cellRenderer:function(p){return natureBadge(p.value);},filter:'agSetColumnFilter',filterParams:{values:['Debit','Credit'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'أُنشئ في':'Created At',field:'created_at',width:150,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'إجراءات':'Actions',field:'_actions',width:90,pinned:IS_AR?'left':'right',sortable:false,filter:false,suppressMenu:true,resizable:false,cellRenderer:AcsDeleteBtn,cellStyle:{overflow:'visible'}},
+];
+
+const defaultColDef = {
+  sortable:true,resizable:true,filter:true,floatingFilter:true,suppressMenu:false,unSortIcon:true,enableRowGroup:true,enablePivot:true,enableValue:true,
+  menuTabs:['filterMenuTab','columnsMenuTab','generalMenuTab'],
+  filterParams:{buttons:['apply','reset','clear'],closeOnApply:true,maxNumConditions:10}
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  const el = document.getElementById('acsGrid');
+  if (el) {
+    agGrid.createGrid(el, {
+      columnDefs:cols,rowData:[],pagination:true,paginationPageSize:20, paginationPageSizeSelector:[20,50,100],animateRows:true,enableRtl:IS_AR,multiSortKey:'ctrl',defaultColDef:defaultColDef,rowSelection:'multiple',suppressRowClickSelection:true,
+      sideBar:{toolPanels:[{id:'columns',labelDefault:IS_AR?'الأعمدة':'Columns',labelKey:'columns',iconKey:'columns',toolPanel:'agColumnsToolPanel'},{id:'filters',labelDefault:IS_AR?'الفلاتر':'Filters',labelKey:'filters',iconKey:'filter',toolPanel:'agFiltersToolPanel'}],defaultToolPanel:''},
+      rowGroupPanelShow:'always',pivotPanelShow:'always',groupDisplayType:'groupRows',
+      onGridReady:function(p){gridApi=p.api;if(window.GridKit){GridKit.enhance(p,'acsGrid',{storageKey:'coa_auto_code',exportName:'Auto Code Selection'});}loadData();},
+      onFilterChanged:updateStatus,onPaginationChanged:updateStatus,onSelectionChanged:updateStatus,
+      onGridSizeChanged:function(p){p.api.sizeColumnsToFit();},
+      onRowDoubleClicked:function(){openEdit();},
+      getRowStyle:function(p){return p.node.rowIndex%2===0?{background:'#fff'}:{background:'#fafbfc'};}
+    });
+  }
+  const modalEl = document.getElementById('acsModal');
+  if (modalEl) { _acsModal = new bootstrap.Modal(modalEl); }
+  const delModalEl = document.getElementById('delModal');
+  if (delModalEl) { _delModal = new bootstrap.Modal(delModalEl); }
+  loadModules();
+  loadLevelFive();
+  loadLevelFour();
+});
+
+function updateStatus() {
+  if (!gridApi) return;
+  const total = gridApi.getDisplayedRowCount();
+  const selected = gridApi.getSelectedRows().length;
+  const pageInfo = document.getElementById('pageInfo');
+  if (pageInfo) {
+    pageInfo.textContent = selected > 0 ? `${selected} ${IS_AR?'محدد':'selected'}` : `${total} ${IS_AR?'سجل':'records'}`;
+  }
+}
+
+function loadData() {
+  var savedFilters = gridApi ? gridApi.getFilterModel() : null;
+  fetch('/auto-code-selection/data').then(r=>r.json()).then(d=>{
+    gridApi.setGridOption('rowData', d);
+    if (savedFilters && Object.keys(savedFilters).length) { gridApi.setFilterModel(savedFilters); }
+    updateStatus();
+  }).catch(err=>console.error('Failed to load data:', err));
+}
+
+/* ══ Module -> Form cascade ══ */
+let _modules = [];
+function loadModules(){
+  return fetch('/auto-code-selection/modules').then(r=>r.json()).then(d=>{
+    _modules = d || [];
+    const sel = document.getElementById('acs_module');
+    sel.innerHTML = '<option value="">'+(IS_AR?'-- اختر --':'-- Select --')+'</option>' +
+      _modules.map(m=>'<option value="'+m.id+'">'+(IS_AR&&m.label_ar?m.label_ar:m.label_en)+'</option>').join('');
+  }).catch(()=>{ _modules = []; });
+}
+let _forms = [];
+function loadForms(moduleId, selected){
+  const sel = document.getElementById('acs_form');
+  if(!moduleId){
+    _forms = [];
+    sel.innerHTML = '<option value="">'+(IS_AR?'-- اختر الوحدة أولاً --':'-- Select module first --')+'</option>'; sel.disabled = true; return Promise.resolve();
+  }
+  return fetch('/auto-code-selection/forms?module_id='+encodeURIComponent(moduleId)).then(r=>r.json()).then(d=>{
+    _forms = d || [];
+    sel.innerHTML = '<option value="">'+(IS_AR?'-- اختر --':'-- Select --')+'</option>' +
+      _forms.map(f=>'<option value="'+f.id+'"'+(String(f.id)===String(selected)?' selected':'')+'>'+(IS_AR&&f.label_ar?f.label_ar:f.label_en)+'</option>').join('');
+    sel.disabled = false;
+  });
+}
+function onModuleChange(){
+  loadForms(document.getElementById('acs_module').value);
+}
+
+/* ══ Level Five: 3 synced, searchable fields (all active control accounts,
+   cascaded to children of whatever Level Four is currently set -- see
+   refreshLevelFiveForL4()) ══
+   Each is a text input backed by a <datalist> -- native browsers filter the
+   suggestion list as the user types, so this is searchable without any extra
+   library. Picking a value that exactly matches one of the three fields
+   (by typing the full value, or choosing it from the datalist) auto-fills
+   the other two for the same account; a partial/in-progress value is left
+   alone until it resolves to a real match. */
+let _lvList = [];
+function _lvOptionsHtml(field){
+  const seen = new Set();
+  let opts = '';
+  _lvList.forEach(a=>{
+    const v = a[field];
+    if(!v || seen.has(v)) return;
+    seen.add(v);
+    opts += '<option value="'+String(v).replace(/"/g,'&quot;')+'">';
+  });
+  return opts;
+}
+function loadLevelFive(levelFourCode){
+  // Cascades off Level Four -- the backend filters to that code's own
+  // children when given, or returns the full unrestricted list when Level
+  // Four isn't set yet (see auto_code_level_five() server-side).
+  const qs = levelFourCode ? ('?levelfour_code=' + encodeURIComponent(levelFourCode)) : '';
+  return fetch('/auto-code-selection/level-five' + qs).then(r=>r.json()).then(d=>{
+    _lvList = d || [];
+    document.getElementById('acs_lv_code_dl').innerHTML      = _lvOptionsHtml('code');
+    document.getElementById('acs_lv_drawer_en_dl').innerHTML = _lvOptionsHtml('drawer_en');
+    document.getElementById('acs_lv_drawer_ar_dl').innerHTML = _lvOptionsHtml('drawer_ar');
+  }).catch(()=>{ _lvList = []; });
+}
+// Re-fetches the Level Five list scoped to whatever is currently in the
+// Level Four Code field -- called any time that field's value changes
+// (typed/picked directly, forced by Payment Mode, or loaded in Edit).
+function refreshLevelFiveForL4(){
+  return loadLevelFive(document.getElementById('acs_l4_code').value);
+}
+function _refreshLvSelects(sel){
+  document.getElementById('acs_lv_code').value       = sel ? (sel.code || '') : '';
+  document.getElementById('acs_lv_drawer_en').value  = sel ? (sel.drawer_en || '') : '';
+  document.getElementById('acs_lv_drawer_ar').value  = sel ? (sel.drawer_ar || '') : '';
+}
+const _lvFieldMap = { code:'acs_lv_code', drawer_en:'acs_lv_drawer_en', drawer_ar:'acs_lv_drawer_ar' };
+function onLvFieldChange(source){
+  const val = document.getElementById(_lvFieldMap[source]).value;
+  const match = val ? _lvList.find(a=>a[source]===val) : null;
+  if (!match) return;   // still typing / no exact match yet -- leave the other fields as they are
+  Object.keys(_lvFieldMap).forEach(field=>{
+    if(field===source) return;
+    const el = document.getElementById(_lvFieldMap[field]);
+    if(el) el.value = match[field]||'';
+  });
+}
+
+/* ══ Level Four: 2 synced, searchable fields (code + drawer), same
+   datalist-driven pattern as Level Five above but its own independent,
+   unrestricted list -- not tied to Module/Form, and optional (no
+   server-side requirement that it be filled in). drawer_ar has no visible
+   field of its own; it rides along silently in a hidden input, filled in
+   whenever code/drawer_en resolves to a match, so the value is still there
+   to submit/display. ══ */
+let _l4List = [];
+function _l4OptionsHtml(field){
+  const seen = new Set();
+  let opts = '';
+  _l4List.forEach(a=>{
+    const v = a[field];
+    if(!v || seen.has(v)) return;
+    seen.add(v);
+    opts += '<option value="'+String(v).replace(/"/g,'&quot;')+'">';
+  });
+  return opts;
+}
+function loadLevelFour(){
+  return fetch('/auto-code-selection/level-four').then(r=>r.json()).then(d=>{
+    _l4List = d || [];
+    document.getElementById('acs_l4_code_dl').innerHTML      = _l4OptionsHtml('code');
+    document.getElementById('acs_l4_drawer_en_dl').innerHTML = _l4OptionsHtml('drawer_en');
+  }).catch(()=>{ _l4List = []; });
+}
+function _refreshL4Selects(sel){
+  document.getElementById('acs_l4_code').value       = sel ? (sel.code || '') : '';
+  document.getElementById('acs_l4_drawer_en').value  = sel ? (sel.drawer_en || '') : '';
+  document.getElementById('acs_l4_drawer_ar').value  = sel ? (sel.drawer_ar || '') : '';
+}
+const _l4FieldMap = { code:'acs_l4_code', drawer_en:'acs_l4_drawer_en' };
+function onL4FieldChange(source){
+  const val = document.getElementById(_l4FieldMap[source]).value;
+  const match = val ? _l4List.find(a=>a[source]===val) : null;
+  if (match) {
+    Object.keys(_l4FieldMap).forEach(field=>{
+      if(field===source) return;
+      const el = document.getElementById(_l4FieldMap[field]);
+      if(el) el.value = match[field]||'';
+    });
+    document.getElementById('acs_l4_drawer_ar').value = match.drawer_ar || '';
+  } else {
+    document.getElementById('acs_l4_drawer_ar').value = '';
+  }
+  // Level Five cascades off Level Four Code -- refresh its list every time
+  // this changes, whether it resolved to a real match yet or not (a
+  // partial/in-progress value just yields an empty Level Five list until
+  // it does).
+  refreshLevelFiveForL4();
+}
+
+/* ══ Add / Edit ══ */
+function openAdd() {
+  document.getElementById('acsModalTitle').innerHTML = '<i class="fas fa-plus-circle me-2"></i>' + (IS_AR?'اختيار كود جديد':'New Code Selection');
+  document.getElementById('acs_id').value = '';
+  document.getElementById('acs_module').value = '';
+  document.getElementById('acs_form').innerHTML = '<option value="">'+(IS_AR?'-- اختر الوحدة أولاً --':'-- Select module first --')+'</option>';
+  document.getElementById('acs_form').disabled = true;
+  _refreshL4Selects(null);
+  loadLevelFive('');
+  _refreshLvSelects(null);
+  document.getElementById('acs_nature_debit').checked = true;
+  if (_acsModal) { _acsModal.show(); }
+}
+
+async function openEdit() {
+  const r = gridApi.getSelectedRows()[0];
+  if (!r) { alert(IS_AR?'اختر سجلاً':'Select a record'); return; }
+  document.getElementById('acsModalTitle').innerHTML = '<i class="fas fa-edit me-2"></i>' + (IS_AR?'تعديل اختيار الكود':'Edit Code Selection');
+  document.getElementById('acs_id').value = r.id;
+  document.getElementById('acs_module').value = r.module_id;
+  await loadForms(r.module_id, r.form_id);
+  _refreshL4Selects({code:r.levelfour_code, drawer_en:r.levelfour_drawer_en, drawer_ar:r.levelfour_drawer_ar});
+  await loadLevelFive(r.levelfour_code);
+  _refreshLvSelects({code:r.levelfive_code, drawer_en:r.levelfive_drawer_en, drawer_ar:r.levelfive_drawer_ar});
+  if(r.nature === 'Credit') document.getElementById('acs_nature_credit').checked = true;
+  else document.getElementById('acs_nature_debit').checked = true;
+  if (_acsModal) { _acsModal.show(); }
+}
+
+function save() {
+  const id = document.getElementById('acs_id').value;
+  const moduleId = document.getElementById('acs_module').value;
+  const formId   = document.getElementById('acs_form').value;
+  const lvCode   = document.getElementById('acs_lv_code').value;
+  const nature   = document.querySelector('input[name="acs_nature"]:checked').value;
+
+  if (!moduleId) { alert(IS_AR?'اختر الوحدة':'Select the Module'); return; }
+  if (!formId)   { alert(IS_AR?'اختر النموذج':'Select the Form'); return; }
+  if (!lvCode)   { alert(IS_AR?'اختر كود المستوى الخامس':'Select the Level Five Code'); return; }
+
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF);
+  fd.set('module_id', moduleId);
+  fd.set('form_id', formId);
+  fd.set('levelfour_code', document.getElementById('acs_l4_code').value);
+  fd.set('levelfour_drawer_en', document.getElementById('acs_l4_drawer_en').value);
+  fd.set('levelfour_drawer_ar', document.getElementById('acs_l4_drawer_ar').value);
+  fd.set('levelfive_code', lvCode);
+  fd.set('levelfive_drawer_en', document.getElementById('acs_lv_drawer_en').value);
+  fd.set('levelfive_drawer_ar', document.getElementById('acs_lv_drawer_ar').value);
+  fd.set('nature', nature);
+
+  const url = id ? '/auto-code-selection/' + id + '/edit' : '/auto-code-selection/add';
+  fetch(url, {method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+  .then(r=>r.json()).then(d=>{
+    if (!d.ok) { alert(d.error || 'Error'); return; }
+    loadData();
+    if (_acsModal) { _acsModal.hide(); }
+  }).catch(()=>alert(IS_AR?'خطأ في الحفظ':'Save failed'));
+}
+
+function confirmDelete(row) {
+  document.getElementById('delTxt').textContent = (IS_AR?'حذف: ':'Delete: ') + row.module_name + ' / ' + row.form_name + ' (' + row.levelfive_code + ')?';
+  document.getElementById('delBtn').onclick = function() {
+    const fd = new FormData();
+    fd.set('csrf_token', CSRF);
+    fetch('/auto-code-selection/' + row.id + '/delete', {method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+    .then(r=>r.json()).then(d=>{
+      if (!d.ok) { alert(d.error || 'Error'); return; }
+      if (_delModal) _delModal.hide();
+      loadData();
+    }).catch(()=>alert(IS_AR?'خطأ في الحذف':'Delete failed'));
+  };
+  if (_delModal) { _delModal.show(); }
+}
+function del() {
+  const r = gridApi.getSelectedRows()[0];
+  if (!r) { alert(IS_AR?'اختر سجلاً':'Select a record'); return; }
+  confirmDelete(r);
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.key === 'n') { e.preventDefault(); openAdd(); }
+  if (e.ctrlKey && e.key === 'e') { e.preventDefault(); openEdit(); }
+  if (e.key === 'Delete') { del(); }
+});
+</script>
+{% endblock %}

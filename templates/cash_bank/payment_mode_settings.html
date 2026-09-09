@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}إعدادات طريقة الدفع{% else %}Payment Mode Settings{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('cash_bank.outgoing_payment_list') }}">{% if ar %}دفعة صادرة{% else %}Outgoing Payment{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}إعدادات طريقة الدفع{% else %}Payment Mode Settings{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading"><i class="fas fa-cog" style="color:#7c3aed;margin-right:8px;"></i>{% if ar %}إعدادات طريقة الدفع{% else %}Payment Mode Settings{% endif %}</h2>
+  <p style="color:#6b7280;font-size:13px;margin-top:-8px;margin-bottom:16px;">
+    {% if ar %}اربط كل طريقة دفع بحساب دفتر الأستاذ الخاص بها. يُستخدم هذا الحساب عند ترحيل أي دفعة صادرة بهذه الطريقة.
+    {% else %}Link each Payment Mode to its own GL account. This account is used whenever an Outgoing Payment posted with that mode is finalized.{% endif %}
+  </p>
+
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead>
+        <tr>
+          <th>{% if ar %}طريقة الدفع{% else %}Payment Mode{% endif %}</th>
+          <th>{% if ar %}حساب دفتر الأستاذ{% else %}GL Account{% endif %}</th>
+          <th style="width:100px">{% if ar %}فعال{% else %}Active{% endif %}</th>
+          <th style="width:110px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+        </tr>
+      </thead>
+      <tbody id="pmBody"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const PM_CSRF = '{{ csrf_token() }}';
+let PM_ACCOUNTS = [];
+
+function loadAccounts(cb){
+  fetch('/cash-bank/outgoing-payments/accounts').then(r=>r.json()).then(d=>{ PM_ACCOUNTS = d || []; cb(); });
+}
+
+function loadModes(){
+  fetch('/cash-bank/payment-modes/data').then(r=>r.json()).then(rows=>{
+    const body = document.getElementById('pmBody');
+    body.innerHTML = rows.map(p => `
+      <tr>
+        <td class="fw-semibold">${p.name}</td>
+        <td>
+          <select id="pm_gl_${p.id}" class="form-select form-select-sm">
+            <option value="">${IS_AR?'(غير مهيأ)':'(not configured)'}</option>
+            ${PM_ACCOUNTS.map(a => `<option value="${a.code}" ${a.code===p.gl_account_id?'selected':''}>${a.code} — ${a.name}</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          <input type="checkbox" id="pm_active_${p.id}" ${p.active?'checked':''} style="width:18px;height:18px;">
+        </td>
+        <td class="text-center">
+          <button class="action-btn action-btn-edit" title="${IS_AR?'حفظ':'Save'}" onclick="saveMode(${p.id})"><i class="fas fa-save"></i></button>
+        </td>
+      </tr>
+    `).join('');
+  });
+}
+
+function saveMode(id){
+  const fd = new FormData();
+  fd.set('csrf_token', PM_CSRF);
+  fd.set('gl_account_id', document.getElementById('pm_gl_'+id).value);
+  fd.set('active', document.getElementById('pm_active_'+id).checked ? '1' : '0');
+  fetch('/cash-bank/payment-modes/' + id + '/update', { method:'POST', headers:{'X-CSRFToken':PM_CSRF}, body: fd })
+    .then(r=>r.json()).then(d=>{
+      if (d.ok) alert(IS_AR ? 'تم الحفظ' : 'Saved');
+      else alert(d.error || (IS_AR ? 'فشل الحفظ' : 'Save failed'));
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => loadAccounts(loadModes));
+</script>
+{% endblock %}

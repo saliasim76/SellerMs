@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}رصيد الافتتاح{% else %}Opening Balance{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}رصيد الافتتاح{% else %}Opening Balance{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.ob-page{padding:4px 2px;}
+.ob-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+.ob-title{font-size:20px;font-weight:800;color:#1e3a5f;margin:0;}
+.obtn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #d1d5db;background:#fff;color:#374151;}
+.obtn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+.obtn:disabled{opacity:.5;cursor:not-allowed;}
+.obtn-primary{background:#2563eb;color:#fff;border-color:#2563eb;}
+.obtn-primary:hover{background:#1d4ed8;color:#fff;}
+.obtn-green{background:#16a34a;color:#fff;border-color:#16a34a;}
+.obtn-green:hover{background:#15803d;color:#fff;}
+.obtn-red{background:#dc2626;color:#fff;border-color:#fca5a5;}
+.ag-theme-alpine{--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-row-hover-color:#eff6ff;--ag-header-height:42px;--ag-row-height:40px;}
+.ob-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.ob-badge-draft{background:#fef3c7;color:#92400e;}
+.ob-badge-posted{background:#dcfce7;color:#166534;}
+.ob-act{width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin:0 2px;}
+.ob-act-edit{background:#eff6ff;color:#2563eb;}
+.ob-act-view{background:#f3f4f6;color:#374151;}
+.ob-act-post{background:#dcfce7;color:#166534;}
+.ob-act-del{background:#fef2f2;color:#dc2626;}
+
+.ob-modal-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:14px 22px;display:flex;justify-content:space-between;align-items:center;}
+.ob-modal-hdr h5{margin:0;color:#fff;font-weight:700;font-size:15px;}
+.ob-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;padding:16px 22px;border-bottom:1px solid #e2e8f0;}
+.ob-fld label{display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:4px;}
+.ob-fld input, .ob-fld select{width:100%;padding:7px 9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;}
+.ob-toolbar{display:flex;align-items:center;justify-content:space-between;padding:10px 22px;gap:12px;flex-wrap:wrap;}
+.ob-search{padding:7px 10px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;width:240px;}
+.ob-totals{display:flex;gap:18px;padding:10px 22px;flex-wrap:wrap;border-top:1px solid #e2e8f0;background:#f8fafc;}
+.ob-total-card{font-size:12.5px;color:#374151;}
+.ob-total-card b{display:block;font-size:16px;font-weight:800;color:#111827;}
+.ob-total-card.diff b{color:#16a34a;}
+.ob-total-card.diff.mismatch b{color:#dc2626;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ob-page">
+  <div class="ob-head">
+    <h2 class="ob-title"><i class="fas fa-scale-balanced me-2"></i>{% if ar %}رصيد الافتتاح{% else %}Opening Balance{% endif %}</h2>
+    <div style="margin-inline-start:auto;display:flex;gap:8px;">
+      <button class="obtn" onclick="loadOBList()"><i class="fas fa-sync-alt"></i>{% if ar %}تحديث{% else %}Refresh{% endif %}</button>
+      <button class="obtn obtn-primary" onclick="openNewOB()"><i class="fas fa-plus"></i>{% if ar %}جديد{% else %}New{% endif %}</button>
+    </div>
+  </div>
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+    <div id="obListGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:480px;"></div>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ══ #}
+<div class="modal fade" id="obModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-fullscreen"><div class="modal-content">
+    <div class="ob-modal-hdr">
+      <h5 id="obModalTitle"><i class="fas fa-scale-balanced me-2"></i>{% if ar %}رصيد الافتتاح{% else %}Opening Balance{% endif %}</h5>
+      <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="ob-fields">
+      <div class="ob-fld"><label>{% if ar %}رقم المستند{% else %}Doc No.{% endif %}</label><input id="obDocNo" disabled placeholder="{% if ar %}يُنشأ عند الترحيل{% else %}Assigned on Post{% endif %}"></div>
+      <div class="ob-fld"><label>{% if ar %}تاريخ الرصيد{% else %}Balance Date{% endif %} <span style="color:#dc2626;">*</span></label><input type="date" id="obBalanceDate"></div>
+      <div class="ob-fld"><label>{% if ar %}الحالة{% else %}Status{% endif %}</label><input id="obStatus" disabled></div>
+      <div class="ob-fld" style="grid-column:span 2;"><label>{% if ar %}ملاحظات{% else %}Narration{% endif %}</label><input id="obNarration"></div>
+    </div>
+    <div class="ob-toolbar">
+      <input type="text" id="obSearch" class="ob-search" placeholder="{% if ar %}بحث عن حساب...{% else %}Search account...{% endif %}" oninput="obGridApi&&obGridApi.setGridOption('quickFilterText',this.value)">
+      <span style="font-size:12px;color:#6b7280;">{% if ar %}أدخل مدين أو دائن فقط للحسابات التي بها رصيد افتتاحي{% else %}Enter Debit or Credit only for accounts that have an opening balance{% endif %}</span>
+    </div>
+    <div style="flex:1;min-height:0;padding:0 22px;">
+      <div id="obEntryGrid" class="ag-theme-alpine" style="width:100%;height:100%;"></div>
+    </div>
+    <div class="ob-totals">
+      <div class="ob-total-card"><span>{% if ar %}إجمالي المدين{% else %}Total Debit{% endif %}</span><b id="obTotDebit">0.00</b></div>
+      <div class="ob-total-card"><span>{% if ar %}إجمالي الدائن{% else %}Total Credit{% endif %}</span><b id="obTotCredit">0.00</b></div>
+      <div class="ob-total-card diff" id="obDiffCard"><span>{% if ar %}الفرق{% else %}Difference{% endif %}</span><b id="obDiff">0.00</b></div>
+      <div style="margin-inline-start:auto;display:flex;gap:8px;">
+        <button class="obtn" data-bs-dismiss="modal">{% if ar %}إغلاق{% else %}Close{% endif %}</button>
+        <button class="obtn" id="obSaveBtn" onclick="submitOB(false)"><i class="fas fa-save"></i> {% if ar %}حفظ (مسودة){% else %}Save (Draft){% endif %}</button>
+        <button class="obtn obtn-green" id="obPostBtn" onclick="submitOB(true)"><i class="fas fa-check-double"></i> {% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}</button>
+      </div>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const OB_CSRF = '{{ csrf_token() }}';
+let obListApi, obGridApi;
+let currentOBId = null;
+let ACCOUNTS_CACHE = [];
+
+function fmt2(v){ return (Math.round((v||0)*100)/100).toFixed(2); }
+function fmtParen(v){
+  v = Math.round((v||0)*100)/100;
+  return v < 0 ? '(' + Math.abs(v).toFixed(2) + ')' : v.toFixed(2);
+}
+
+function statusBadge(p){
+  const posted = p.value === 'Posted';
+  return '<span class="ob-badge ' + (posted?'ob-badge-posted':'ob-badge-draft') + '">' +
+    (posted ? (IS_AR?'مرحّل':'Posted') : (IS_AR?'مسودة':'Draft')) + '</span>';
+}
+function obActions(p){
+  const d = p.data;
+  let html = '';
+  if (d.status === 'Draft'){
+    html += '<button class="ob-act ob-act-edit" title="'+(IS_AR?'تعديل':'Edit')+'" onclick="openEditOB('+d.id+')"><i class="fas fa-pen"></i></button>';
+    html += '<button class="ob-act ob-act-del" title="'+(IS_AR?'حذف':'Delete')+'" onclick="deleteOB('+d.id+')"><i class="fas fa-trash"></i></button>';
+  } else {
+    html += '<button class="ob-act ob-act-view" title="'+(IS_AR?'عرض':'View')+'" onclick="window.open(\'/coa/opening-balance/'+d.id+'/view\',\'_blank\')"><i class="fas fa-eye"></i></button>';
+  }
+  return html;
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  agGrid.createGrid(document.getElementById('obListGrid'), {
+    columnDefs: [
+      {headerName: IS_AR?'رقم المستند':'Doc No.', field:'doc_no', width:150, cellRenderer:p=>p.value||'—'},
+      {headerName: IS_AR?'تاريخ الرصيد':'Balance Date', field:'balance_date', width:130},
+      {headerName: IS_AR?'الحالة':'Status', field:'status', width:110, cellRenderer:statusBadge},
+      {headerName: IS_AR?'إجمالي المدين':'Total Debit', field:'total_debit', width:140, valueFormatter:p=>fmt2(p.value)},
+      {headerName: IS_AR?'إجمالي الدائن':'Total Credit', field:'total_credit', width:140, valueFormatter:p=>fmt2(p.value)},
+      {headerName: IS_AR?'ملاحظات':'Narration', field:'narration', flex:1, minWidth:200},
+      {headerName: IS_AR?'أنشئ في':'Created At', field:'created_at', width:150},
+      {headerName: IS_AR?'إجراءات':'Actions', width:100, cellRenderer:obActions, sortable:false, filter:false},
+    ],
+    rowData: [], pagination:true, paginationPageSize:25, paginationPageSizeSelector:[25,50,100],
+    defaultColDef:{sortable:true, resizable:true, filter:true}, enableRtl:IS_AR,
+    onGridReady(p){ obListApi = p.api; if (window.GridKit) GridKit.enhance(p, 'obListGrid', {storageKey:'opening_balance_list', exportName:'Opening Balance'}); loadOBList(); },
+  });
+});
+
+function loadOBList(){
+  fetch('/coa/opening-balance/data').then(r=>r.json()).then(d=>{ if (obListApi) obListApi.setGridOption('rowData', d); });
+}
+
+function loadAccounts(){
+  return fetch('/coa/opening-balance/accounts').then(r=>r.json()).then(list=>{ ACCOUNTS_CACHE = list || []; return ACCOUNTS_CACHE; });
+}
+
+function ensureEntryGrid(){
+  if (obGridApi) return;
+  agGrid.createGrid(document.getElementById('obEntryGrid'), {
+    columnDefs: [
+      {headerName: IS_AR?'الرمز':'Code', field:'code', width:140, pinned: IS_AR?'right':'left'},
+      {headerName: IS_AR?'اسم الحساب':'Account Name', field:'name', minWidth:220, flex:1,
+        valueGetter:p => IS_AR && p.data.name_ar ? p.data.name_ar : p.data.name},
+      {headerName: IS_AR?'نوع الحساب':'Account Type', field:'account_type_name', width:150},
+      {headerName: IS_AR?'رصيد سابق مرحّل':'Already Posted', field:'existing_balance', width:150,
+        valueFormatter:p=>fmtParen(p.value), cellStyle:p=>({color: (p.value||0)!==0 ? '#6b7280' : '#d1d5db'})},
+      {headerName: IS_AR?'مدين':'Debit', field:'debit', width:150, editable:true,
+        cellEditor:'agNumberCellEditor', valueFormatter:p=>p.value?fmt2(p.value):'',
+        cellStyle:{textAlign:'right', fontWeight:'600'}},
+      {headerName: IS_AR?'دائن':'Credit', field:'credit', width:150, editable:true,
+        cellEditor:'agNumberCellEditor', valueFormatter:p=>p.value?fmt2(p.value):'',
+        cellStyle:{textAlign:'right', fontWeight:'600'}},
+    ],
+    rowData: [], animateRows:true, enableRtl:IS_AR,
+    defaultColDef:{resizable:true, sortable:true, filter:true},
+    onCellValueChanged(p){
+      if (p.colDef.field === 'debit' && Number(p.newValue) > 0) p.node.setDataValue('credit', 0);
+      if (p.colDef.field === 'credit' && Number(p.newValue) > 0) p.node.setDataValue('debit', 0);
+      computeOBTotals();
+    },
+    onGridReady(p){ obGridApi = p.api; },
+  });
+}
+
+function computeOBTotals(){
+  if (!obGridApi) return;
+  let td = 0, tc = 0;
+  obGridApi.forEachNode(n => { td += Number(n.data.debit)||0; tc += Number(n.data.credit)||0; });
+  document.getElementById('obTotDebit').textContent = fmt2(td);
+  document.getElementById('obTotCredit').textContent = fmt2(tc);
+  const diff = Math.round((td - tc) * 100) / 100;
+  document.getElementById('obDiff').textContent = fmt2(diff);
+  document.getElementById('obDiffCard').classList.toggle('mismatch', Math.abs(diff) > 0.005);
+}
+
+function resetOBForm(){
+  document.getElementById('obDocNo').value = '';
+  document.getElementById('obBalanceDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('obBalanceDate').disabled = false;
+  document.getElementById('obStatus').value = IS_AR?'مسودة':'Draft';
+  document.getElementById('obNarration').value = '';
+  document.getElementById('obNarration').disabled = false;
+  document.getElementById('obSearch').value = '';
+  document.getElementById('obSaveBtn').style.display = '';
+  document.getElementById('obPostBtn').style.display = '';
+  currentOBId = null;
+}
+
+function setFormLocked(locked){
+  document.getElementById('obBalanceDate').disabled = locked;
+  document.getElementById('obNarration').disabled = locked;
+  if (obGridApi){
+    obGridApi.setGridOption('columnDefs', obGridApi.getColumnDefs().map(c =>
+      ({...c, editable: locked ? false : (c.field==='debit'||c.field==='credit')})));
+  }
+  document.getElementById('obSaveBtn').style.display = locked ? 'none' : '';
+  document.getElementById('obPostBtn').style.display = locked ? 'none' : '';
+}
+
+function openNewOB(){
+  resetOBForm();
+  ensureEntryGrid();
+  loadAccounts().then(list=>{
+    obGridApi.setGridOption('rowData', list.map(a => ({...a, debit:0, credit:0})));
+    computeOBTotals();
+  });
+  setFormLocked(false);
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('obModal')).show();
+}
+
+function openEditOB(id){
+  resetOBForm();
+  ensureEntryGrid();
+  Promise.all([loadAccounts(), fetch('/coa/opening-balance/'+id+'/json').then(r=>r.json())]).then(([accounts, doc])=>{
+    currentOBId = id;
+    document.getElementById('obDocNo').value = doc.doc_no || (IS_AR?'يُنشأ عند الترحيل':'Assigned on Post');
+    document.getElementById('obBalanceDate').value = doc.balance_date || '';
+    document.getElementById('obStatus').value = doc.status === 'Posted' ? (IS_AR?'مرحّل':'Posted') : (IS_AR?'مسودة':'Draft');
+    document.getElementById('obNarration').value = doc.narration || '';
+    const byCode = {};
+    (doc.lines||[]).forEach(l => { byCode[l.code] = l; });
+    const rows = accounts.map(a => {
+      const l = byCode[a.code];
+      return {...a, debit: l ? l.debit : 0, credit: l ? l.credit : 0};
+    });
+    obGridApi.setGridOption('rowData', rows);
+    computeOBTotals();
+    setFormLocked(doc.status === 'Posted');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('obModal')).show();
+  });
+}
+
+function collectFormData(){
+  const fd = new FormData();
+  if (currentOBId) fd.set('id', currentOBId);
+  fd.set('balance_date', document.getElementById('obBalanceDate').value);
+  fd.set('narration', document.getElementById('obNarration').value);
+  obGridApi.forEachNode(n => {
+    const debit = Number(n.data.debit)||0, credit = Number(n.data.credit)||0;
+    if (!debit && !credit) return;
+    fd.append('code[]', n.data.code);
+    fd.append('account_name[]', n.data.name);
+    fd.append('debit[]', debit);
+    fd.append('credit[]', credit);
+  });
+  return fd;
+}
+
+function submitOB(post){
+  if (!document.getElementById('obBalanceDate').value){
+    alert(IS_AR?'الرجاء إدخال تاريخ الرصيد':'Please enter the Balance Date');
+    return;
+  }
+  const fd = collectFormData();
+  fetch(post ? '/coa/opening-balance/post' : '/coa/opening-balance/save', {
+    method:'POST', headers:{'X-CSRFToken':OB_CSRF}, body: fd,
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok){ alert(d.error || (IS_AR?'فشلت العملية':'Operation failed')); return; }
+    currentOBId = d.id;
+    if (post){
+      bootstrap.Modal.getInstance(document.getElementById('obModal')).hide();
+    } else {
+      document.getElementById('obStatus').value = IS_AR?'مسودة':'Draft';
+    }
+    loadOBList();
+  }).catch(()=>alert(IS_AR?'فشل الاتصال بالخادم':'Server request failed'));
+}
+
+function deleteOB(id){
+  if (!confirm(IS_AR?'هل تريد حذف هذه المسودة؟':'Delete this draft?')) return;
+  fetch('/coa/opening-balance/'+id+'/delete', {method:'POST', headers:{'X-CSRFToken':OB_CSRF}})
+    .then(r=>r.json()).then(d=>{
+      if (!d.ok){ alert(d.error || (IS_AR?'فشل الحذف':'Delete failed')); return; }
+      loadOBList();
+    });
+}
+</script>
+{% endblock %}

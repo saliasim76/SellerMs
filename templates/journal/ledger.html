@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}دفتر الأستاذ{% else %}Ledger{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('journal.journal_list') }}">{% if ar %}قيود اليومية{% else %}Journal Entries{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}دفتر الأستاذ{% else %}Ledger{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.ldg-page{padding:4px 2px;}
+.ldg-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+.ldg-title{font-size:20px;font-weight:800;color:#1e3a5f;margin:0;}
+.ldg-toolbar{display:flex;gap:8px;margin-inline-start:auto;flex-wrap:wrap;}
+.jbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #d1d5db;background:#fff;color:#374151;}
+.jbtn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+.jbtn:disabled{opacity:.5;cursor:not-allowed;}
+.jbtn-primary{background:#2563eb;color:#fff;border-color:#2563eb;}
+.jbtn-primary:hover{background:#1d4ed8;color:#fff;}
+.jbtn-green{background:#0d9488;color:#fff;border-color:#0d9488;}
+.jbtn-green:hover{background:#0f766e;color:#fff;}
+.jbtn-red{background:#dc2626;color:#fff;border-color:#dc2626;}
+.jbtn-red:hover{background:#b91c1c;color:#fff;}
+
+.ldg-filters{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:16px;}
+.ldg-filters-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;}
+.ldg-fld label{display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:4px;}
+.ldg-fld label .req{color:#dc2626;}
+.ldg-fld select, .ldg-fld input{width:100%;padding:7px 9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;}
+.ldg-fld select:focus, .ldg-fld input:focus{outline:none;border-color:#2563eb;}
+.ldg-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+
+.ldg-summary{display:none;}
+.ldg-summary.show{display:block;}
+.ldg-acct-line{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13px;color:#374151;margin-bottom:12px;}
+.ldg-acct-line b{color:#111827;}
+.ldg-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px;}
+.ldg-card{border-radius:10px;padding:14px 16px;border:1px solid #e2e8f0;background:#fff;}
+.ldg-card .lbl{font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px;}
+.ldg-card .val{font-size:19px;font-weight:800;color:#111827;font-variant-numeric:tabular-nums;}
+.ldg-card.opening{border-inline-start:4px solid #6366f1;}
+.ldg-card.debit{border-inline-start:4px solid #16a34a;}
+.ldg-card.credit{border-inline-start:4px solid #dc2626;}
+.ldg-card.closing{border-inline-start:4px solid #1e3a5f;}
+.ldg-card .val.neg{color:#dc2626;}
+
+.ldg-warn{background:#fef2f2;border:1.5px solid #fecaca;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:14px;display:none;}
+.ldg-warn.show{display:block;}
+
+.ldg-table-wrap{border:1px solid #e2e8f0;border-radius:10px;overflow:auto;background:#fff;}
+.ldg-table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px;}
+.ldg-table thead th{background:#1e3a5f;color:#fff;padding:10px 10px;font-size:11px;text-transform:uppercase;text-align:left;white-space:nowrap;position:sticky;top:0;}
+.ldg-table thead th.num{text-align:right;}
+.ldg-table td{padding:9px 10px;border-bottom:1px solid #f1f5f9;white-space:nowrap;}
+.ldg-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.ldg-table td.desc{white-space:normal;min-width:220px;}
+.ldg-row-opening td{background:#eef2ff;font-weight:700;color:#3730a3;}
+.ldg-row-neg{color:#dc2626;}
+.ldg-table tfoot td{background:#f1f5f9;font-weight:800;color:#111827;}
+.ldg-empty{padding:40px 20px;text-align:center;color:#9ca3af;font-size:14px;}
+
+.ldg-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 4px;flex-wrap:wrap;}
+.ldg-pagination .info{font-size:12.5px;color:#6b7280;}
+.ldg-pagination .controls{display:flex;align-items:center;gap:6px;}
+.ldg-pagination select{padding:5px 8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12.5px;}
+[dir="rtl"] .ldg-table thead th{text-align:right;}
+[dir="rtl"] .ldg-table thead th.num{text-align:left;}
+[dir="rtl"] .ldg-table td.num{text-align:left;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ldg-page">
+  <div class="ldg-head">
+    <h2 class="ldg-title"><i class="fas fa-book-open me-2"></i>{% if ar %}دفتر الأستاذ{% else %}Ledger{% endif %}</h2>
+    <div class="ldg-toolbar">
+      <button class="jbtn" id="ldgResetBtn" onclick="resetLedger()"><i class="fas fa-undo"></i>{% if ar %}إعادة تعيين{% else %}Reset{% endif %}</button>
+      <button class="jbtn" id="ldgPrintBtn" onclick="printLedger()" disabled><i class="fas fa-print"></i>{% if ar %}طباعة{% else %}Print{% endif %}</button>
+      <button class="jbtn jbtn-green" id="ldgExcelBtn" onclick="exportLedgerExcel()" disabled><i class="fas fa-file-excel"></i>{% if ar %}تصدير Excel{% else %}Export Excel{% endif %}</button>
+      <button class="jbtn jbtn-red" id="ldgPdfBtn" onclick="exportLedgerPdf()" disabled><i class="fas fa-file-pdf"></i>{% if ar %}تصدير PDF{% else %}Export PDF{% endif %}</button>
+    </div>
+  </div>
+
+  {# ── FILTERS ── #}
+  <div class="ldg-filters">
+    <div class="ldg-filters-grid">
+      <div class="ldg-fld">
+        <label>{% if ar %}الحساب{% else %}Account{% endif %} <span class="req">*</span></label>
+        <select id="ldgAccount" onchange="onAccountChange()"><option value="">{% if ar %}اختر الحساب...{% else %}Select account...{% endif %}</option></select>
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}نوع الحساب{% else %}Account Type{% endif %}</label>
+        <select id="ldgAccountType" onchange="filterAccountOptions()"><option value="">{% if ar %}الكل{% else %}All{% endif %}</option></select>
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}من تاريخ{% else %}From Date{% endif %}</label>
+        <input type="date" id="ldgFromDate">
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}إلى تاريخ{% else %}To Date{% endif %}</label>
+        <input type="date" id="ldgToDate">
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</label>
+        <input type="date" id="ldgPostingDate">
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}عميل / مورد / موظف{% else %}Customer / Supp / Employee{% endif %}</label>
+        <select id="ldgPartyType" onchange="onPartyTypeChange()">
+          <option value="">{% if ar %}الكل{% else %}All{% endif %}</option>
+          <option value="buyer">{% if ar %}عميل{% else %}Customer{% endif %}</option>
+          <option value="supplier">{% if ar %}مورد{% else %}Supplier{% endif %}</option>
+          <option value="employee">{% if ar %}موظف{% else %}Employee{% endif %}</option>
+        </select>
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}القيمة{% else %}Value{% endif %}</label>
+        <select id="ldgPartyValue" onchange="onPartyValueChange()" disabled>
+          <option value="">{% if ar %}الكل{% else %}All{% endif %}</option>
+        </select>
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}نوع المستند{% else %}Document Type{% endif %}</label>
+        <select id="ldgDocType" onchange="onDocTypeChange()"><option value="">{% if ar %}الكل{% else %}All{% endif %}</option></select>
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}رقم المستند{% else %}Document No.{% endif %}</label>
+        <select id="ldgDocNo"><option value="">{% if ar %}الكل{% else %}All{% endif %}</option></select>
+      </div>
+      <div class="ldg-fld">
+        <label>{% if ar %}الحالة{% else %}Status{% endif %}</label>
+        <select id="ldgStatus" disabled title="{% if ar %}يحتوي هذا السجل على المعاملات المرحّلة فقط{% else %}This ledger only ever contains Posted transactions{% endif %}">
+          <option>{% if ar %}مرحّل{% else %}Posted{% endif %}</option>
+        </select>
+      </div>
+    </div>
+    <div class="ldg-actions">
+      <button class="jbtn jbtn-primary" onclick="searchLedger()"><i class="fas fa-search"></i>{% if ar %}بحث{% else %}Search{% endif %}</button>
+    </div>
+  </div>
+
+  <div class="ldg-warn" id="ldgWarn"><i class="fas fa-triangle-exclamation me-1"></i><span id="ldgWarnText"></span></div>
+
+  {# ── SUMMARY ── #}
+  <div class="ldg-summary" id="ldgSummary">
+    <div class="ldg-acct-line">
+      <span>{% if ar %}رمز الحساب:{% else %}Account Code:{% endif %} <b id="sumAcctCode">—</b></span>
+      <span>{% if ar %}اسم الحساب:{% else %}Account Name:{% endif %} <b id="sumAcctName">—</b></span>
+      <span>{% if ar %}من:{% else %}From:{% endif %} <b id="sumFrom">—</b></span>
+      <span>{% if ar %}إلى:{% else %}To:{% endif %} <b id="sumTo">—</b></span>
+    </div>
+    <div class="ldg-cards">
+      <div class="ldg-card opening"><div class="lbl">{% if ar %}الرصيد الافتتاحي{% else %}Opening Balance{% endif %}</div><div class="val" id="cardOpening">0.00</div></div>
+      <div class="ldg-card debit"><div class="lbl">{% if ar %}إجمالي المدين{% else %}Total Debit{% endif %}</div><div class="val" id="cardDebit">0.00</div></div>
+      <div class="ldg-card credit"><div class="lbl">{% if ar %}إجمالي الدائن{% else %}Total Credit{% endif %}</div><div class="val" id="cardCredit">0.00</div></div>
+      <div class="ldg-card closing"><div class="lbl">{% if ar %}الرصيد الختامي{% else %}Closing Balance{% endif %}</div><div class="val" id="cardClosing">0.00</div></div>
+    </div>
+  </div>
+
+  {# ── TABLE ── #}
+  <div id="ldgTableArea">
+    <div class="ldg-empty">{% if ar %}اختر حسابًا واضغط "بحث" لعرض دفتر الأستاذ{% else %}Select an Account and click Search to view the ledger{% endif %}</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const T = IS_AR
+  ? { date:'التاريخ', docType:'نوع المستند', docNo:'رقم المستند', desc:'البيان', debit:'مدين', credit:'دائن', balance:'الرصيد',
+      opening:'الرصيد الافتتاحي', totalRow:'الإجمالي', of:'من', page:'صفحة', rows:'صف', noRows:'لا توجد معاملات ضمن الفترة المحددة.',
+      selectAccountFirst:'الرجاء اختيار الحساب أولاً.', integrityWarn:'تحذير: عدم تطابق في تكامل البيانات المحاسبية — الرصيد الختامي لا يساوي آخر رصيد جاري محسوب.' }
+  : { date:'Date', docType:'Document Type', docNo:'Document No.', desc:'Description', debit:'Debit', credit:'Credit', balance:'Balance',
+      opening:'Opening Balance', totalRow:'Total', of:'of', page:'Page', rows:'rows', noRows:'No transactions in the selected period.',
+      selectAccountFirst:'Please select an Account first.', integrityWarn:'Accounting data-integrity warning: Closing Balance does not match the last computed running balance.' };
+
+let ACCOUNTS = [];
+let CURRENT = { page: 1, pageSize: 100, lastQuery: '' };
+
+function fmtPlain(v){ return (Math.round((v||0)*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtBalance(v){
+  v = Math.round((v||0)*100)/100;
+  if (v < 0) return '(' + fmtPlain(Math.abs(v)) + ')';
+  return fmtPlain(v);
+}
+function fmtAmount(v){
+  v = Math.round((v||0)*100)/100;
+  if (Math.abs(v) < 0.005) return '';
+  return fmtPlain(v);
+}
+
+const PARTY_URL = {
+  buyer: '/cash-bank/outgoing-payments/buyers',
+  supplier: '/cash-bank/outgoing-payments/suppliers',
+  employee: '/cash-bank/outgoing-payments/employees',
+};
+const PARTY_PARAM = { buyer: 'buyer_id', supplier: 'supplier_id', employee: 'employee_id' };
+
+document.addEventListener('DOMContentLoaded', function(){
+  loadAccounts().then(applyDeepLinkParams);
+  loadAccountTypes();
+  reloadDocTypeOptions();
+  reloadDocNoOptions();
+});
+
+function applyDeepLinkParams(){
+  const params = new URLSearchParams(window.location.search);
+  const account = params.get('account');
+  if (!account) return;
+  document.getElementById('ldgAccount').value = account;
+  const postingDate = params.get('posting_date');
+  if (postingDate) document.getElementById('ldgPostingDate').value = postingDate;
+  const fromDate = params.get('from_date');
+  if (fromDate) document.getElementById('ldgFromDate').value = fromDate;
+  const toDate = params.get('to_date');
+  if (toDate) document.getElementById('ldgToDate').value = toDate;
+  reloadDocTypeOptions();
+  reloadDocNoOptions();
+  searchLedger();
+}
+
+function loadAccounts(){
+  return fetch('/journal/ledger/accounts').then(r=>r.json()).then(list=>{
+    ACCOUNTS = list || [];
+    renderAccountOptions(ACCOUNTS);
+  });
+}
+function renderAccountOptions(list){
+  const sel = document.getElementById('ldgAccount');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">' + (IS_AR?'اختر الحساب...':'Select account...') + '</option>' +
+    list.map(a => `<option value="${a.code}">${a.code} — ${IS_AR && a.name_ar ? a.name_ar : a.name}</option>`).join('');
+  if (current && list.some(a=>a.code===current)) sel.value = current;
+}
+function filterAccountOptions(){
+  const type = document.getElementById('ldgAccountType').value;
+  renderAccountOptions(type ? ACCOUNTS.filter(a=>a.account_type_code===type) : ACCOUNTS);
+}
+function loadAccountTypes(){
+  fetch('/journal/ledger/account-types').then(r=>r.json()).then(list=>{
+    const sel = document.getElementById('ldgAccountType');
+    sel.innerHTML = '<option value="">' + (IS_AR?'الكل':'All') + '</option>' +
+      (list||[]).map(t => `<option value="${t.code}">${t.name}</option>`).join('');
+  });
+}
+
+function onAccountChange(){
+  reloadDocTypeOptions();
+  reloadDocNoOptions();
+}
+
+function onPartyTypeChange(){
+  const type = document.getElementById('ldgPartyType').value;
+  const valueSel = document.getElementById('ldgPartyValue');
+  if (!type){
+    valueSel.innerHTML = '<option value="">' + (IS_AR?'الكل':'All') + '</option>';
+    valueSel.disabled = true;
+    onPartyValueChange();
+    return;
+  }
+  valueSel.disabled = false;
+  fetch(PARTY_URL[type]).then(r=>r.json()).then(list=>{
+    valueSel.innerHTML = '<option value="">' + (IS_AR?'الكل':'All') + '</option>' +
+      (list||[]).map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+    onPartyValueChange();
+  });
+}
+function onPartyValueChange(){
+  reloadDocTypeOptions();
+  reloadDocNoOptions();
+}
+function onDocTypeChange(){
+  reloadDocNoOptions();
+}
+
+function partyQueryParams(){
+  const params = new URLSearchParams();
+  const type = document.getElementById('ldgPartyType').value;
+  const value = document.getElementById('ldgPartyValue').value;
+  if (type && value) params.set(PARTY_PARAM[type], value);
+  const account = document.getElementById('ldgAccount').value;
+  if (account) params.set('account', account);
+  return params;
+}
+
+function reloadDocTypeOptions(){
+  const sel = document.getElementById('ldgDocType');
+  const current = sel.value;
+  fetch('/journal/ledger/document-types?' + partyQueryParams().toString()).then(r=>r.json()).then(list=>{
+    list = list || [];
+    sel.innerHTML = '<option value="">' + (IS_AR?'الكل':'All') + '</option>' +
+      list.map(t => `<option value="${t}">${t}</option>`).join('');
+    if (current && list.includes(current)) sel.value = current;
+  });
+}
+function reloadDocNoOptions(){
+  const sel = document.getElementById('ldgDocNo');
+  const current = sel.value;
+  const params = partyQueryParams();
+  const docType = document.getElementById('ldgDocType').value;
+  if (docType) params.set('document_type', docType);
+  fetch('/journal/ledger/document-numbers?' + params.toString()).then(r=>r.json()).then(list=>{
+    list = list || [];
+    sel.innerHTML = '<option value="">' + (IS_AR?'الكل':'All') + '</option>' +
+      list.map(t => `<option value="${t}">${t}</option>`).join('');
+    if (current && list.includes(current)) sel.value = current;
+  });
+}
+
+function buildQuery(page){
+  const params = new URLSearchParams();
+  params.set('account', document.getElementById('ldgAccount').value);
+  const fromDate = document.getElementById('ldgFromDate').value;
+  const toDate = document.getElementById('ldgToDate').value;
+  const postingDate = document.getElementById('ldgPostingDate').value;
+  const partyType = document.getElementById('ldgPartyType').value;
+  const partyValue = document.getElementById('ldgPartyValue').value;
+  const docType = document.getElementById('ldgDocType').value;
+  const docNo = document.getElementById('ldgDocNo').value;
+  if (fromDate) params.set('from_date', fromDate);
+  if (toDate) params.set('to_date', toDate);
+  if (postingDate) params.set('posting_date', postingDate);
+  if (partyType && partyValue) params.set(PARTY_PARAM[partyType], partyValue);
+  if (docType) params.set('document_type', docType);
+  if (docNo) params.set('document_no', docNo);
+  params.set('page', page || 1);
+  params.set('page_size', CURRENT.pageSize);
+  return params.toString();
+}
+
+function resetLedger(){
+  document.getElementById('ldgAccount').value = '';
+  document.getElementById('ldgAccountType').value = '';
+  filterAccountOptions();
+  document.getElementById('ldgFromDate').value = '';
+  document.getElementById('ldgToDate').value = '';
+  document.getElementById('ldgPostingDate').value = '';
+  document.getElementById('ldgPartyType').value = '';
+  document.getElementById('ldgPartyValue').innerHTML = '<option value="">' + (IS_AR?'الكل':'All') + '</option>';
+  document.getElementById('ldgPartyValue').disabled = true;
+  document.getElementById('ldgSummary').classList.remove('show');
+  document.getElementById('ldgWarn').classList.remove('show');
+  document.getElementById('ldgTableArea').innerHTML =
+    '<div class="ldg-empty">' + (IS_AR?'اختر حسابًا واضغط "بحث" لعرض دفتر الأستاذ':'Select an Account and click Search to view the ledger') + '</div>';
+  ['ldgPrintBtn','ldgExcelBtn','ldgPdfBtn'].forEach(id => document.getElementById(id).disabled = true);
+  CURRENT.page = 1;
+  CURRENT.lastQuery = '';
+  reloadDocTypeOptions();
+  reloadDocNoOptions();
+}
+
+function searchLedger(){
+  const account = document.getElementById('ldgAccount').value;
+  if (!account){
+    alert(T.selectAccountFirst);
+    return;
+  }
+  CURRENT.page = 1;
+  fetchLedger();
+}
+
+function fetchLedger(){
+  const qs = buildQuery(CURRENT.page);
+  CURRENT.lastQuery = qs;
+  fetch('/journal/ledger/data?' + qs).then(r=>r.json()).then(renderLedger);
+}
+
+function goPage(delta){
+  CURRENT.page = Math.max(1, CURRENT.page + delta);
+  fetchLedger();
+}
+function changePageSize(sel){
+  CURRENT.pageSize = parseInt(sel.value, 10) || 100;
+  CURRENT.page = 1;
+  fetchLedger();
+}
+
+function renderLedger(res){
+  if (!res || res.ok === false){
+    document.getElementById('ldgSummary').classList.remove('show');
+    document.getElementById('ldgTableArea').innerHTML = '<div class="ldg-empty">' + (res && res.error ? res.error : T.selectAccountFirst) + '</div>';
+    ['ldgPrintBtn','ldgExcelBtn','ldgPdfBtn'].forEach(id => document.getElementById(id).disabled = true);
+    return;
+  }
+  ['ldgPrintBtn','ldgExcelBtn','ldgPdfBtn'].forEach(id => document.getElementById(id).disabled = false);
+
+  document.getElementById('sumAcctCode').textContent = res.account.code;
+  document.getElementById('sumAcctName').textContent = IS_AR && res.account.name_ar ? res.account.name_ar : res.account.name;
+  document.getElementById('sumFrom').textContent = res.from_date || (IS_AR?'—':'—');
+  document.getElementById('sumTo').textContent = res.to_date || (IS_AR?'—':'—');
+  document.getElementById('cardOpening').textContent = fmtBalance(res.opening_balance);
+  document.getElementById('cardOpening').classList.toggle('neg', res.opening_balance < 0);
+  document.getElementById('cardDebit').textContent = fmtPlain(res.total_debit);
+  document.getElementById('cardCredit').textContent = fmtPlain(res.total_credit);
+  document.getElementById('cardClosing').textContent = fmtBalance(res.closing_balance);
+  document.getElementById('cardClosing').classList.toggle('neg', res.closing_balance < 0);
+  document.getElementById('ldgSummary').classList.add('show');
+
+  const warn = document.getElementById('ldgWarn');
+  if (!res.integrity_ok){
+    document.getElementById('ldgWarnText').textContent = T.integrityWarn;
+    warn.classList.add('show');
+  } else {
+    warn.classList.remove('show');
+  }
+
+  let rowsHtml = '';
+  if (res.show_opening_row){
+    rowsHtml += `<tr class="ldg-row-opening">
+      <td>${res.from_date || ''}</td><td>—</td><td>—</td><td class="desc">${T.opening}</td>
+      <td class="num"></td><td class="num"></td><td class="num">${fmtBalance(res.opening_balance)}</td></tr>`;
+  }
+  if (!res.rows.length && !res.show_opening_row){
+    rowsHtml = `<tr><td colspan="7" class="ldg-empty">${T.noRows}</td></tr>`;
+  } else {
+    res.rows.forEach(r => {
+      const balNeg = r.balance < 0 ? ' ldg-row-neg' : '';
+      rowsHtml += `<tr>
+        <td>${r.posting_date}</td><td>${r.document_type||''}</td><td>${r.document_no||''}</td>
+        <td class="desc">${(r.description||'').replace(/</g,'&lt;')}</td>
+        <td class="num">${fmtAmount(r.debit)}</td><td class="num">${fmtAmount(r.credit)}</td>
+        <td class="num${balNeg}">${fmtBalance(r.balance)}</td></tr>`;
+    });
+  }
+
+  const showTotalRow = res.page === res.total_pages;
+  const totalRowHtml = showTotalRow ? `<tfoot><tr>
+    <td colspan="4">${T.totalRow}</td>
+    <td class="num">${fmtPlain(res.total_debit)}</td>
+    <td class="num">${fmtPlain(res.total_credit)}</td>
+    <td class="num">${fmtBalance(res.closing_balance)}</td>
+  </tr></tfoot>` : '';
+
+  document.getElementById('ldgTableArea').innerHTML = `
+    <div class="ldg-table-wrap">
+      <table class="ldg-table">
+        <thead><tr>
+          <th>${T.date}</th><th>${T.docType}</th><th>${T.docNo}</th><th>${T.desc}</th>
+          <th class="num">${T.debit}</th><th class="num">${T.credit}</th><th class="num">${T.balance}</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+        ${totalRowHtml}
+      </table>
+    </div>
+    <div class="ldg-pagination">
+      <span class="info">${T.page} ${res.page} ${T.of} ${res.total_pages} (${res.total_count} ${T.rows})</span>
+      <div class="controls">
+        <select onchange="changePageSize(this)">
+          ${[50,100,200,500].map(n => `<option value="${n}" ${n===CURRENT.pageSize?'selected':''}>${n}</option>`).join('')}
+        </select>
+        <button class="jbtn" ${res.page<=1?'disabled':''} onclick="goPage(-1)"><i class="fas fa-chevron-${IS_AR?'right':'left'}"></i></button>
+        <button class="jbtn" ${res.page>=res.total_pages?'disabled':''} onclick="goPage(1)"><i class="fas fa-chevron-${IS_AR?'left':'right'}"></i></button>
+      </div>
+    </div>`;
+}
+
+function printLedger(){
+  if (!CURRENT.lastQuery) return;
+  window.open('/journal/ledger/print?' + CURRENT.lastQuery, '_blank');
+}
+function exportLedgerPdf(){
+  if (!CURRENT.lastQuery) return;
+  window.open('/journal/ledger/print?' + CURRENT.lastQuery + '&autoprint=1', '_blank');
+}
+function exportLedgerExcel(){
+  if (!CURRENT.lastQuery) return;
+  window.location.href = '/journal/ledger/export/excel?' + CURRENT.lastQuery;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% set ar = current_locale != 'en' %}
+{% block title %}{{ t('so_quantity_tracking') }} – Seller MS{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{{ t('dashboard') }}</a></li>
+<li class="breadcrumb-item active">{{ t('so_quantity_tracking') }}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.tool-btn{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:38px;padding:0 12px;border:none;border-radius:8px;font-size:14px;cursor:pointer;color:#fff;transition:filter .15s;}
+.tool-btn:hover{filter:brightness(0.92);}
+.ag-theme-alpine{--ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#eff6ff;--ag-header-height:44px;--ag-row-height:40px;--ag-cell-horizontal-padding:12px;}
+.so-pill{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.so-Open{background:#fef3c7;color:#92400e;}
+.so-Partially-Delivered{background:#dbeafe;color:#1e40af;}
+.so-Fully-Delivered{background:#dcfce7;color:#166534;}
+.vd-btn{background:#2563eb;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;}
+.vd-btn:hover{filter:brightness(0.92);}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading"><i class="fas fa-clipboard-list me-2"></i>{{ t('so_quantity_tracking') }}</h2>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="tool-btn tool-btn-blue" onclick="refreshGrid()" title="{{ t('refresh') }}"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn tool-btn-green" onclick="exportCSV()" title="{{ t('export_action') }}"><i class="fas fa-file-csv"></i></button>
+      <button class="tool-btn tool-btn-gray" onclick="clearAllFilters()" title="{{ t('clear_filters') }}"><i class="fas fa-times-circle"></i></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="selText" style="font-size:12px;font-weight:600;color:var(--gray-400);">0 {{ t('records') }}</span>
+      <div style="position:relative;">
+        <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:12px;pointer-events:none;"></i>
+        <input id="globalSearch" type="text" style="padding:8px 12px 8px 32px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:13px;outline:none;width:220px;" placeholder="{{ t('search_placeholder') }}" oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+  <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
+    <div id="soGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:520px;"></div>
+  </div>
+</div>
+
+<!-- ══ View Deliveries modal ══ -->
+<div class="modal fade" id="deliveriesModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-truck-loading me-2"></i><span id="dmTitle"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-sm table-bordered">
+          <thead><tr>
+            <th>{{ 'رقم إذن التسليم' if ar else 'DN Doc No.' }}</th>
+            <th>{{ 'الكمية' if ar else 'Quantity' }}</th>
+            <th>{{ 'المخزن' if ar else 'Store' }}</th>
+            <th>{{ 'المشتري' if ar else 'Buyer' }}</th>
+            <th>{{ 'تاريخ الترحيل' if ar else 'Posting Date' }}</th>
+          </tr></thead>
+          <tbody id="dmBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const DATA_URL = '/sales/so-tracking/data';
+
+function statusPill(p){
+  const s = (p.value || 'Open').replace(/ /g, '-');
+  return `<span class="so-pill so-${s}">${p.value||'Open'}</span>`;
+}
+class ViewDeliveriesR{
+  init(p){
+    this.el = document.createElement('div');
+    this.el.innerHTML = `<button class="vd-btn"><i class="fas fa-eye me-1"></i>${IS_AR?'عرض':'View'}</button>`;
+    this.el.querySelector('button').onclick = () => openDeliveries(p.data);
+  }
+  getGui(){ return this.el; }
+}
+
+let gridApi;
+agGrid.createGrid(document.getElementById('soGrid'), {
+  columnDefs: [
+    {headerName: IS_AR?'رقم أمر البيع':'SO Doc No.', field:'so_doc_no', minWidth:130, filter:'agTextColumnFilter', enableRowGroup:true},
+    {headerName: IS_AR?'رقم البند':'Line #', field:'line_number', width:80, filter:'agNumberColumnFilter'},
+    {headerName: IS_AR?'كود الصنف':'Item Code', field:'item_code', minWidth:120, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'اسم الصنف':'Item Name', field:'item_desc', minWidth:170, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'الكمية الأصلية':'Original Qty', field:'quantity', width:110, filter:'agNumberColumnFilter'},
+    {headerName: IS_AR?'المسلّم':'Delivered Qty', field:'delivered_quantity', width:110, filter:'agNumberColumnFilter'},
+    {headerName: IS_AR?'المتبقي':'Remaining Qty', field:'remaining_quantity', width:110, filter:'agNumberColumnFilter', cellStyle:{fontWeight:700, color:'#166534'}},
+    {headerName: IS_AR?'المخزن':'Store Type', field:'store_type', minWidth:150, filter:'agTextColumnFilter', enableRowGroup:true},
+    {headerName: IS_AR?'حالة أمر البيع':'SO Status', field:'so_status', width:120, filter:'agTextColumnFilter', enableRowGroup:true},
+    {headerName: IS_AR?'حالة التسليم':'Delivery Status', field:'delivery_status', width:150, cellRenderer:statusPill, filter:'agSetColumnFilter', enableRowGroup:true},
+    {headerName: IS_AR?'آخر إذن تسليم':'Last DN Doc No.', field:'last_dn_doc_no', minWidth:140, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'عرض التسليمات':'View Deliveries', field:'_v', width:130, sortable:false, filter:false, cellRenderer:ViewDeliveriesR},
+  ],
+  rowData: [], pagination:true, paginationPageSize:20, paginationPageSizeSelector:[20,50,100],
+  sideBar:{toolPanels:[{id:'columns',labelDefault:IS_AR?'الأعمدة':'Columns',toolPanel:'agColumnsToolPanel'},{id:'filters',labelDefault:IS_AR?'الفلاتر':'Filters',toolPanel:'agFiltersToolPanel'}],defaultToolPanel:''},
+  rowGroupPanelShow:'always',
+  animateRows:true, enableRtl:IS_AR,
+  defaultColDef:{sortable:true, resizable:true, filter:true, floatingFilter:true, enableRowGroup:true, menuTabs:['filterMenuTab','columnsMenuTab','generalMenuTab']},
+  onGridReady(p){ gridApi = p.api; loadData(); },
+  onFilterChanged(){ updateBadge(); }, onPaginationChanged(){ updateBadge(); },
+});
+
+function updateBadge(){
+  if(!gridApi) return;
+  let n = 0;
+  gridApi.forEachNodeAfterFilter(node => { if(!node.group) n++; });
+  document.getElementById('selText').textContent = n + ' ' + '{{ t("records") }}';
+}
+function loadData(){
+  fetch(DATA_URL).then(r=>r.json()).then(d=>{ gridApi.setGridOption('rowData', d); updateBadge(); });
+}
+function refreshGrid(){ if(gridApi) loadData(); }
+function exportCSV(){ if(gridApi) gridApi.exportDataAsCsv({fileName:'so_quantity_tracking.csv'}); }
+function clearAllFilters(){
+  if(!gridApi) return;
+  gridApi.setFilterModel(null);
+  gridApi.setGridOption('quickFilterText','');
+  const gs = document.getElementById('globalSearch'); if(gs) gs.value='';
+  gridApi.onFilterChanged();
+  updateBadge();
+}
+
+let _dmModal;
+function openDeliveries(row){
+  document.getElementById('dmTitle').textContent = (row.so_doc_no||'') + ' — ' + (row.item_code||'');
+  fetch('/sales/so-tracking/' + row.sales_order_line_item_id + '/deliveries')
+    .then(r => r.json())
+    .then(rows => {
+      const tb = document.getElementById('dmBody');
+      tb.innerHTML = (rows||[]).map(r => `<tr>
+          <td>${r.delivery_note_doc_no||''}</td>
+          <td>${Math.abs(parseFloat(r.quantity)||0)}</td>
+          <td>${r.store_name||''}</td>
+          <td>${r.buyer_name||''}</td>
+          <td>${r.posting_date||''}</td>
+        </tr>`).join('') || `<tr><td colspan="5" class="text-center text-muted">${IS_AR?'لا يوجد تسليمات':'No deliveries yet'}</td></tr>`;
+      if (!_dmModal) _dmModal = new bootstrap.Modal(document.getElementById('deliveriesModal'));
+      _dmModal.show();
+    });
+}
+</script>
+{% endblock %}

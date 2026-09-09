@@ -1,0 +1,1035 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}دفعة صادرة{% else %}Outgoing Payment{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}دفعة صادرة{% else %}Outgoing Payment{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.st-pill{display:inline-flex;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.st-draft{background:#e5e7eb;color:#374151;}
+.st-approved{background:#dbeafe;color:#1e40af;}
+.st-posted{background:#dcfce7;color:#15803d;}
+.st-cancelled{background:#fee2e2;color:#991b1b;}
+.op-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+.op-filters input, .op-filters select{padding:7px 9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:12.5px;}
+.op-section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:14px;}
+.op-section h6{font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;margin-bottom:12px;}
+.op-detail-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.op-detail-table th{background:#eff6ff;color:#1d4ed8;padding:6px 8px;text-align:start;font-size:11px;white-space:nowrap;}
+.op-detail-table td{padding:4px 6px;border-bottom:1px solid #f1f5f9;}
+.op-detail-table input, .op-detail-table select{width:100%;padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;}
+.op-detail-table input[readonly]{background:#f8fafc;color:#6b7280;}
+.op-remove-line{border:none;background:transparent;color:#dc2626;cursor:pointer;}
+.op-totals{display:flex;gap:22px;justify-content:flex-end;margin-top:10px;font-size:13px;}
+.op-totals b{color:#1e3a5f;}
+.op-picker-row{display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid #f1f5f9;font-size:12.5px;}
+.op-picker-row input[type=checkbox]{width:16px;height:16px;}
+.grl-lbl{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;}
+.grl-inp{width:100%;padding:8px 11px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box;}
+.grl-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.grl-table th{background:#1e3a5f;color:#fff;padding:8px 7px;font-size:10.5px;text-transform:uppercase;text-align:left;font-weight:600;}
+.grl-table td{padding:6px 7px;border-bottom:1px solid #f1f5f9;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading"><i class="fas fa-money-bill-wave" style="color:#dc2626;margin-right:8px;"></i>{% if ar %}دفعة صادرة{% else %}Outgoing Payment{% endif %}</h2>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="tool-btn tool-btn-green" onclick="openAdd()" title="{% if ar %}جديد{% else %}New{% endif %}"><i class="fas fa-plus"></i></button>
+      <button class="tool-btn tool-btn-blue" onclick="loadOp()" title="{% if ar %}تحديث{% else %}Refresh{% endif %}"><i class="fas fa-sync-alt"></i></button>
+    </div>
+  </div>
+
+  <div class="op-filters">
+    <input type="text" id="fltPaymentNo" placeholder="{% if ar %}رقم الدفعة{% else %}Payment No{% endif %}" oninput="renderRows()">
+    <select id="fltPayToType" onchange="renderRows()">
+      <option value="">{% if ar %}كل الأنواع{% else %}All Types{% endif %}</option>
+      <option value="Supplier">{% if ar %}مورد{% else %}Supplier{% endif %}</option>
+      <option value="Buyer">{% if ar %}مشتري{% else %}Buyer{% endif %}</option>
+      <option value="Employee">{% if ar %}موظف{% else %}Employee{% endif %}</option>
+      <option value="GL Account">{% if ar %}حساب دفتر الأستاذ{% else %}GL Account{% endif %}</option>
+    </select>
+    <input type="date" id="fltDateFrom" onchange="renderRows()">
+    <input type="date" id="fltDateTo" onchange="renderRows()">
+    <select id="fltStatus" onchange="renderRows()">
+      <option value="">{% if ar %}كل الحالات{% else %}All Statuses{% endif %}</option>
+      <option value="Draft">{% if ar %}مسودة{% else %}Draft{% endif %}</option>
+      <option value="Approved">{% if ar %}معتمد{% else %}Approved{% endif %}</option>
+      <option value="Posted">{% if ar %}مرحّل{% else %}Posted{% endif %}</option>
+      <option value="Cancelled">{% if ar %}ملغى{% else %}Cancelled{% endif %}</option>
+    </select>
+  </div>
+
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead>
+        <tr>
+          <th>{% if ar %}رقم الدفعة{% else %}Payment No{% endif %}</th>
+          <th>{% if ar %}النوع{% else %}Pay To Type{% endif %}</th>
+          <th>{% if ar %}المستفيد{% else %}Pay To{% endif %}</th>
+          <th>{% if ar %}نوع الدفعة{% else %}Payment Type{% endif %}</th>
+          <th>{% if ar %}تاريخ الدفع{% else %}Payment Date{% endif %}</th>
+          <th>{% if ar %}الإجمالي{% else %}Amount{% endif %}</th>
+          <th>{% if ar %}الضريبة{% else %}VAT{% endif %}</th>
+          <th>{% if ar %}الإجمالي شامل الضريبة{% else %}Total incl. VAT{% endif %}</th>
+          <th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
+          <th style="width:170px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+        </tr>
+      </thead>
+      <tbody id="opBody">
+        <tr><td colspan="10" class="empty-row"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>{% if ar %}لا توجد دفعات{% else %}No payments yet{% endif %}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="opModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="opModalTitle">{% if ar %}دفعة صادرة جديدة{% else %}New Outgoing Payment{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="op_id">
+        <input type="hidden" id="op_status" value="Draft">
+
+        <div class="op-section">
+          <h6>{% if ar %}دفعة صادرة{% else %}Outgoing Payment{% endif %}</h6>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}رقم الدفعة{% else %}Payment No{% endif %}</label>
+              <input type="text" id="op_payment_no" class="form-control" readonly>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}الحالة{% else %}Status{% endif %}</label>
+              <select id="op_status_display" class="form-select" onchange="onStatusDropdownChange()">
+                <option value="Draft">{% if ar %}مسودة{% else %}Draft{% endif %}</option>
+                <option value="Approved">{% if ar %}معتمد{% else %}Approved{% endif %}</option>
+                <option value="Posted">{% if ar %}مرحّل{% else %}Posted{% endif %}</option>
+                <option value="Cancelled">{% if ar %}ملغى{% else %}Cancelled{% endif %}</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}الدفع إلى{% else %}Pay To Type{% endif %} <span style="color:#ef4444">*</span></label>
+              <select id="op_pay_to_type" class="form-select" onchange="onPayToTypeChange()">
+                <option value="Supplier">{% if ar %}مورد{% else %}Supplier{% endif %}</option>
+                <option value="Buyer">{% if ar %}مشتري{% else %}Buyer{% endif %}</option>
+                <option value="Employee">{% if ar %}موظف{% else %}Employee{% endif %}</option>
+                <option value="GL Account">{% if ar %}حساب دفتر الأستاذ{% else %}GL Account{% endif %}</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold" id="op_pay_to_label">{% if ar %}المورد{% else %}Supplier{% endif %}</label>
+              <select id="op_pay_to_id" class="form-select" onchange="onPayToEntityChange()">
+                <option value="">{% if ar %}اختر...{% else %}Select...{% endif %}</option>
+              </select>
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-md-3" id="op_payment_type_wrap">
+              <label class="form-label fw-semibold">{% if ar %}نوع الدفعة{% else %}Payment Type{% endif %} <span style="color:#ef4444">*</span></label>
+              <select id="op_payment_type" class="form-select" onchange="onPaymentTypeChange()">
+                <option value="Outstanding">{% if ar %}مستحقة{% else %}Outstanding{% endif %}</option>
+                <option value="Advance">{% if ar %}سلفة{% else %}Advance{% endif %}</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}تاريخ الدفع{% else %}Payment Date{% endif %}</label>
+              <input type="date" id="op_payment_date" class="form-control" readonly
+                     title="{% if ar %}دائماً تاريخ اليوم{% else %}Always today's date{% endif %}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</label>
+              <input type="date" id="op_posting_date" class="form-control" disabled
+                     title="{% if ar %}يتم تفعيله تلقائياً عند تغيير الحالة عن مسودة{% else %}Activates automatically once status leaves Draft{% endif %}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">{% if ar %}الرقم المرجعي{% else %}Reference No{% endif %}</label>
+              <input type="text" id="op_reference_no" class="form-control">
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">{% if ar %}طريقة الدفع{% else %}Payment Method{% endif %} <span style="color:#ef4444">*</span></label>
+              <select id="op_payment_method_id" class="form-select" onchange="onPaymentMethodChange()"></select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">{% if ar %}حساب الدفع{% else %}Payment Account{% endif %} <span style="color:#ef4444">*</span></label>
+              <select id="op_payment_account_id" class="form-select" onchange="grlRefreshPreview()"></select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">{% if ar %}البيان{% else %}Narration{% endif %}</label>
+              <input type="text" id="op_narration" class="form-control">
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail Table 1 -- Outstanding (Supplier/Buyer/Employee) -->
+        <div class="op-section" id="op_adj_section">
+          <h6>{% if ar %}المستندات المستحقة{% else %}Outstanding Documents{% endif %}</h6>
+          <div class="d-flex gap-2 mb-2" id="op_adj_actions">
+            <button type="button" class="pl-footer-btn pl-btn-save" style="padding:6px 14px;font-size:12px;" onclick="openAdjPicker()">
+              <i class="fas fa-plus"></i> {% if ar %}إضافة سجل جديد{% else %}Add New Record{% endif %}
+            </button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="op-detail-table">
+              <thead>
+                <tr>
+                  <th>{% if ar %}رقم المستند{% else %}Document No{% endif %}</th>
+                  <th>{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</th>
+                  <th>{% if ar %}المستحق{% else %}Outstanding{% endif %}</th>
+                  <th>{% if ar %}الدفع{% else %}Payment{% endif %}</th>
+                  <th>{% if ar %}المتبقي{% else %}Remaining{% endif %}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="op_adj_body"></tbody>
+            </table>
+          </div>
+          <div class="op-totals">
+            <span>{% if ar %}صافي الدفع:{% else %}Total Payment:{% endif %} <b id="op_adj_tot_payment">0.00</b></span>
+          </div>
+        </div>
+
+        <!-- Advance (Supplier/Buyer/Employee) -->
+        <div class="op-section" id="op_advance_section">
+          <h6>{% if ar %}سلفة{% else %}Advance{% endif %}</h6>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">{% if ar %}مبلغ السلفة{% else %}Advance Amount{% endif %} <span style="color:#ef4444">*</span></label>
+              <input type="number" step="0.01" min="0.01" id="op_advance_amount" class="form-control" oninput="grlRefreshPreview()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail Table 2 -- GL Account -->
+        <div class="op-section" id="op_gl_section">
+          <h6>{% if ar %}تفاصيل حساب دفتر الأستاذ{% else %}GL Account Details{% endif %}</h6>
+          <div class="d-flex gap-2 mb-2" id="op_gl_actions">
+            <button type="button" class="pl-footer-btn pl-btn-save" style="padding:6px 14px;font-size:12px;" onclick="addGlLine()">
+              <i class="fas fa-plus"></i> {% if ar %}إضافة سجل جديد{% else %}Add New Record{% endif %}
+            </button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="op-detail-table">
+              <thead>
+                <tr>
+                  <th>{% if ar %}الرمز{% else %}Code{% endif %}</th>
+                  <th>{% if ar %}الاسم{% else %}Name{% endif %}</th>
+                  <th>{% if ar %}رقم المستند{% else %}Document No{% endif %}</th>
+                  <th>{% if ar %}الغرض{% else %}Purpose{% endif %}</th>
+                  <th>{% if ar %}المبلغ{% else %}Amount{% endif %}</th>
+                  <th>{% if ar %}الضريبة{% else %}VAT{% endif %}</th>
+                  <th>{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="op_gl_body"></tbody>
+            </table>
+          </div>
+          <div class="op-totals">
+            <span>{% if ar %}المجموع الفرعي:{% else %}Subtotal:{% endif %} <b id="op_gl_tot_amount">0.00</b></span>
+            <span>{% if ar %}الضريبة:{% else %}VAT:{% endif %} <b id="op_gl_tot_vat">0.00</b></span>
+            <span>{% if ar %}الإجمالي الكلي:{% else %}Grand Total:{% endif %} <b id="op_gl_tot_total">0.00</b></span>
+          </div>
+        </div>
+
+        {# ── Section: General Receipt Ledger (GRL) -- collapsed by default ── #}
+        <div style="margin-bottom:14px;">
+          <button type="button" id="opGrlSecHdr" onclick="opTogGrlSec(this)" style="width:100%;border:none;cursor:pointer;text-align:left;background:#1e3a5f;color:#fff;padding:10px 14px;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
+            <span><i class="fas fa-book me-1"></i>{% if ar %}دفتر الاستلام العام (GRL){% else %}General Receipt Ledger (GRL){% endif %}</span>
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div id="opGrlSecBody" style="display:none;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:14px 16px;">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="grl-lbl">{% if ar %}رقم القيد{% else %}JE No{% endif %}</label>
+                <input type="text" id="opgrl_je_no" class="grl-inp" readonly style="background:#f0fdf4;color:#15803d;font-weight:700;" placeholder="{% if ar %}يُنشأ عند الترحيل{% else %}Assigned on Post{% endif %}">
+              </div>
+              <div class="col-md-3">
+                <label class="grl-lbl">{% if ar %}رقم GRL{% else %}GRL No{% endif %}</label>
+                <input type="text" id="opgrl_no" class="grl-inp" readonly style="background:#f0fdf4;color:#15803d;font-weight:700;" placeholder="{% if ar %}يُنشأ تلقائياً{% else %}Auto-generated{% endif %}">
+              </div>
+              <div class="col-md-3">
+                <label class="grl-lbl">{% if ar %}المصدر / Origin{% else %}Origin{% endif %}</label>
+                <input type="text" id="opgrl_origion" class="grl-inp" readonly style="background:#f8fafc;">
+              </div>
+              <div class="col-md-3">
+                <label class="grl-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</label>
+                <input type="date" id="opgrl_posting_date" class="grl-inp" disabled
+                       title="{% if ar %}يتم تفعيله تلقائياً عند تغيير الحالة عن مسودة{% else %}Activates automatically once status leaves Draft{% endif %}">
+              </div>
+            </div>
+            <div class="row g-3 mt-1">
+              <div class="col-md-12">
+                <label class="grl-lbl">{% if ar %}البيان{% else %}Narration{% endif %}</label>
+                <input type="text" id="opgrl_narration" class="grl-inp" readonly style="background:#f8fafc;">
+              </div>
+            </div>
+            <div style="overflow-x:auto;margin-top:12px;">
+              <table class="grl-table">
+                <thead>
+                  <tr>
+                    <th>{% if ar %}الرمز{% else %}Code{% endif %}</th>
+                    <th>{% if ar %}اسم الحساب{% else %}Account Name{% endif %}</th>
+                    <th>{% if ar %}حساب التحكم{% else %}Control Account{% endif %}</th>
+                    <th>{% if ar %}رمز المرجع{% else %}Reference Code{% endif %}</th>
+                    <th style="text-align:right;">{% if ar %}مدين{% else %}Debit{% endif %}</th>
+                    <th style="text-align:right;">{% if ar %}دائن{% else %}Credit{% endif %}</th>
+                  </tr>
+                </thead>
+                <tbody id="opGrlDetailBody">
+                  <tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:10px;">{% if ar %}أكمل بيانات الدفعة لعرض المعاينة{% else %}Complete the payment details to preview{% endif %}</td></tr>
+                </tbody>
+                <tfoot>
+                  <tr style="font-weight:700;background:#f8fafc;">
+                    <td colspan="4" style="text-align:right;padding:6px 8px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</td>
+                    <td style="text-align:right;padding:6px 8px;" id="opGrlTotDebit">0.00</td>
+                    <td style="text-align:right;padding:6px 8px;" id="opGrlTotCredit">0.00</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      {# Same footer mechanism as the Purchase module: Cancel (plain
+         dismiss) / Save & Post / Save Payment -- see applyStatusUI for
+         the status-driven visibility of the latter two. Cancelling a
+         POSTED payment (the GL-reversing action) is a list-row action
+         instead, since the whole form is locked once Posted. #}
+      <div class="modal-footer proledg-modal-footer" id="op_footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" class="pl-footer-btn pl-btn-save" id="op_btn_post" style="background:#16a34a;" onclick="postOp()">{% if ar %}حفظ وترحيل{% else %}Save & Post{% endif %}</button>
+        <button type="button" class="pl-footer-btn pl-btn-save" id="op_btn_save" onclick="saveOp()">{% if ar %}حفظ الدفعة / حفظ{% else %}Save Payment / Save{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Outstanding Documents Picker Modal -->
+<div class="modal fade" id="opAdjPickerModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title">{% if ar %}المستندات المستحقة{% else %}Outstanding Documents{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="opAdjPickerBody" style="max-height:60vh;overflow:auto;">
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" class="pl-footer-btn pl-btn-save" onclick="addPickedAdjDocs()">{% if ar %}إضافة المحدد{% else %}Add Selected{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const OP_CSRF = '{{ csrf_token() }}';
+const IS_ADMIN = {{ 'true' if current_user.is_admin() else 'false' }};
+let OP_ROWS = [];
+let OP_ADJ_LINES = [];        // Detail Table 1 -- Outstanding documents in the modal
+let OP_GL_LINES = [];         // Detail Table 2 -- GL Account lines in the modal
+let OP_PAYMENT_METHODS = [];
+let OP_ACCOUNTS_CACHE = [];   // every LevelFive code -- used by the GL Account line dropdown
+let OP_OUTSTANDING_CACHE = []; // last-fetched outstanding documents for the picker
+
+function money(v){ return Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function flashErr(msg){ alert(msg || (IS_AR ? 'حدث خطأ' : 'Something went wrong')); }
+
+function loadOp(){
+  fetch('/cash-bank/outgoing-payments/data').then(r=>r.json()).then(d=>{ OP_ROWS = d || []; renderRows(); });
+}
+function loadPaymentMethods(cb, selectedId){
+  fetch('/cash-bank/outgoing-payments/payment-modes').then(r=>r.json()).then(d=>{
+    OP_PAYMENT_METHODS = d || [];
+    const sel = document.getElementById('op_payment_method_id');
+    sel.innerHTML = '<option value="">' + (IS_AR?'اختر...':'Select...') + '</option>' +
+      OP_PAYMENT_METHODS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    // Default to the value being restored (e.g. an Edit reload) when it's
+    // still offered, otherwise to the first Payment Method in the list --
+    // this document should never open with Payment Method (and therefore
+    // Payment Account, which is scoped by it) left blank.
+    const want = (selectedId != null && OP_PAYMENT_METHODS.some(p => String(p.id) === String(selectedId)))
+      ? String(selectedId) : (OP_PAYMENT_METHODS.length ? String(OP_PAYMENT_METHODS[0].id) : '');
+    if (want) sel.value = want;
+    if (cb) cb();
+  });
+}
+// Detail Table 2 (GL Account) Code/Name dropdowns need every Level Five
+// account across the WHOLE chart of accounts (an expense line isn't
+// restricted to Cash & Bank the way Payment Account is) -- reuses the
+// same generic Level Five lookup the Sales Invoice Services-kind Code/Name
+// dropdowns already fetch from, rather than the Cash & Bank-scoped
+// /cash-bank/outgoing-payments/accounts used for Payment Account.
+function loadAllAccounts(cb){
+  fetch('/coa/level-five/data').then(r=>r.json()).then(d=>{
+    OP_ACCOUNTS_CACHE = (d || [])
+      .filter(a => (a.status || 'active') === 'active')
+      .map(a => ({ code: a.code, name: a.drawers }));
+    if (cb) cb();
+  });
+}
+
+const STATUS_CLASS = { Draft:'st-draft', Approved:'st-approved', Posted:'st-posted', Cancelled:'st-cancelled' };
+const STATUS_LABEL = IS_AR
+  ? { Draft:'مسودة', Approved:'معتمد', Posted:'مرحّل', Cancelled:'ملغى' }
+  : { Draft:'Draft', Approved:'Approved', Posted:'Posted', Cancelled:'Cancelled' };
+const PAYMENT_TYPE_LABEL = IS_AR
+  ? { Advance:'سلفة', Outstanding:'مستحقة' }
+  : { Advance:'Advance', Outstanding:'Outstanding' };
+
+function renderRows(){
+  const paymentNo = (document.getElementById('fltPaymentNo').value || '').toLowerCase();
+  const payToType = document.getElementById('fltPayToType').value;
+  const dateFrom = document.getElementById('fltDateFrom').value;
+  const dateTo = document.getElementById('fltDateTo').value;
+  const status = document.getElementById('fltStatus').value;
+  const body = document.getElementById('opBody');
+  let rows = OP_ROWS.slice();
+  if (paymentNo) rows = rows.filter(r => (r.payment_no||'').toLowerCase().includes(paymentNo));
+  if (payToType) rows = rows.filter(r => r.pay_to_type === payToType);
+  if (dateFrom) rows = rows.filter(r => r.payment_date && r.payment_date >= dateFrom);
+  if (dateTo) rows = rows.filter(r => r.payment_date && r.payment_date <= dateTo);
+  if (status) rows = rows.filter(r => r.status === status);
+
+  if (!rows.length){
+    body.innerHTML = '<tr><td colspan="10" class="empty-row"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>'+(IS_AR?'لا توجد دفعات':'No payments yet')+'</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td class="fw-semibold">${r.payment_no}</td>
+      <td>${PAY_TO_LABEL[r.pay_to_type] || r.pay_to_type}</td>
+      <td>${r.pay_to_name || '—'}</td>
+      <td>${r.payment_type ? (PAYMENT_TYPE_LABEL[r.payment_type]||r.payment_type) : '—'}</td>
+      <td>${r.payment_date || '—'}</td>
+      <td>${money(r.total_amount)}</td>
+      <td>${money(r.total_vat)}</td>
+      <td>${money(r.total_amount_including_vat)}</td>
+      <td><span class="st-pill ${STATUS_CLASS[r.status]||''}">${STATUS_LABEL[r.status]||r.status}</span></td>
+      <td class="text-center">
+        <button class="action-btn action-btn-edit" title="${IS_AR?'فتح':'Open'}" onclick="openEdit(${r.id})"><i class="fas fa-folder-open"></i></button>
+        <a class="action-btn action-btn-edit" title="${IS_AR?'طباعة':'Print'}" href="/cash-bank/outgoing-payments/${r.id}/print" target="_blank"><i class="fas fa-print"></i></a>
+        ${r.status === 'Draft' ? `<button class="action-btn action-btn-delete" title="${IS_AR?'حذف':'Delete'}" onclick="deleteOp(${r.id})"><i class="fas fa-trash-alt"></i></button>` : ''}
+        ${r.status === 'Posted' ? `<button class="action-btn action-btn-delete" title="${IS_AR?'إلغاء الدفعة':'Cancel Payment'}" onclick="cancelOpRow(${r.id})"><i class="fas fa-ban"></i></button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Pay To dynamic entity dropdown ──────────────────────────────────
+const PAY_TO_LABEL = IS_AR
+  ? { Supplier:'المورد', Buyer:'المشتري', Employee:'الموظف', 'GL Account':'حساب دفتر الأستاذ' }
+  : { Supplier:'Supplier', Buyer:'Buyer', Employee:'Employee', 'GL Account':'GL Account' };
+const PAY_TO_URL = {
+  Supplier: '/cash-bank/outgoing-payments/suppliers',
+  Buyer: '/cash-bank/outgoing-payments/buyers',
+  Employee: '/cash-bank/outgoing-payments/employees',
+};
+// Outstanding-document picker source + the document_type value it carries,
+// per Pay To Type -- Supplier settles Purchase Invoices, Buyer settles
+// Sales Invoices, Employee settles Payroll Payable (SalaryConsolidation) rows.
+const OUTSTANDING_URL = {
+  Supplier: '/cash-bank/outgoing-payments/supplier-invoices?supplier_id=',
+  Buyer: '/cash-bank/outgoing-payments/buyer-invoices?buyer_id=',
+  Employee: '/cash-bank/outgoing-payments/employee-payables?employee_id=',
+};
+const OUTSTANDING_DOCTYPE = { Supplier: 'Purchase Invoice', Buyer: 'Sales Invoice', Employee: 'Payroll Payable' };
+
+function onPayToTypeChange(selectedId){
+  const type = document.getElementById('op_pay_to_type').value;
+  document.getElementById('op_pay_to_label').textContent = PAY_TO_LABEL[type];
+  const sel = document.getElementById('op_pay_to_id');
+
+  if (type === 'GL Account') {
+    sel.innerHTML = '<option value="">' + (IS_AR?'لا ينطبق':'Not applicable') + '</option>';
+    sel.disabled = true;
+    OP_ADJ_LINES = []; renderAdjGrid();
+    updateDetailSectionVisibility();
+    grlRefreshPreview();
+  } else {
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">' + (IS_AR?'اختر...':'Select...') + '</option>';
+    fetch(PAY_TO_URL[type]).then(r=>r.json()).then(list=>{
+      sel.innerHTML += list.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+      if (selectedId != null) sel.value = String(selectedId);
+      OP_GL_LINES = []; renderGlGrid();
+      updateDetailSectionVisibility();
+      grlRefreshPreview();
+    });
+  }
+}
+function onPayToEntityChange(){
+  // Party changed -- any already-picked outstanding documents belonged to
+  // the PREVIOUS party, so they're no longer valid; clear and let the user
+  // re-pick from the new party's own outstanding documents.
+  OP_ADJ_LINES = []; renderAdjGrid();
+  grlRefreshPreview();
+}
+
+function onPaymentTypeChange(){
+  updateDetailSectionVisibility();
+  const pt = document.getElementById('op_payment_type').value;
+  if (pt === 'Advance') { OP_ADJ_LINES = []; renderAdjGrid(); }
+  else { document.getElementById('op_advance_amount').value = ''; }
+  grlRefreshPreview();
+}
+
+function updateDetailSectionVisibility(){
+  const payToType = document.getElementById('op_pay_to_type').value;
+  const paymentType = document.getElementById('op_payment_type').value;
+  const isGl = payToType === 'GL Account';
+  document.getElementById('op_payment_type_wrap').style.display = isGl ? 'none' : '';
+  document.getElementById('op_adj_section').style.display = (!isGl && paymentType === 'Outstanding') ? '' : 'none';
+  document.getElementById('op_advance_section').style.display = (!isGl && paymentType === 'Advance') ? '' : 'none';
+  document.getElementById('op_gl_section').style.display = isGl ? '' : 'none';
+}
+
+// Payment Account -- the Cash/Bank account this payment is actually paid
+// FROM, scoped by the selected Payment Method: Cash offers only Cash In
+// Hand accounts (A2-07-02); every other Payment Method offers only Cash
+// at Bank accounts (A2-07-01) -- mirrors _op_payment_account_l4() server-side.
+// Payment Account depends entirely on Payment Method: with no Payment
+// Method selected there is nothing to scope by, so Payment Account stays
+// forced blank (never auto-picks from an unscoped list) until a Payment
+// Method is chosen.
+function loadPaymentAccountOptions(selectedCode){
+  const pmId = document.getElementById('op_payment_method_id').value;
+  const sel = document.getElementById('op_payment_account_id');
+  if (!pmId){
+    sel.innerHTML = '<option value="">' + (IS_AR?'اختر...':'Select...') + '</option>';
+    sel.value = '';
+    return Promise.resolve();
+  }
+  return fetch('/cash-bank/outgoing-payments/accounts?payment_method_id=' + encodeURIComponent(pmId))
+    .then(r=>r.json()).then(list=>{
+      sel.innerHTML = '<option value="">' + (IS_AR?'اختر...':'Select...') + '</option>' +
+        list.map(a => `<option value="${a.code}">${a.code} - ${a.name}</option>`).join('');
+      const want = (selectedCode && list.some(a => a.code === selectedCode))
+        ? selectedCode : (list.length ? list[0].code : '');
+      if (want) sel.value = want;
+    });
+}
+function onPaymentMethodChange(){
+  loadPaymentAccountOptions().then(()=>grlRefreshPreview());
+}
+
+// ── Detail Table 1 -- Outstanding documents picker + grid ────────────
+function openAdjPicker(){
+  const type = document.getElementById('op_pay_to_type').value;
+  const partyId = document.getElementById('op_pay_to_id').value;
+  if (!partyId){ flashErr(IS_AR?'اختر المستفيد أولاً':'Select a Pay To party first'); return; }
+  fetch(OUTSTANDING_URL[type] + encodeURIComponent(partyId))
+    .then(r=>r.json()).then(list=>{
+      OP_OUTSTANDING_CACHE = list || [];
+      const already = new Set(OP_ADJ_LINES.map(l=>l.document_id));
+      const body = document.getElementById('opAdjPickerBody');
+      if (!OP_OUTSTANDING_CACHE.length){
+        body.innerHTML = '<div class="text-muted">' + (IS_AR?'لا توجد مستندات مستحقة':'No outstanding documents') + '</div>';
+      } else {
+        body.innerHTML = OP_OUTSTANDING_CACHE.map(d => `
+          <div class="op-picker-row">
+            <label style="display:flex;align-items:center;gap:8px;flex:1;">
+              <input type="checkbox" value="${d.document_id}" ${already.has(d.document_id)?'checked disabled':''}>
+              <span><b>${d.document_no}</b> — ${d.document_date || ''}</span>
+            </label>
+            <span>${IS_AR?'المستحق':'Outstanding'}: <b>${money(d.outstanding_amount)}</b></span>
+          </div>`).join('');
+      }
+      new bootstrap.Modal(document.getElementById('opAdjPickerModal')).show();
+    });
+}
+function addPickedAdjDocs(){
+  const type = document.getElementById('op_pay_to_type').value;
+  const docType = OUTSTANDING_DOCTYPE[type];
+  const checked = Array.from(document.querySelectorAll('#opAdjPickerBody input[type=checkbox]:checked:not(:disabled)'));
+  checked.forEach(cb => {
+    const d = OP_OUTSTANDING_CACHE.find(x => String(x.document_id) === cb.value);
+    if (!d) return;
+    OP_ADJ_LINES.push({
+      document_type: docType, document_id: d.document_id, document_no: d.document_no,
+      document_date: d.document_date, due_date: d.due_date || '',
+      outstanding_amount: Number(d.outstanding_amount)||0, payment_amount: Number(d.outstanding_amount)||0,
+      reference_no: d.reference_no || '', narration: '',
+    });
+  });
+  renderAdjGrid();
+  bootstrap.Modal.getInstance(document.getElementById('opAdjPickerModal')).hide();
+}
+function onAdjPaymentInput(i, value){
+  OP_ADJ_LINES[i].payment_amount = Number(value) || 0;
+  renderAdjGrid();
+}
+function removeAdjLine(i){ OP_ADJ_LINES.splice(i,1); renderAdjGrid(); }
+function renderAdjGrid(){
+  const body = document.getElementById('op_adj_body');
+  body.innerHTML = OP_ADJ_LINES.map((l,i) => `
+    <tr>
+      <td><input value="${l.document_no||''}" readonly></td>
+      <td><input value="${l.document_date||''}" readonly></td>
+      <td><input value="${money(l.outstanding_amount)}" readonly></td>
+      <td><input type="number" step="0.01" min="0.01" value="${l.payment_amount||0}" onchange="onAdjPaymentInput(${i},this.value)"></td>
+      <td><input value="${money(Math.max(0, (Number(l.outstanding_amount)||0) - (Number(l.payment_amount)||0)))}" readonly></td>
+      <td><button type="button" class="op-remove-line" onclick="removeAdjLine(${i})"><i class="fas fa-times"></i></button></td>
+    </tr>
+  `).join('') || `<tr><td colspan="6" class="text-muted text-center py-2">${IS_AR?'لا توجد سطور بعد':'No lines yet'}</td></tr>`;
+  renderAdjTotals();
+}
+function renderAdjTotals(){
+  let pay = 0;
+  OP_ADJ_LINES.forEach(l => pay += Number(l.payment_amount||0));
+  document.getElementById('op_adj_tot_payment').textContent = money(pay);
+  grlRefreshPreview();
+}
+
+// ── Detail Table 2 -- GL Account grid ─────────────────────────────────
+function addGlLine(){
+  OP_GL_LINES.push({ code:'', name:'', document_no:'', purpose:'', amount:0, vat:0, narration:'' });
+  renderGlGrid();
+}
+function onGlInput(i, field, value){
+  const l = OP_GL_LINES[i];
+  if (field === 'amount' || field === 'vat') {
+    l[field] = Number(value) || 0;
+  } else {
+    l[field] = value;
+  }
+  renderGlGrid();
+}
+// Code and Name are two separate dropdowns over the same Level Five list,
+// both keyed by the account's own code (Code is labeled by the code
+// itself, Name by its drawer) -- mirrors the Code/Name dual-dropdown
+// pattern already used on Purchase Request/Quotation/Return Note/Debit
+// Memo, Sale Return Note and Sales Invoice: picking either one syncs
+// the other, since both selects share the same option values.
+function onGlAccountChange(i, value){
+  const l = OP_GL_LINES[i];
+  l.code = value;
+  const acc = OP_ACCOUNTS_CACHE.find(a => a.code === value);
+  l.name = acc ? acc.name : '';
+  renderGlGrid();
+}
+function _glCodeOptionsHtml(selectedCode){
+  const opts = OP_ACCOUNTS_CACHE.map(a =>
+    `<option value="${a.code}" ${a.code===selectedCode?'selected':''}>${a.code}</option>`).join('');
+  return `<option value="">${IS_AR?'اختر...':'Select...'}</option>` + opts;
+}
+function _glNameOptionsHtml(selectedCode){
+  const opts = OP_ACCOUNTS_CACHE.map(a =>
+    `<option value="${a.code}" ${a.code===selectedCode?'selected':''}>${a.name}</option>`).join('');
+  return `<option value="">${IS_AR?'اختر...':'Select...'}</option>` + opts;
+}
+function removeGlLine(i){ OP_GL_LINES.splice(i,1); renderGlGrid(); }
+function renderGlGrid(){
+  const body = document.getElementById('op_gl_body');
+  body.innerHTML = OP_GL_LINES.map((l,i) => `
+    <tr>
+      <td><select onchange="onGlAccountChange(${i},this.value)">${_glCodeOptionsHtml(l.code)}</select></td>
+      <td><select onchange="onGlAccountChange(${i},this.value)">${_glNameOptionsHtml(l.code)}</select></td>
+      <td><input value="${l.document_no||''}" onchange="onGlInput(${i},'document_no',this.value)"></td>
+      <td><input value="${l.purpose||''}" onchange="onGlInput(${i},'purpose',this.value)"></td>
+      <td><input type="number" step="0.01" min="0.01" value="${l.amount||0}" onchange="onGlInput(${i},'amount',this.value)"></td>
+      <td><input type="number" step="0.01" min="0" value="${l.vat||0}" onchange="onGlInput(${i},'vat',this.value)"></td>
+      <td><input value="${money((Number(l.amount)||0)+(Number(l.vat)||0))}" readonly></td>
+      <td><button type="button" class="op-remove-line" onclick="removeGlLine(${i})"><i class="fas fa-times"></i></button></td>
+    </tr>
+  `).join('') || `<tr><td colspan="8" class="text-muted text-center py-2">${IS_AR?'لا توجد سطور بعد':'No lines yet'}</td></tr>`;
+  renderGlTotals();
+}
+function renderGlTotals(){
+  let amt=0, vat=0;
+  OP_GL_LINES.forEach(l => { amt += Number(l.amount||0); vat += Number(l.vat||0); });
+  document.getElementById('op_gl_tot_amount').textContent = money(amt);
+  document.getElementById('op_gl_tot_vat').textContent = money(vat);
+  document.getElementById('op_gl_tot_total').textContent = money(amt+vat);
+  grlRefreshPreview();
+}
+
+// ── GRL (General Receipt Ledger) preview section ─────────────────────
+function opTogGrlSec(btn){
+  const body = document.getElementById('opGrlSecBody');
+  const icon = btn.querySelector('.fa-chevron-down, .fa-chevron-up');
+  const show = body.style.display === 'none';
+  body.style.display = show ? '' : 'none';
+  if (icon) icon.className = show ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+}
+
+function grlRenderLines(lines){
+  const body = document.getElementById('opGrlDetailBody');
+  if (!lines || !lines.length){
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:10px;">' +
+      (IS_AR?'أكمل بيانات الدفعة لعرض المعاينة':'Complete the payment details to preview') + '</td></tr>';
+    document.getElementById('opGrlTotDebit').textContent = money(0);
+    document.getElementById('opGrlTotCredit').textContent = money(0);
+    return;
+  }
+  let td = 0, tc = 0;
+  body.innerHTML = lines.map(l => {
+    td += Number(l.debit)||0; tc += Number(l.credit)||0;
+    return `<tr>
+      <td>${l.code||''}</td><td>${l.account_name||''}</td><td>${l.control_account||''}</td>
+      <td>${l.reference_code||''}</td>
+      <td style="text-align:right;">${l.debit ? money(l.debit) : ''}</td>
+      <td style="text-align:right;">${l.credit ? money(l.credit) : ''}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('opGrlTotDebit').textContent = money(td);
+  document.getElementById('opGrlTotCredit').textContent = money(tc);
+}
+
+function grlResetHeader(){
+  document.getElementById('opgrl_je_no').value = '';
+  document.getElementById('opgrl_no').value = '';
+  document.getElementById('opgrl_origion').value = document.getElementById('op_payment_no').value || '';
+  // Same mechanism as op_posting_date itself (see applyStatusUI): mirror
+  // both its value and its disabled state, so this section never shows an
+  // editable-looking date picker before the header's own unlocks.
+  document.getElementById('opgrl_posting_date').value = document.getElementById('op_posting_date').value || '';
+  document.getElementById('opgrl_posting_date').disabled = document.getElementById('op_posting_date').disabled;
+  document.getElementById('opgrl_narration').value = document.getElementById('op_narration').value || '';
+}
+
+// Live preview of the payment_no (new/unsaved payment only -- an
+// already-saved Draft keeps the real payment_no it was assigned at Save)
+// and of the GRL/JE numbers (whenever the payment isn't Posted/Cancelled
+// yet, since those are only actually assigned at Post -- see
+// outgoing_payment_post()). Pure reads server-side, so safe to call as
+// often as the form opens; can go stale under concurrent creation like
+// every other "next number" preview in this app, and is superseded by the
+// real numbers once Save/Post return.
+function previewNextNumbers(){
+  const status = document.getElementById('op_status').value;
+  if (status === 'Posted' || status === 'Cancelled') return;
+  fetch('/cash-bank/outgoing-payments/next-doc-numbers').then(r=>r.json()).then(d=>{
+    if (!document.getElementById('op_id').value){
+      document.getElementById('op_payment_no').value = d.payment_no;
+      document.getElementById('opgrl_origion').value = d.payment_no;
+    }
+    document.getElementById('opgrl_no').value = d.grl_no;
+    document.getElementById('opgrl_je_no').value = d.je_no || (IS_AR?'فعّل السنة المالية أولاً':'Activate financial year first');
+  });
+}
+
+// Live, not-yet-posted preview -- recomputed from the current form values
+// every time Pay To / Payment Type / Payment Method / the detail lines
+// change. Never called once a payment is Posted or Cancelled --
+// grlLoadPosted() shows the real, already-posted entry instead so what's
+// on screen never drifts from what was actually written to the ledger.
+function grlRefreshPreview(){
+  const status = document.getElementById('op_status').value;
+  if (status === 'Posted' || status === 'Cancelled') return;
+  grlResetHeader();
+  const payToType = document.getElementById('op_pay_to_type').value;
+  const paymentAccountId = document.getElementById('op_payment_account_id').value;
+  if (!paymentAccountId){ grlRenderLines([]); return; }
+
+  if (payToType === 'GL Account'){
+    const glLines = OP_GL_LINES.filter(l => l.code && Number(l.amount) > 0)
+      .map(l => ({ code: l.code, amount: Number(l.amount)||0, vat: Number(l.vat)||0 }));
+    if (!glLines.length){ grlRenderLines([]); return; }
+    const params = new URLSearchParams({
+      pay_to_type: payToType, payment_account_id: paymentAccountId,
+      gl_lines_json: JSON.stringify(glLines),
+    });
+    fetch('/cash-bank/outgoing-payments/grl-preview?' + params.toString())
+      .then(r=>r.json()).then(d=>{ if (d.ok) grlRenderLines(d.lines); });
+    return;
+  }
+
+  const payToId = document.getElementById('op_pay_to_id').value;
+  const paymentType = document.getElementById('op_payment_type').value;
+  if (!payToType || !payToId || !paymentType){ grlRenderLines([]); return; }
+
+  let amt = 0;
+  if (paymentType === 'Advance') amt = Number(document.getElementById('op_advance_amount').value) || 0;
+  else OP_ADJ_LINES.forEach(l => amt += Number(l.payment_amount||0));
+  if (amt <= 0){ grlRenderLines([]); return; }
+
+  const params = new URLSearchParams({
+    pay_to_type: payToType, pay_to_id: payToId, payment_type: paymentType,
+    payment_account_id: paymentAccountId, total_amount_including_vat: amt,
+  });
+  fetch('/cash-bank/outgoing-payments/grl-preview?' + params.toString())
+    .then(r=>r.json()).then(d=>{ if (d.ok) grlRenderLines(d.lines); });
+}
+
+// The actual, already-posted GRL for a Posted/Cancelled payment -- fetched
+// once when the form opens, never recomputed from current field values.
+function grlLoadPosted(grlId){
+  if (!grlId){ grlResetHeader(); grlRenderLines([]); return; }
+  fetch('/grl-account/' + grlId + '/json').then(r=>r.json()).then(d=>{
+    document.getElementById('opgrl_je_no').value = d.je_no || '';
+    document.getElementById('opgrl_no').value = d.grl_no || '';
+    document.getElementById('opgrl_origion').value = d.origion || '';
+    document.getElementById('opgrl_posting_date').value = d.posting_date || '';
+    document.getElementById('opgrl_narration').value = d.narration || '';
+    grlRenderLines(d.details || []);
+  });
+}
+
+// ── Status-driven footer button visibility ──────────────────────────
+// Payment Date / Posting Date follow the same mechanism as the Purchase
+// module (GRN/Purchase Invoice): Payment Date is always today's date and
+// never user-editable; Posting Date stays empty and disabled while the
+// document is still Draft, then auto-fills with today and becomes
+// editable once it leaves Draft.
+const OP_PRE_POST_STATUSES = ['Draft', 'Approved'];
+
+function applyStatusUI(status){
+  document.getElementById('op_status_display').value = status;
+  // Only Draft/Approved can be freely changed via this dropdown (see
+  // onStatusDropdownChange) -- once Posted/Cancelled it's a display-only
+  // reflection, since neither is ever reachable by picking a value here
+  // (Post/Cancel each have their own dedicated action + GL effect).
+  document.getElementById('op_status_display').disabled = !OP_PRE_POST_STATUSES.includes(status);
+  document.getElementById('op_payment_date').value = new Date().toISOString().slice(0,10);
+  const postEl = document.getElementById('op_posting_date');
+  if (status === 'Draft') {
+    postEl.disabled = true;
+    postEl.value = '';
+  } else {
+    postEl.disabled = false;
+    if (!postEl.value) postEl.value = new Date().toISOString().slice(0,10);
+  }
+
+  // The whole form locks only on the two terminal statuses (Posted,
+  // Cancelled) -- Draft/Approved both stay fully editable, matching the
+  // Purchase module's own Cancel/Save & Post/Save footer mechanism.
+  const LOCKED_STATUSES = ['Posted', 'Cancelled'];
+  const editable = !LOCKED_STATUSES.includes(status);
+  document.querySelectorAll('#opModal .form-control, #opModal .form-select').forEach(el => {
+    if (['op_payment_no','op_status_display','op_payment_date','op_posting_date'].includes(el.id)) return;
+    el.disabled = !editable;
+  });
+  document.querySelectorAll('#op_adj_body input, #op_gl_body input, #op_gl_body select').forEach(el => {
+    if (!el.readOnly) el.disabled = !editable;
+  });
+  document.querySelectorAll('#op_adj_body .op-remove-line, #op_gl_body .op-remove-line').forEach(el => {
+    el.style.display = editable ? '' : 'none';
+  });
+  document.getElementById('op_adj_actions').style.display = editable ? 'flex' : 'none';
+  document.getElementById('op_gl_actions').style.display = editable ? 'flex' : 'none';
+
+  // Save Payment works for every status except the two locked ones; Save &
+  // Post stays visible always but is only enabled once Approved.
+  document.getElementById('op_btn_save').style.display = editable ? '' : 'none';
+  const postBtn = document.getElementById('op_btn_post');
+  const canPost = status === 'Approved';
+  postBtn.disabled = !canPost;
+  postBtn.style.opacity = canPost ? '1' : '.5';
+  postBtn.style.cursor = canPost ? 'pointer' : 'not-allowed';
+  postBtn.title = canPost ? '' : (IS_AR ? 'يتوفر فقط عندما تكون الحالة معتمد' : 'Only available once status is Approved');
+}
+
+// The status dropdown's own save action -- a plain flip between
+// Draft/Approved with no GL effect (Posted/Cancelled stay reachable only
+// via their own buttons). Reacts immediately so the Payment/Posting Date
+// mechanism (applyStatusUI) updates live, and persists right away for an
+// already-saved payment; for a brand-new, not-yet-saved one there's
+// nothing to persist against yet, so the chosen status is simply carried
+// into the very first Save (see buildFormData).
+function onStatusDropdownChange(){
+  const sel = document.getElementById('op_status_display');
+  const newStatus = sel.value;
+  const previousStatus = document.getElementById('op_status').value;
+  document.getElementById('op_status').value = newStatus;
+  applyStatusUI(newStatus);
+
+  const id = document.getElementById('op_id').value;
+  if (!id) return;
+  const fd = new FormData();
+  fd.set('status', newStatus);
+  fetch('/cash-bank/outgoing-payments/' + id + '/set-status', { method:'POST', headers:{'X-CSRFToken':OP_CSRF}, body: fd })
+    .then(r=>r.json()).then(d=>{
+      if (!d.ok){
+        flashErr(d.error);
+        document.getElementById('op_status').value = previousStatus;
+        applyStatusUI(previousStatus);
+      }
+    })
+    .catch(()=>{
+      flashErr(IS_AR?'فشل الاتصال بالخادم':'Server request failed');
+      document.getElementById('op_status').value = previousStatus;
+      applyStatusUI(previousStatus);
+    });
+}
+
+// ── Open Add / Edit ──────────────────────────────────────────────────
+function openAdd(){
+  document.getElementById('opModalTitle').textContent = IS_AR ? 'دفعة صادرة جديدة' : 'New Outgoing Payment';
+  document.getElementById('op_id').value = '';
+  document.getElementById('op_status').value = 'Draft';
+  document.getElementById('op_payment_no').value = IS_AR ? '(تلقائي)' : '(auto)';
+  document.getElementById('op_posting_date').value = '';
+  document.getElementById('op_reference_no').value = '';
+  document.getElementById('op_narration').value = '';
+  document.getElementById('op_pay_to_type').value = 'Supplier';
+  document.getElementById('op_payment_type').value = 'Outstanding';
+  document.getElementById('op_advance_amount').value = '';
+  OP_ADJ_LINES = []; renderAdjGrid();
+  OP_GL_LINES = []; renderGlGrid();
+  grlResetHeader();
+  grlRenderLines([]);
+  previewNextNumbers();
+  loadAllAccounts(() => {
+    loadPaymentMethods(() => {
+      loadPaymentAccountOptions().then(() => {
+        onPayToTypeChange();
+        applyStatusUI('Draft');
+        new bootstrap.Modal(document.getElementById('opModal')).show();
+      });
+    });
+  });
+}
+
+function openEdit(id){
+  fetch('/cash-bank/outgoing-payments/' + id + '/json').then(r=>r.json()).then(r=>{
+    document.getElementById('opModalTitle').textContent = r.payment_no;
+    document.getElementById('op_id').value = r.id;
+    document.getElementById('op_status').value = r.status;
+    document.getElementById('op_payment_no').value = r.payment_no;
+    document.getElementById('op_posting_date').value = r.posting_date || '';
+    document.getElementById('op_reference_no').value = r.reference_no || '';
+    document.getElementById('op_narration').value = r.narration || '';
+    document.getElementById('op_pay_to_type').value = r.pay_to_type;
+    document.getElementById('op_payment_type').value = r.payment_type || 'Outstanding';
+
+    OP_ADJ_LINES = (r.adjustment_lines || []).map(l => ({
+      document_type: l.document_type, document_id: l.document_id, document_no: l.document_no,
+      document_date: l.document_date, due_date: l.due_date,
+      outstanding_amount: l.outstanding_amount, payment_amount: l.payment_amount,
+      reference_no: l.reference_no, narration: l.narration,
+    }));
+    OP_GL_LINES = (r.gl_lines || []).map(l => ({
+      code: l.code, name: l.name, document_no: l.document_no, purpose: l.purpose,
+      amount: l.amount, vat: l.vat, narration: l.narration,
+    }));
+    document.getElementById('op_advance_amount').value =
+      (r.payment_type === 'Advance') ? (r.total_amount_including_vat || '') : '';
+
+    loadAllAccounts(() => {
+      renderAdjGrid();
+      renderGlGrid();
+      loadPaymentMethods(() => {
+        loadPaymentAccountOptions(r.payment_account_id).then(() => {
+          onPayToTypeChange(r.pay_to_id);
+          updateDetailSectionVisibility();
+          applyStatusUI(r.status);
+          if (r.status === 'Posted' || r.status === 'Cancelled') grlLoadPosted(r.grl_id);
+          else previewNextNumbers();
+          new bootstrap.Modal(document.getElementById('opModal')).show();
+        });
+      }, r.payment_method_id);
+    });
+  });
+}
+
+function buildFormData(){
+  const fd = new FormData();
+  fd.set('csrf_token', OP_CSRF);
+  fd.set('status', document.getElementById('op_status').value);
+  fd.set('pay_to_type', document.getElementById('op_pay_to_type').value);
+  fd.set('pay_to_id', document.getElementById('op_pay_to_id').value);
+  fd.set('payment_type', document.getElementById('op_payment_type').value);
+  fd.set('payment_date', document.getElementById('op_payment_date').value);
+  fd.set('posting_date', document.getElementById('op_posting_date').value);
+  fd.set('reference_no', document.getElementById('op_reference_no').value);
+  fd.set('narration', document.getElementById('op_narration').value);
+  fd.set('payment_method_id', document.getElementById('op_payment_method_id').value);
+  fd.set('payment_account_id', document.getElementById('op_payment_account_id').value);
+
+  const payToType = document.getElementById('op_pay_to_type').value;
+  const paymentType = document.getElementById('op_payment_type').value;
+  if (payToType === 'GL Account'){
+    OP_GL_LINES.forEach(l => {
+      fd.append('gl_code[]', l.code || '');
+      fd.append('gl_document_no[]', l.document_no || '');
+      fd.append('gl_purpose[]', l.purpose || '');
+      fd.append('gl_amount[]', l.amount || 0);
+      fd.append('gl_vat[]', l.vat || 0);
+      fd.append('gl_narration[]', l.narration || '');
+    });
+  } else if (paymentType === 'Advance'){
+    fd.set('advance_amount', document.getElementById('op_advance_amount').value || 0);
+  } else {
+    OP_ADJ_LINES.forEach(l => {
+      fd.append('adj_document_type[]', l.document_type || '');
+      fd.append('adj_document_id[]', l.document_id || '');
+      fd.append('adj_document_no[]', l.document_no || '');
+      fd.append('adj_due_date[]', l.due_date || '');
+      fd.append('adj_payment_amount[]', l.payment_amount || 0);
+      fd.append('adj_reference_no[]', l.reference_no || '');
+      fd.append('adj_narration[]', l.narration || '');
+    });
+  }
+  return fd;
+}
+
+function saveOp(){
+  const id = document.getElementById('op_id').value;
+  const url = id ? '/cash-bank/outgoing-payments/' + id + '/edit' : '/cash-bank/outgoing-payments/add';
+  fetch(url, { method:'POST', headers:{'X-CSRFToken':OP_CSRF}, body: buildFormData() })
+    .then(r=>r.json()).then(d=>{
+      if (d.ok){ bootstrap.Modal.getInstance(document.getElementById('opModal')).hide(); loadOp(); }
+      else flashErr(d.error);
+    }).catch(()=>flashErr(IS_AR?'خطأ في الشبكة':'Network error'));
+}
+
+function postOp(){
+  const id = document.getElementById('op_id').value;
+  if (!id){ flashErr(IS_AR?'احفظ كمسودة أولاً':'Save as Draft first'); return; }
+  if (!confirm(IS_AR ? 'ترحيل هذه الدفعة؟ سيتم إنشاء قيد محاسبي.' : 'Post this payment? A GL entry will be created.')) return;
+  saveThenAction(id, '/post');
+}
+// Cancelling a Posted payment (reversing GL entry) is a list-row action,
+// not a modal button -- the modal itself is fully locked once Posted,
+// mirroring the Purchase module's own Cancel/Save & Post/Save footer.
+function cancelOpRow(id){
+  if (!confirm(IS_AR ? 'إلغاء هذه الدفعة المرحّلة؟ سيتم إنشاء قيد عكسي.' : 'Cancel this posted payment? A reversing GL entry will be created.')) return;
+  fetch('/cash-bank/outgoing-payments/' + id + '/cancel', { method:'POST', headers:{'X-CSRFToken':OP_CSRF} })
+    .then(r=>r.json()).then(d=>{
+      if (d.ok) loadOp();
+      else flashErr(d.error);
+    });
+}
+function saveThenAction(id, actionPath){
+  // The form stays fully editable in Draft/Approved (see applyStatusUI),
+  // so whatever was just changed must be persisted before Post runs
+  // against it -- not only while still Draft.
+  const proceed = () => {
+    fetch('/cash-bank/outgoing-payments/' + id + actionPath, { method:'POST', headers:{'X-CSRFToken':OP_CSRF} })
+      .then(r=>r.json()).then(d=>{
+        if (d.ok){ bootstrap.Modal.getInstance(document.getElementById('opModal')).hide(); loadOp(); }
+        else flashErr(d.error);
+      });
+  };
+  fetch('/cash-bank/outgoing-payments/' + id + '/edit', { method:'POST', headers:{'X-CSRFToken':OP_CSRF}, body: buildFormData() })
+    .then(r=>r.json()).then(d=>{ if (d.ok) proceed(); else flashErr(d.error); });
+}
+
+function deleteOp(id){
+  if (!confirm(IS_AR ? 'حذف هذه المسودة؟' : 'Delete this draft?')) return;
+  fetch('/cash-bank/outgoing-payments/' + id + '/delete', { method:'POST', headers:{'X-CSRFToken':OP_CSRF} })
+    .then(r=>r.json()).then(d=>{ if (d.ok) loadOp(); else flashErr(d.error); });
+}
+
+document.addEventListener('DOMContentLoaded', loadOp);
+</script>
+{% endblock %}

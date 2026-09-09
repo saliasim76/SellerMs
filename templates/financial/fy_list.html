@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}السنة المالية{% else %}Financial Year{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}السنة المالية{% else %}Financial Year{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+  .ag-theme-alpine { --ag-font-family:'Segoe UI',system-ui,sans-serif; --ag-font-size:13px; --ag-header-background-color:#1e3a5f; --ag-header-foreground-color:#fff; --ag-border-color:#e2e8f0; --ag-row-hover-color:#eff6ff; --ag-selected-row-background-color:#dbeafe; --ag-header-height:44px; --ag-row-height:42px; }
+  .ag-theme-alpine .ag-header-cell-label { font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.4px; }
+  .fy-section-title { font-size:13px; font-weight:700; color:#334155; margin:0 0 8px; display:flex; align-items:center; gap:8px; }
+  .fy-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .fy-toolbar .search-form { position:relative; }
+  .fy-badge-open { background:#dcfce7; color:#15803d; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .fy-act { width:28px; height:28px; border:none; border-radius:6px; cursor:pointer; font-size:12px; margin:0 2px; display:inline-flex; align-items:center; justify-content:center; }
+  .fy-act-edit { background:#eff6ff; color:#2563eb; } .fy-act-edit:hover { background:#dbeafe; }
+  .fy-act-del { background:#fef2f2; color:#dc2626; } .fy-act-del:hover { background:#fee2e2; }
+  .fy-badge-closed { background:#f1f5f9; color:#64748b; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .fy-hint { color:#64748b; font-size:12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}إدارة السنة المالية{% else %}Financial Year Management{% endif %}</h2>
+
+  {# ── Upper grid: Financial Year ── #}
+  <div class="fy-section-title"><i class="fas fa-calendar-alt"></i>{% if ar %}السنوات المالية{% else %}Financial Years{% endif %}</div>
+  <div class="fy-toolbar">
+    <button class="tool-btn tool-btn-green" onclick="openAddFy()" title="{% if ar %}جديد{% else %}New{% endif %}"><i class="fas fa-plus"></i></button>
+    <button class="tool-btn" onclick="openEditFy()" title="{% if ar %}تعديل{% else %}Edit{% endif %}"><i class="fas fa-pencil-alt"></i></button>
+    <button class="tool-btn" onclick="deleteFy()" title="{% if ar %}حذف{% else %}Delete{% endif %}"><i class="fas fa-trash"></i></button>
+    <button class="tool-btn" onclick="loadFy()" title="{% if ar %}تحديث{% else %}Refresh{% endif %}"><i class="fas fa-sync-alt"></i></button>
+    <a class="tool-btn" href="/io/financial-year/export?fmt=xlsx" style="text-decoration:none;" title="{% if ar %}تصدير Excel{% else %}Export Excel{% endif %}"><i class="fas fa-file-excel"></i></a>
+    <button class="tool-btn" title="{% if ar %}استيراد{% else %}Import{% endif %}" onclick="document.getElementById('fyImp').click()"><i class="fas fa-file-import"></i></button>
+    <input type="file" id="fyImp" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="ioImport(this,'financial-year')">
+    <button class="tool-btn" onclick="fyApi&&fyApi.exportDataAsCsv({fileName:'financial_years.csv'})" title="Excel/CSV"><i class="fas fa-file-export"></i></button>
+    <div class="search-form" style="margin-inline-start:auto;"><i class="fas fa-search search-icon"></i>
+      <input type="text" class="search-input" style="width:200px" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="fyApi&&fyApi.setGridOption('quickFilterText',this.value)">
+    </div>
+  </div>
+  <div id="fyGrid" class="ag-theme-alpine" style="width:100%;height:260px;"></div>
+
+  {# ── Lower grid: Financial Months ── #}
+  <div class="fy-section-title" style="margin-top:18px;"><i class="fas fa-calendar-day"></i>{% if ar %}الأشهر المالية{% else %}Financial Months{% endif %}
+    <span id="fmParent" class="fy-hint"></span></div>
+  <div class="fy-toolbar">
+    <button class="tool-btn" onclick="openEditFm()" title="{% if ar %}تعديل الحالة{% else %}Edit Status{% endif %}"><i class="fas fa-pencil-alt"></i></button>
+    <button class="tool-btn" onclick="reloadFm()" title="{% if ar %}تحديث{% else %}Refresh{% endif %}"><i class="fas fa-sync-alt"></i></button>
+    <button class="tool-btn" onclick="fmApi&&fmApi.exportDataAsCsv({fileName:'financial_months.csv'})" title="Excel/CSV"><i class="fas fa-file-export"></i></button>
+    <div class="search-form" style="margin-inline-start:auto;"><i class="fas fa-search search-icon"></i>
+      <input type="text" class="search-input" style="width:200px" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="fmApi&&fmApi.setGridOption('quickFilterText',this.value)">
+    </div>
+  </div>
+  <div id="fmGrid" class="ag-theme-alpine" style="width:100%;height:620px;"></div>
+</div>
+
+{# ── Financial Year Modal ── #}
+<div class="modal fade" id="fyModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1e3a5f;color:#fff;">
+        <h5 class="modal-title" id="fyModalTitle">{% if ar %}سنة مالية جديدة{% else %}New Financial Year{% endif %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="fy_id">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{% if ar %}السنة{% else %}Year{% endif %}<span class="text-danger">*</span></label>
+          <input type="number" id="fy_year" class="form-control" min="1990" max="2200" step="1"
+                 oninput="recomputeFy()" placeholder="2026">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{% if ar %}السنة المالية{% else %}Financial Year{% endif %}</label>
+          <input type="text" id="fy_str" class="form-control" readonly style="background:#f0fdf4;color:#15803d;font-weight:700;">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{% if ar %}النطاق{% else %}Range{% endif %}</label>
+          <input type="text" id="fy_range" class="form-control" readonly style="background:#f8fafc;">
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">{% if ar %}الحالة{% else %}Status{% endif %}</label>
+          <select id="fy_status" class="form-select" style="font-weight:700;">
+            <option value="Open">{% if ar %}مفتوحة{% else %}Open{% endif %}</option>
+            <option value="Closed">{% if ar %}مغلقة{% else %}Closed{% endif %}</option>
+          </select>
+          <div class="form-text">{% if ar %}يمكن إغلاق السنة فقط بعد إغلاق جميع أشهرها الـ12.{% else %}The year can be Closed only after all 12 of its months are Closed.{% endif %}</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" class="btn btn-outline-primary" onclick="saveFy(true)">{% if ar %}حفظ وجديد{% else %}Save &amp; New{% endif %}</button>
+        <button type="button" class="btn btn-primary" onclick="saveFy(false)">{% if ar %}حفظ{% else %}Save{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Financial Month Status Modal ── #}
+<div class="modal fade" id="fmModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1e3a5f;color:#fff;">
+        <h5 class="modal-title">{% if ar %}تعديل حالة الشهر{% else %}Edit Month Status{% endif %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="fm_id">
+        <div class="mb-2"><label class="form-label fw-semibold" id="fm_label_disp"></label></div>
+        <select id="fm_status" class="form-select">
+          <option value="Open">Open</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" class="btn btn-primary" onclick="saveFm()">{% if ar %}حفظ{% else %}Save{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+const CSRF  = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if ar else 'false' }};
+const FY_DATA = '{{ url_for("financial.fy_data") }}';
+let fyApi, fmApi, _selFy = null, _suppressSelReload = false;
+
+function badge(v){ return v==='Open'
+  ? '<span class="fy-badge-open">'+(IS_AR?'مفتوحة':'Open')+'</span>'
+  : '<span class="fy-badge-closed">'+(IS_AR?'مغلقة':'Closed')+'</span>'; }
+
+const _locale = IS_AR ? { noRowsToShow:'لا توجد بيانات', searchOoo:'بحث...' }
+                      : { noRowsToShow:'No records found', searchOoo:'Search...' };
+const _defCol = { sortable:true, resizable:true, filter:true, floatingFilter:true, unSortIcon:true,
+  menuTabs:['filterMenuTab','generalMenuTab'],
+  filterParams:{ buttons:['apply','reset','clear'], closeOnApply:true } };
+
+/* ── Upper grid ── */
+const fyCols = [
+  { headerName: IS_AR?'السنة المالية':'Financial Year', field:'financial_year', minWidth:150, pinned:IS_AR?'right':'left' },
+  { headerName: IS_AR?'النطاق':'Range', field:'range', minWidth:230 },
+  { headerName: IS_AR?'الأشهر':'Months', field:'months_count', width:110, filter:'agNumberColumnFilter' },
+  { headerName: IS_AR?'الحالة':'Status', field:'status', width:130, cellRenderer:p=>badge(p.value) },
+  { headerName: IS_AR?'إجراءات':'Actions', width:120, sortable:false, filter:false, pinned:IS_AR?'left':'right',
+    cellRenderer:p=>{
+      const id=(p.data||{}).id;
+      return '<button class="fy-act fy-act-edit" title="'+(IS_AR?'تعديل':'Edit')+'" onclick="fyRowEditById('+id+')"><i class="fas fa-pencil-alt"></i></button>'+
+             '<button class="fy-act fy-act-del" title="'+(IS_AR?'حذف':'Delete')+'" onclick="fyRowDeleteById('+id+')"><i class="fas fa-trash"></i></button>';
+    } },
+];
+agGrid.createGrid(document.getElementById('fyGrid'), {
+  columnDefs: fyCols, rowData: [], pagination:true, paginationPageSize:10, paginationPageSizeSelector:[10,50,100],
+  rowSelection:'single', animateRows:true, enableRtl:IS_AR, localeText:_locale,
+  multiSortKey:'ctrl', defaultColDef:_defCol,
+  onGridReady(p){ fyApi=p.api; loadFy(); try{ if(window.GridKit) GridKit.enhance(p,'fyGrid',{storageKey:'fin_years',exportName:'FinancialYears'}); }catch(e){ console.error('GridKit enhance (fy) failed:', e); } },
+  onSelectionChanged(){ if(_suppressSelReload) return; const r=fyApi.getSelectedRows()[0]; _selFy=r||null; loadMonths(r); },
+  onRowDoubleClicked(){ openEditFy(); },
+});
+
+/* ── Lower grid ── */
+const fmCols = [
+  { headerName: IS_AR?'السنة المالية':'Financial Year', field:'financial_year', width:150 },
+  { headerName: IS_AR?'التسمية':'Label', field:'label', minWidth:150, pinned:IS_AR?'right':'left' },
+  { headerName: IS_AR?'النطاق':'Range', field:'range', minWidth:250 },
+  { headerName: IS_AR?'الحالة':'Status', field:'status', width:130, cellRenderer:p=>badge(p.value) },
+  { headerName: IS_AR?'إجراءات':'Actions', width:100, sortable:false, filter:false, pinned:IS_AR?'left':'right',
+    cellRenderer:p=>{
+      const id=(p.data||{}).id;
+      return '<button class="fy-act fy-act-edit" title="'+(IS_AR?'تعديل الحالة':'Edit Status')+'" onclick="fmRowEditById('+id+')"><i class="fas fa-pencil-alt"></i></button>';
+    } },
+];
+agGrid.createGrid(document.getElementById('fmGrid'), {
+  columnDefs: fmCols, rowData: [], pagination:false,
+  rowSelection:'single', animateRows:true, enableRtl:IS_AR, localeText:_locale,
+  multiSortKey:'ctrl', defaultColDef:_defCol,
+  onGridReady(p){ fmApi=p.api; try{ if(window.GridKit) GridKit.enhance(p,'fmGrid',{storageKey:'fin_months',exportName:'FinancialMonths'}); }catch(e){ console.error('GridKit enhance (fm) failed:', e); } },
+  onRowDoubleClicked(){ openEditFm(); },
+});
+
+function loadFy(){
+  const keepId = _selFy ? _selFy.id : null;
+  fetch(FY_DATA).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(d=>{
+    if(!fyApi) return;
+    _suppressSelReload = true;                 // don't let the data-swap's selection event wipe months
+    fyApi.setGridOption('rowData', d);
+    if(keepId != null){
+      const still = d.find(x=>x.id===keepId);
+      if(still){
+        _selFy = still;
+        fyApi.forEachNode(n=>{ if(n.data && n.data.id===keepId) n.setSelected(true); });
+        loadMonths(still);   // refresh months for the still-selected year
+      } else {
+        _selFy = null; if(fmApi) fmApi.setGridOption('rowData',[]); document.getElementById('fmParent').textContent='';
+      }
+    }
+    // Re-enable selection handling after the grid finishes applying the change.
+    setTimeout(function(){ _suppressSelReload = false; }, 0);
+  }).catch(e=>{ _suppressSelReload = false; console.error('Failed to load financial years:', e); });
+}
+function loadMonths(row){
+  if(!fmApi){ setTimeout(()=>loadMonths(row), 50); return; }   // wait for months grid to be ready
+  if(!row){ fmApi.setGridOption('rowData',[]); document.getElementById('fmParent').textContent=''; return; }
+  document.getElementById('fmParent').textContent = '— ' + row.financial_year;
+  fetch('/financial-years/'+row.id+'/months').then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d=>fmApi.setGridOption('rowData',d))
+    .catch(e=>console.error('Failed to load months:', e));
+}
+function reloadFm(){ loadMonths(_selFy); }
+
+/* ── FY form ── */
+function recomputeFy(){
+  const y = parseInt(document.getElementById('fy_year').value,10);
+  if(!y){ document.getElementById('fy_str').value=''; document.getElementById('fy_range').value=''; return; }
+  document.getElementById('fy_str').value   = 'FY-'+y;
+  document.getElementById('fy_range').value = '01-Jan-'+y+' → 31-Dec-'+y;
+}
+function openAddFy(){
+  document.getElementById('fyModalTitle').textContent = IS_AR?'سنة مالية جديدة':'New Financial Year';
+  document.getElementById('fy_id').value='';
+  document.getElementById('fy_status').value='Open';
+  document.getElementById('fy_status').disabled=true;   // new years always start Open
+  document.getElementById('fy_year').readOnly=false;
+  // suggest next year
+  fetch('/financial-years/next').then(r=>r.json()).then(d=>{
+    document.getElementById('fy_year').value=d.year; recomputeFy();
+  });
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('fyModal')).show();
+}
+function _fyRowById(id){ let out=null; if(fyApi) fyApi.forEachNode(n=>{ if(n.data && n.data.id===id) out=n.data; }); return out; }
+function _fmRowById(id){ let out=null; if(fmApi) fmApi.forEachNode(n=>{ if(n.data && n.data.id===id) out=n.data; }); return out; }
+function fyRowEditById(id){ const r=_fyRowById(id); if(r) fyRowEdit(r); }
+function fyRowDeleteById(id){ const r=_fyRowById(id); if(r) fyRowDelete(r.id, r.financial_year); }
+function fmRowEditById(id){ const r=_fmRowById(id); if(r) fmRowEdit(r); }
+
+function openEditFy(){
+  const r = fyApi.getSelectedRows()[0];
+  if(!r){ alert(IS_AR?'اختر سنة مالية':'Select a financial year'); return; }
+  fyRowEdit(r);
+}
+function fyRowEdit(r){
+  document.getElementById('fyModalTitle').textContent = IS_AR?'تعديل السنة المالية':'Edit Financial Year';
+  document.getElementById('fy_id').value=r.id;
+  document.getElementById('fy_year').value=r.year;
+  document.getElementById('fy_year').readOnly=true;   // year fixed on edit
+  recomputeFy();
+  document.getElementById('fy_status').disabled=false;
+  document.getElementById('fy_status').value=r.status;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('fyModal')).show();
+}
+function fyRowDelete(id, name){
+  if(!confirm((IS_AR?'حذف ':'Delete ')+(name||'')+(IS_AR?' وكل أشهرها؟':' and all its months?'))) return;
+  const fd=new FormData(); fd.set('csrf_token',CSRF);
+  fetch('/financial-years/'+id+'/delete',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+    if(!d.ok){ alert(d.error||'Error'); return; }
+    if(_selFy && _selFy.id===id){ _selFy=null; fmApi.setGridOption('rowData',[]); document.getElementById('fmParent').textContent=''; }
+    loadFy();
+  }).catch(()=>alert(IS_AR?'خطأ في الحذف':'Delete failed'));
+}
+function _closeFyModal(){
+  const el = document.getElementById('fyModal');
+  bootstrap.Modal.getOrCreateInstance(el).hide();
+  // Safety net: if a stray backdrop/disabled state lingers, clear it.
+  setTimeout(function(){
+    document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }, 300);
+}
+function saveFy(again){
+  const id = document.getElementById('fy_id').value;
+  const year = document.getElementById('fy_year').value;
+  if(!year){ alert(IS_AR?'السنة مطلوبة':'Year is required'); return; }
+  const statusEl = document.getElementById('fy_status');
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF);
+  fd.set('year', year);
+  fd.set('status', statusEl.value || 'Open');   // disabled select still readable
+  const url = id ? '/financial-years/'+id+'/edit' : '/financial-years/add';
+  fetch(url,{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+    if(!d.ok){ alert(d.error||'Error'); return; }
+    const newId = d.id || (id ? parseInt(id,10) : null);
+    // Reload years, then select the saved year so its 12 months show at once.
+    fetch(FY_DATA).then(r=>r.json()).then(rows=>{
+      if(fyApi) fyApi.setGridOption('rowData', rows);
+      const target = newId != null ? rows.find(x=>x.id===newId) : null;
+      if(target && fyApi){
+        _selFy = target;
+        fyApi.forEachNode(n=>{ if(n.data && n.data.id===newId) n.setSelected(true); });
+        loadMonths(target);
+      }
+    }).catch(e=>console.error('Reload after save failed:', e));
+    if(again && !id){ document.getElementById('fy_id').value=''; openAddFy(); }
+    else { _closeFyModal(); }
+  }).catch(()=>alert(IS_AR?'خطأ في الحفظ':'Save failed'));
+}
+function deleteFy(){
+  const r = fyApi.getSelectedRows()[0];
+  if(!r){ alert(IS_AR?'اختر سنة مالية':'Select a financial year'); return; }
+  if(!confirm((IS_AR?'حذف ':'Delete ')+r.financial_year+(IS_AR?' وكل أشهرها؟':' and all its months?'))) return;
+  const fd=new FormData(); fd.set('csrf_token',CSRF);
+  fetch('/financial-years/'+r.id+'/delete',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+    if(!d.ok){ alert(d.error||'Error'); return; }
+    _selFy=null; if(fmApi) fmApi.setGridOption('rowData',[]); document.getElementById('fmParent').textContent=''; loadFy();
+  });
+}
+
+/* ── FM status form ── */
+function openEditFm(){
+  const r = fmApi.getSelectedRows()[0];
+  if(!r){ alert(IS_AR?'اختر شهراً':'Select a month'); return; }
+  fmRowEdit(r);
+}
+function fmRowEdit(r){
+  document.getElementById('fm_id').value=r.id;
+  document.getElementById('fm_label_disp').textContent=r.label+'  ('+r.range+')';
+  document.getElementById('fm_status').value=r.status;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('fmModal')).show();
+}
+function saveFm(){
+  const id=document.getElementById('fm_id').value;
+  const fd=new FormData(); fd.set('csrf_token',CSRF);
+  fd.set('status', document.getElementById('fm_status').value);
+  fetch('/financial-months/'+id+'/edit',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+    if(!d.ok){ alert(d.error||'Error'); return; }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('fmModal')).hide();
+    setTimeout(function(){
+      document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }, 300);
+    // Refresh the months list (keeps the same selected year).
+    reloadFm();
+    // Update the selected year's status in place, if the server changed it —
+    // without reloading the whole years grid (which would drop the selection).
+    if(_selFy && d.year_status && fyApi){
+      fyApi.forEachNode(n=>{
+        if(n.data && n.data.id===_selFy.id && n.data.status!==d.year_status){
+          n.setDataValue('status', d.year_status);
+        }
+      });
+    }
+  }).catch(()=>alert(IS_AR?'خطأ في الحفظ':'Save failed'));
+}
+</script>
+{% endblock %}

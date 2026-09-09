@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}الأسئلة الشائعة{% else %}FAQ{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('support.customer_support') }}">{% if ar %}دعم العملاء{% else %}Customer Support{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}الأسئلة الشائعة{% else %}FAQ{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.faq-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 20px;}
+.faq-item{border-bottom:1px solid #f1f5f9;padding:14px 0;}
+.faq-item:last-child{border-bottom:none;}
+.faq-q{font-weight:700;font-size:14px;color:#111827;margin-bottom:5px;display:flex;gap:8px;}
+.faq-q i{color:#10b981;margin-top:2px;}
+.faq-a{font-size:13px;color:#4b5563;margin:0 0 0 22px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading"><i class="fas fa-question-circle" style="color:#10b981;margin-right:8px;"></i>{% if ar %}الأسئلة الشائعة{% else %}Frequently Asked Questions{% endif %}</h2>
+  <p style="color:#6b7280;font-size:13px;margin-top:-8px;margin-bottom:16px;">
+    {% if ar %}إجابات سريعة على الأسئلة الأكثر شيوعاً. لم تجد ما تبحث عنه؟ <a href="{{ url_for('support.customer_support') }}">أرسل تذكرة دعم</a>.
+    {% else %}Quick answers to the most common questions. Can't find what you need? <a href="{{ url_for('support.customer_support') }}">Submit a support ticket</a>.{% endif %}
+  </p>
+
+  <div class="faq-card">
+    <div class="faq-item">
+      <div class="faq-q"><i class="fas fa-circle-question"></i>{% if ar %}كيف أرسل تذكرة دعم جديدة؟{% else %}How do I submit a new support ticket?{% endif %}</div>
+      <p class="faq-a">{% if ar %}من قائمة "الدعم" اذهب إلى "دعم العملاء"، عبّئ النموذج واضغط إرسال التذكرة.{% else %}From the Support menu, go to Customer Support, fill in the form, and click Submit Ticket.{% endif %}</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><i class="fas fa-circle-question"></i>{% if ar %}ما هو زمن الاستجابة المتوقع؟{% else %}What response time should I expect?{% endif %}</div>
+      <p class="faq-a">{% if ar %}يعتمد على الأولوية التي تختارها: عاجلة خلال 4 ساعات، عالية خلال 8 ساعات، متوسطة خلال 24 ساعة، منخفضة خلال 48 ساعة.{% else %}It depends on the priority you choose: Urgent within 4 hours, High within 8 hours, Medium within 24 hours, Low within 48 hours.{% endif %}</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><i class="fas fa-circle-question"></i>{% if ar %}أين أرى تذاكري السابقة؟{% else %}Where can I see my previous tickets?{% endif %}</div>
+      <p class="faq-a">{% if ar %}في أسفل صفحة "دعم العملاء" قسم "تذاكري" يعرض كل التذاكر التي أرسلتها شركتك.{% else %}At the bottom of the Customer Support page, the "My Tickets" section lists every ticket your company has submitted.{% endif %}</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><i class="fas fa-circle-question"></i>{% if ar %}كيف أتواصل مباشرة بدلاً من إرسال تذكرة؟{% else %}How do I reach you directly instead of a ticket?{% endif %}</div>
+      <p class="faq-a">{% if ar %}راجع لوحة "تواصل معنا" في صفحة دعم العملاء للبريد والهاتف والواتساب وساعات العمل.{% else %}See the Contact Us panel on the Customer Support page for email, phone, WhatsApp, and business hours.{% endif %}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

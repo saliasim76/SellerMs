@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}وحدة القياس{% else %}Unit of Measurement{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}وحدة القياس{% else %}Unit of Measurement{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.ag-theme-alpine{--ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#eff6ff;--ag-selected-row-background-color:#dbeafe;--ag-header-height:44px;--ag-row-height:42px;}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;}
+.ag-theme-alpine .ag-row-odd{background:#fafbfc;}
+.uom-page{padding:4px 2px;}
+.uom-head{display:flex;flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:16px;}
+.uom-title{font-size:20px;font-weight:800;color:#1e3a5f;margin:0;}
+.uom-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ubtn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #d1d5db;background:white;color:#374151;transition:all .12s;text-decoration:none;}
+.ubtn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+.ubtn-green{background:linear-gradient(135deg,#16a34a,#15803d);color:white;border:none;}
+.ubtn-green:hover{filter:brightness(1.08);color:white;}
+.ubtn-blue{background:#2563eb;color:#fff;border:none;} .ubtn-blue:hover{filter:brightness(1.1);color:#fff;}
+.ubtn-teal{background:#0d9488;color:#fff;border:none;} .ubtn-teal:hover{filter:brightness(1.1);color:#fff;}
+.ubtn-purple{background:#7c3aed;color:#fff;border:none;} .ubtn-purple:hover{filter:brightness(1.1);color:#fff;}
+.ubtn-orange{background:#ea580c;color:#fff;border:none;} .ubtn-orange:hover{filter:brightness(1.1);color:#fff;}
+.ubtn-gray{background:#64748b;color:#fff;border:none;} .ubtn-gray:hover{filter:brightness(1.1);color:#fff;}
+.usearch{position:relative;}
+.usearch input{padding:8px 12px 8px 34px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;width:230px;}
+.usearch input:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.usearch i{position:absolute;top:50%;left:12px;transform:translateY(-50%);color:#9ca3af;font-size:12px;}
+.grid-wrap{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;}
+.act-btn{width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;font-size:12px;margin:0 2px;display:inline-flex;align-items:center;justify-content:center;}
+.act-edit{background:#eff6ff;color:#2563eb;} .act-edit:hover{background:#dbeafe;}
+.act-del{background:#fef2f2;color:#dc2626;} .act-del:hover{background:#fee2e2;}
+.st-badge{padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;}
+.st-active{background:#dcfce7;color:#15803d;} .st-inactive{background:#f1f5f9;color:#6b7280;}
+/* Modal */
+.um-modal-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.um-modal-hdr h5{margin:0;color:white;font-weight:700;font-size:15px;}
+.modal-content{border-radius:12px;overflow:hidden;}
+.um-body{padding:20px 22px;}
+.um-fld{margin-bottom:14px;}
+.um-fld label{font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;display:block;}
+.um-fld label .req{color:#ef4444;}
+.um-fld input,.um-fld select{width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box;}
+.um-fld input:focus,.um-fld select:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.um-fld input[readonly]{background:#f1f5f9;color:#6b7280;font-weight:700;}
+.um-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.um-hint{font-size:11px;color:#9ca3af;margin-top:4px;}
+.um-field-wrap{position:relative;}
+.um-field-wrap input{padding-right:34px;}
+.um-retrans-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:6px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;transition:all .12s;opacity:.7;z-index:2;}
+.um-retrans-btn:hover{opacity:1;background:#dbeafe;}
+[dir="rtl"] .um-field-wrap input{padding-right:12px;padding-left:34px;}
+[dir="rtl"] .um-retrans-btn{right:auto;left:6px;}
+.um-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 22px;background:#f8fafc;border-top:1.5px solid #e2e8f0;}
+@media(max-width:640px){.um-grid2{grid-template-columns:1fr;}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="uom-page">
+  <div class="uom-head">
+    <h2 class="uom-title">{% if ar %}وحدة القياس{% else %}Unit of Measurement{% endif %}</h2>
+    <div class="uom-toolbar">
+      <button class="ubtn ubtn-green" onclick="openAdd()"><i class="fas fa-plus"></i>{% if ar %}إضافة{% else %}Add Unit{% endif %}</button>
+      <a class="ubtn ubtn-teal" href="/io/unit-measurement/export?fmt=xlsx" style="text-decoration:none;"><i class="fas fa-file-excel"></i>{% if ar %}تصدير{% else %}Export{% endif %}</a>
+      <a class="ubtn ubtn-purple" href="/io/unit-measurement/template?fmt=xlsx" style="text-decoration:none;" title="Template"><i class="fas fa-file-download"></i></a>
+      <button class="ubtn ubtn-orange" onclick="document.getElementById('uomImp').click()"><i class="fas fa-file-import"></i>{% if ar %}استيراد{% else %}Import{% endif %}</button>
+      <input type="file" id="uomImp" accept=".xlsx,.xlsm" style="display:none;" onchange="ioImport(this,'unit-measurement')">
+      <div class="usearch"><i class="fas fa-search"></i>
+        <input type="text" id="uomSearch" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="onSearch()">
+      </div>
+      <button class="ubtn ubtn-blue" onclick="loadData()"><i class="fas fa-sync-alt"></i>{% if ar %}تحديث{% else %}Refresh{% endif %}</button>
+    </div>
+  </div>
+
+  <div class="grid-wrap">
+    <div id="uomGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:560px;"></div>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ══ #}
+<div class="modal fade" id="uomModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="um-modal-hdr">
+      <h5 id="uomModalTitle"><i class="fas fa-ruler-combined me-2"></i>{% if ar %}وحدة القياس{% else %}Unit of Measurement{% endif %}</h5>
+      <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="um-body">
+      <input type="hidden" id="u_id">
+      <div class="um-fld">
+        <label>{% if ar %}الكود{% else %}Code{% endif %} <span class="req">*</span></label>
+        <input type="text" id="u_code" readonly placeholder="Auto Generated">
+        <div class="um-hint">{% if ar %}يتم إنشاؤه تلقائيًا{% else %}Auto generated{% endif %}</div>
+      </div>
+      <div class="um-grid2">
+        <div class="um-fld">
+          <label>{% if ar %}الاسم (إنجليزي){% else %}Name Eng{% endif %} <span class="req">*</span></label>
+          <div class="um-field-wrap">
+            <input type="text" id="u_name_en" dir="ltr" placeholder="e.g. Box" oninput="uomVTrans('u_name_en','u_name_ar')">
+            <button type="button" class="um-retrans-btn" title="{% if ar %}إعادة الترجمة{% else %}Re-translate to Arabic{% endif %}" onclick="uomRetrans('u_name_en','u_name_ar')"><i class="fas fa-sync-alt"></i></button>
+          </div>
+        </div>
+        <div class="um-fld">
+          <label>{% if ar %}الاسم (عربي){% else %}Name Ar{% endif %}</label>
+          <input type="text" id="u_name_ar" dir="rtl" placeholder="مثال: صندوق">
+        </div>
+        <div class="um-fld">
+          <label>{% if ar %}حجم العبوة (إنجليزي){% else %}Pack Size Eng{% endif %}</label>
+          <div class="um-field-wrap">
+            <input type="text" id="u_pac_size_en" dir="ltr" placeholder="e.g. 12" oninput="uomVTrans('u_pac_size_en','u_pac_size_ar')">
+            <button type="button" class="um-retrans-btn" title="{% if ar %}إعادة الترجمة{% else %}Re-translate to Arabic{% endif %}" onclick="uomRetrans('u_pac_size_en','u_pac_size_ar')"><i class="fas fa-sync-alt"></i></button>
+          </div>
+        </div>
+        <div class="um-fld">
+          <label>{% if ar %}حجم العبوة (عربي){% else %}Pack Size Ar{% endif %}</label>
+          <input type="text" id="u_pac_size_ar" dir="rtl">
+        </div>
+        <div class="um-fld">
+          <label>{% if ar %}المضاعف{% else %}MultiPly{% endif %}</label>
+          <input type="number" step="any" id="u_multiply" dir="ltr" placeholder="1">
+        </div>
+        <div class="um-fld">
+          <label>{% if ar %}الحالة{% else %}Status{% endif %}</label>
+          <select id="u_status">
+            <option value="Active">{% if ar %}نشط{% else %}Active{% endif %}</option>
+            <option value="Inactive">{% if ar %}غير نشط{% else %}Inactive{% endif %}</option>
+          </select>
+        </div>
+      </div>
+      <div id="uomMsg" style="display:none;margin-top:6px;padding:8px 10px;border-radius:7px;font-size:12.5px;font-weight:600;background:#fee2e2;color:#b91c1c;"></div>
+    </div>
+    <div class="um-foot">
+      <button class="ubtn" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+      <button class="ubtn" id="uomSaveNew" onclick="save(true)"><i class="fas fa-plus"></i>{% if ar %}حفظ وجديد{% else %}Save & New{% endif %}</button>
+      <button class="ubtn ubtn-green" onclick="save(false)"><i class="fas fa-save"></i>{% if ar %}حفظ{% else %}Save{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+const CSRF = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if ar else 'false' }};
+const UOM_TR = '{{ url_for("lookups.item_translate") }}';
+let gridApi;
+
+/* ══ EN → AR auto-translate (Name Eng / Pack Size Eng) ══ */
+const _uomVTimers = {};
+function uomVTrans(srcId, tgtId) {
+  clearTimeout(_uomVTimers[tgtId]);
+  const src = document.getElementById(srcId);
+  const tgt = document.getElementById(tgtId);
+  const text = src ? src.value.trim() : '';
+  if (!text) { if (tgt) tgt.value = ''; return; }
+  _uomVTimers[tgtId] = setTimeout(() => {
+    fetch(UOM_TR, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({ text: text, dir: 'en2ar' })
+    })
+    .then(r => r.json())
+    .then(d => { if (d.ok && d.translated && tgt) tgt.value = d.translated; })
+    .catch(err => console.error('Translation error:', err));
+  }, 700);
+}
+function uomRetrans(srcId, tgtId) {
+  const src = document.getElementById(srcId);
+  const tgt = document.getElementById(tgtId);
+  const text = src ? src.value.trim() : '';
+  if (!text || !tgt) return;
+  fetch(UOM_TR, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({ text: text, dir: 'en2ar' })
+  })
+  .then(r => r.json())
+  .then(d => { if (d.ok && d.translated) tgt.value = d.translated; })
+  .catch(err => console.error('Re-translation error:', err));
+}
+
+const fmtMul = v => (v==null||v==='')?'':Number(v).toLocaleString(undefined,{maximumFractionDigits:4});
+
+function statusBadge(p){
+  const on = (p.value||'Active')==='Active';
+  return `<span class="st-badge ${on?'st-active':'st-inactive'}">${on?(IS_AR?'نشط':'Active'):(IS_AR?'غير نشط':'Inactive')}</span>`;
+}
+function actions(p){
+  const d=p.data;
+  return `<button class="act-btn act-edit" title="Edit" onclick='uomEdit(${JSON.stringify(d)})'><i class="fas fa-pen"></i></button>`+
+         `<button class="act-btn act-del" title="Delete" onclick="uomDelete(${d.id})"><i class="fas fa-trash"></i></button>`;
+}
+
+const COLS = [
+  {headerName:IS_AR?'الكود':'Code', field:'code', width:120, cellStyle:{fontWeight:'700',color:'#2563eb'}},
+  {headerName:IS_AR?'الاسم (إنجليزي)':'Name Eng', field:'name_en', flex:1, minWidth:150, editable:true},
+  {headerName:IS_AR?'الاسم (عربي)':'Name Ar', field:'name_ar', flex:1, minWidth:150, cellStyle:{direction:'rtl'}, editable:true},
+  {headerName:IS_AR?'حجم العبوة (إنجليزي)':'Pack Size Eng', field:'pac_size_en', width:150, editable:true},
+  {headerName:IS_AR?'حجم العبوة (عربي)':'Pack Size Ar', field:'pac_size_ar', width:150, cellStyle:{direction:'rtl'}, editable:true},
+  {headerName:IS_AR?'المضاعف':'MultiPly', field:'multiply', width:120, valueFormatter:p=>fmtMul(p.value), editable:true},
+  {headerName:IS_AR?'الحالة':'Status', field:'status', width:120, cellRenderer:statusBadge, editable:true},
+  {headerName:IS_AR?'إجراءات':'Actions', width:110, cellRenderer:actions, sortable:false, filter:false, pinned:IS_AR?'left':'right'},
+];
+
+document.addEventListener('DOMContentLoaded', () => {
+  agGrid.createGrid(document.getElementById('uomGrid'), {
+    columnDefs: COLS, rowData: [],
+    defaultColDef:{sortable:true, resizable:true, filter:true, editable:function(p){return window.ioFieldEditable && ioFieldEditable(p.colDef.field);}},
+    onCellValueChanged:function(e){ if(window.ioSaveCell) ioSaveCell('unit-measurement', e); },
+    enableRtl: IS_AR, pagination:true, paginationPageSize:25, paginationPageSizeSelector:[25,50,100],
+    onGridReady: p => { gridApi = p.api; if (window.GridKit) { GridKit.enhance(p, 'uomGrid', { storageKey: 'unit_measurement', exportName: 'Unit of Measurement' }); } loadData(); },
+  });
+});
+
+function loadData(){
+  fetch('/unit-measurement/data').then(r=>r.json()).then(d=>gridApi.setGridOption('rowData', d));
+}
+function onSearch(){ gridApi.setGridOption('quickFilterText', document.getElementById('uomSearch').value); }
+
+function setVal(id,v){ document.getElementById(id).value = v==null?'':v; }
+function getVal(id){ return (document.getElementById(id).value||'').trim(); }
+
+function openAdd(){
+  document.getElementById('uomModalTitle').innerHTML = '<i class="fas fa-ruler-combined me-2"></i>'+(IS_AR?'إضافة وحدة قياس':'Add Unit of Measurement');
+  setVal('u_id','');
+  ['u_name_en','u_name_ar','u_pac_size_en','u_pac_size_ar'].forEach(id=>setVal(id,''));
+  setVal('u_multiply','1');
+  setVal('u_status','Active');
+  document.getElementById('uomMsg').style.display='none';
+  fetch('/unit-measurement/next-code').then(r=>r.json()).then(d=>setVal('u_code', d.code||'Auto Generated'));
+  new bootstrap.Modal(document.getElementById('uomModal')).show();
+}
+
+function uomEdit(d){
+  document.getElementById('uomModalTitle').innerHTML = '<i class="fas fa-pen me-2"></i>'+(IS_AR?'تعديل وحدة قياس':'Edit Unit of Measurement');
+  setVal('u_id', d.id);
+  setVal('u_code', d.code);
+  setVal('u_name_en', d.name_en);
+  setVal('u_name_ar', d.name_ar);
+  setVal('u_pac_size_en', d.pac_size_en);
+  setVal('u_pac_size_ar', d.pac_size_ar);
+  setVal('u_multiply', d.multiply);
+  setVal('u_status', d.status||'Active');
+  document.getElementById('uomMsg').style.display='none';
+  new bootstrap.Modal(document.getElementById('uomModal')).show();
+}
+
+function save(andNew){
+  const id = getVal('u_id');
+  if(!getVal('u_name_en')){
+    const m=document.getElementById('uomMsg'); m.style.display='block';
+    m.textContent = IS_AR?'الاسم (إنجليزي) مطلوب':'Name (English) is required'; return;
+  }
+  const fd = new FormData();
+  fd.append('name_en', getVal('u_name_en'));
+  fd.append('name_ar', getVal('u_name_ar'));
+  fd.append('pac_size_en', getVal('u_pac_size_en'));
+  fd.append('pac_size_ar', getVal('u_pac_size_ar'));
+  fd.append('multiply', getVal('u_multiply')||'0');
+  fd.append('status', getVal('u_status'));
+  const url = id ? '/unit-measurement/'+id+'/edit' : '/unit-measurement/add';
+  fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        loadData();
+        if(andNew && !id){ openAdd(); }
+        else { bootstrap.Modal.getInstance(document.getElementById('uomModal')).hide(); }
+      } else {
+        const m=document.getElementById('uomMsg'); m.style.display='block'; m.textContent=d.error||'Error';
+      }
+    });
+}
+
+function uomDelete(id){
+  if(!confirm(IS_AR?'حذف هذه الوحدة؟':'Delete this unit?')) return;
+  const fd=new FormData();
+  fetch('/unit-measurement/'+id+'/delete',{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+    .then(r=>r.json()).then(d=>{ if(d.ok) loadData(); else alert(d.error||'Error'); });
+}
+</script>
+{% endblock %}

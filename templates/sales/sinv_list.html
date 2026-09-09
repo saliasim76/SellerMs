@@ -1,0 +1,2524 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}فواتير الشراء{% else %}Sales Invoices{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+/* ═══════════════════════════════════════════════════════
+   AG Grid - Enterprise Theme with Proledg styling (EXACTLY LIKE EMPLOYEES)
+   ═══════════════════════════════════════════════════════ */
+.ag-theme-alpine {
+    --ag-font-family:'Segoe UI',system-ui,sans-serif;
+    --ag-font-size:13px;
+    --ag-header-background-color:#1e3a5f;
+    --ag-header-foreground-color:#fff;
+    --ag-border-color:#e2e8f0;
+    --ag-row-hover-color:#eff6ff;
+    --ag-selected-row-background-color:#dbeafe;
+    --ag-header-height:44px;
+    --ag-row-height:44px;
+    --ag-cell-horizontal-padding:12px;
+}
+.ag-theme-alpine .ag-header-cell-label {
+    font-weight:700;
+    font-size:11.5px;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    overflow:visible;
+}
+.ag-theme-alpine .ag-header-cell-text {
+    overflow:visible;
+    text-overflow:clip;
+    white-space:nowrap;
+}
+.ag-theme-alpine .ag-header-cell:hover {
+    background:rgba(255,255,255,.08) !important;
+}
+.ag-theme-alpine .ag-sort-ascending-icon,
+.ag-theme-alpine .ag-sort-descending-icon,
+.ag-theme-alpine .ag-sort-none-icon {
+    color:#94a3b8;
+}
+.ag-theme-alpine .ag-header-icon {
+    color:#94a3b8;
+}
+.ag-theme-alpine .ag-filter {
+    border-radius:10px !important;
+    box-shadow:0 8px 30px rgba(0,0,0,.15) !important;
+    border:1px solid #e2e8f0 !important;
+    overflow:hidden;
+    min-width:260px;
+    background:white;
+}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input {
+    border:1.5px solid #d1d5db !important;
+    border-radius:7px !important;
+    padding:6px 10px !important;
+    font-size:12px !important;
+}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input:focus {
+    outline:none !important;
+    border-color:#2563eb !important;
+    box-shadow:0 0 0 2px rgba(37,99,235,.12) !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel {
+    padding:8px 10px !important;
+    background:#f8fafc !important;
+    border-top:1px solid #e2e8f0 !important;
+    display:flex !important;
+    gap:6px !important;
+    justify-content:space-between !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button {
+    padding:5px 14px !important;
+    border-radius:7px !important;
+    font-size:12px !important;
+    font-weight:600 !important;
+    border:none !important;
+    cursor:pointer !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="applyFilterButton"] {
+    background:linear-gradient(135deg,#16a34a,#15803d) !important;
+    color:white !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="clearFilterButton"],
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="resetFilterButton"] {
+    background:white !important;
+    color:#374151 !important;
+    border:1.5px solid #d1d5db !important;
+}
+.ag-theme-alpine .ag-floating-filter-input input {
+    border:1px solid #e2e8f0 !important;
+    border-radius:5px !important;
+    padding:3px 7px !important;
+    font-size:11px !important;
+}
+.ag-theme-alpine .ag-floating-filter-input input:focus {
+    outline:none !important;
+    border-color:#2563eb !important;
+}
+.ag-theme-alpine .ag-row-even {
+    background:white;
+}
+.ag-theme-alpine .ag-row-odd {
+    background:#fafbfc;
+}
+.ag-theme-alpine .ag-row-hover {
+    background:#eff6ff !important;
+}
+.ag-theme-alpine .ag-cell {
+    border-right:1px solid #f1f5f9 !important;
+}
+
+/* Action buttons (matching Employees/Suppliers) */
+.ag-ab {
+    width:28px;
+    height:28px;
+    border-radius:7px;
+    border:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    cursor:pointer;
+    transition:all .12s;
+}
+.ag-ab:hover {
+    transform:translateY(-1px);
+    box-shadow:0 2px 6px rgba(0,0,0,.2);
+}
+.ag-ab-view { background:#0ea5e9; color:white; }
+.ag-ab-view:hover { background:#0284c7; }
+.ag-ab-edit { background:#f59e0b; color:white; }
+.ag-ab-edit:hover { background:#d97706; }
+.ag-ab-del { background:#ef4444; color:white; }
+.ag-ab-del:hover { background:#dc2626; }
+.ag-ab-print { background:#2563eb; color:white; }
+.ag-ab-print:hover { background:#1d4ed8; }
+
+/* Status pill */
+.st-pill {
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:3px 10px;
+    border-radius:10px;
+    font-size:11px;
+    font-weight:700;
+}
+.st-open { background:#dbeafe; color:#2563eb; }
+.st-pending { background:#fef3c7; color:#d97706; }
+.st-approved { background:#dcfce7; color:#15803d; }
+.st-closed { background:#f1f5f9; color:#6b7280; }
+.st-cancelled { background:#fee2e2; color:#dc2626; }
+
+/* Toolbar (matching Employees/Suppliers) */
+.toolbar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-bottom:14px;
+}
+.toolbar-left, .toolbar-right {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.tool-btn {
+    width:34px;
+    height:34px;
+    border-radius:7px;
+    border:1.5px solid #d1d5db;
+    background:white;
+    color:#6b7280;
+    cursor:pointer;
+    font-size:13px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+    transition:all .12s;
+}
+.tool-btn:hover {
+    border-color:#2563eb;
+    color:#2563eb;
+    background:#eff6ff;
+}
+.tool-btn-green { background:#16a34a; color:white; border:none; }
+.tool-btn-green:hover { background:#15803d; }
+.tool-btn-blue { background:#2563eb; color:white; border:none; }
+.tool-btn-blue:hover { background:#1d4ed8; }
+
+.search-form { position:relative; }
+.search-icon {
+    position:absolute;
+    left:10px;
+    top:50%;
+    transform:translateY(-50%);
+    color:#9ca3af;
+    font-size:12px;
+    z-index:2;
+}
+.search-input {
+    padding:7px 12px 7px 32px;
+    border:1.5px solid #d1d5db;
+    border-radius:7px;
+    font-size:12px;
+    outline:none;
+}
+.search-input:focus { border-color:#2563eb; }
+
+.sel-badge {
+    font-size:11px;
+    color:#6b7280;
+    background:#f1f5f9;
+    padding:4px 10px;
+    border-radius:5px;
+    font-weight:600;
+}
+
+.proledg-pagination {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 16px;
+    background:#f8fafc;
+    border:1px solid #e2e8f0;
+    border-top:none;
+    border-radius:0 0 8px 8px;
+}
+.page-count { font-size:12px; color:#6b7280; font-weight:600; }
+
+/* ── Modal Styles ── */
+.pur-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.pur-hdr h5{margin:0;color:white;font-weight:700;font-size:15px;}
+.pur-badge{background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;margin-left:8px;}
+.pur-tabs{display:flex;border-bottom:2px solid #e2e8f0;padding:0 18px;background:white;}
+.pur-tab{padding:10px 18px;border:none;background:none;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.pur-tab:hover{color:#2563eb;}
+.pur-tab.active{color:#2563eb;border-bottom-color:#2563eb;}
+.pur-tab-pane{display:none!important;padding:0;}
+.pur-tab-pane.active{display:block!important;}
+.pur-section{border:1.5px solid #e2e8f0;border-radius:10px;margin:14px 18px 0;overflow:hidden;}
+.pur-section-hdr{width:100%;background:white;border:none;padding:12px 16px;text-align:left;font-weight:700;font-size:13px;color:#1e3a5f;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:background .1s;}
+.pur-section-hdr:hover{background:#f8fafc;}
+.pur-section-hdr.open{background:#f0f7ff;border-bottom:1.5px solid #e2e8f0;}
+.pur-sec-icon{width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;margin-right:8px;font-size:11px;background:#e0f2fe;color:#0284c7;flex-shrink:0;}
+.pur-section-hdr.open .pur-sec-icon{background:#2563eb;color:white;}
+.pur-section-body{padding:16px 18px;display:none;background:white;}
+.pur-section-body.open{display:block;}
+.f-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-item{display:flex;flex-direction:column;}
+.f-lbl{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+.f-req{color:#ef4444;margin-left:2px;}
+.f-inp{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;transition:border-color .15s;font-family:inherit;box-sizing:border-box;}
+.f-inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.f-inp[readonly]{background:#f8fafc;color:#374151;}
+select.f-inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
+.po-selected-banner{background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;font-size:13px;}
+.po-selected-banner i{color:#16a34a;font-size:16px;}
+.po-selected-banner strong{color:#15803d;}
+.li-wrap{overflow-x:auto;border-radius:8px;border:1.5px solid #e2e8f0;}
+.li-table{width:100%;border-collapse:collapse;font-size:11.5px;min-width:1150px;}
+.li-table thead tr{background:#1e3a5f;}
+.li-table th{padding:9px 7px;font-weight:600;color:white;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;}
+.li-table td{padding:5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+.li-table tbody tr:hover td{background:#f0f7ff;}
+.li-table tbody tr:nth-child(even) td{background:#fafbfc;}
+.li-inp{border:1.5px solid #e5e7eb;border-radius:6px;padding:5px 7px;font-size:11.5px;width:100%;font-family:inherit;}
+.li-inp:focus{outline:none;border-color:#2563eb;}
+.li-inp[readonly]{background:#f3f4f6;color:#374151;}
+select.li-inp{appearance:none;padding-right:16px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;}
+.pur-summary{background:linear-gradient(135deg,#f8fafc,#f0f7ff);border:1.5px solid #bfdbfe;border-radius:10px;padding:16px 18px;}
+.sum-line{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #e2e8f0;font-size:13px;}
+.sum-line:last-child{border-bottom:none;}
+.sum-total-row{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:10px 14px;border-radius:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;}
+.sum-total-row span{color:white;}
+.sum-doc-row{margin-top:8px;padding-top:8px;border-top:1px dashed #bfdbfe;display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.att-item{display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid #e2e8f0;border-radius:7px;padding:7px 12px;font-size:12px;margin-bottom:6px;}
+.att-rm{cursor:pointer;color:#ef4444;background:none;border:none;padding:0;}
+.pur-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#f8fafc;border-top:2px solid #e2e8f0;}
+.btn-f{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+.btn-save{background:linear-gradient(135deg,#16a34a,#15803d);color:white;box-shadow:0 2px 8px rgba(22,163,74,.3);}
+.btn-save:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(22,163,74,.4);}
+.btn-cancel{background:white;color:#374151;border:1.5px solid #d1d5db;}
+.btn-cancel:hover{background:#f9fafb;}
+.grl-lbl{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;}
+.grl-inp{width:100%;padding:8px 11px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box;}
+.grl-inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.grl-table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px;}
+.grl-table th{background:#1e3a5f;color:#fff;padding:8px 7px;font-size:10.5px;text-transform:uppercase;text-align:left;font-weight:600;}
+.grl-table td{padding:4px 5px;border-bottom:1px solid #f1f5f9;}
+.grl-table td input{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;box-sizing:border-box;}
+.grl-table td input:focus{outline:none;border-color:#2563eb;}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}فواتير الشراء{% else %}Sales Invoices{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}فواتير الشراء{% else %}Sales Invoices{% endif %}</h2>
+  
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="tool-btn tool-btn-green" onclick="openAddSINV()"><i class="fas fa-plus"></i></button>
+      <button class="tool-btn tool-btn-blue" onclick="loadData()"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn" onclick="gridApi&&gridApi.setFilterModel(null);document.getElementById('qs').value='';gridApi.setGridOption('quickFilterText','')"><i class="fas fa-times-circle"></i></button>
+      <button class="tool-btn" onclick="gridApi&&gridApi.exportDataAsCsv({fileName:'sales_invoices.csv'})" title="Export"><i class="fas fa-file-export"></i></button>
+    </div>
+    <div class="toolbar-right d-flex align-items-center gap-3">
+      <div class="sel-badge"><span id="selText">0 {% if ar %}فاتورة{% else %}invoices{% endif %}</span></div>
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="qs" class="search-input" style="width:220px" 
+               placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" 
+               oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">
+    <div id="sinvGrid" class="ag-theme-alpine" style="height:calc(100vh - 260px);min-height:520px;width:100%;"></div>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count" id="pageInfo">–</span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-muted">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="gridApi&&gridApi.setGridOption('paginationPageSize',+this.value)">
+        <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ══ #}
+<div class="modal fade" id="sinvModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width:1060px;">
+    <div class="modal-content" style="border:none;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+
+      <div class="pur-hdr">
+        <div style="display:flex;align-items:center;">
+          <h5 id="sinvTitle"><i class="fas fa-file-invoice me-2"></i>{% if ar %}إضافة فاتورة شراء{% else %}Add Sales Invoice{% endif %}</h5>
+          <span class="pur-badge" id="sinvDocBadge">NEW</span>
+        </div>
+        <button class="btn-close" style="filter:brightness(0) invert(1);" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="pur-tabs">
+        <button class="pur-tab active" onclick="switchTab('tab_content',this)">
+          <i class="fas fa-file-alt me-1"></i>{% if ar %}المحتوى{% else %}Content{% endif %}
+        </button>
+        <button class="pur-tab" onclick="switchTab('tab_attach',this)">
+          <i class="fas fa-paperclip me-1"></i>{% if ar %}المرفقات{% else %}Attachments{% endif %}
+          <span id="attBadge" style="background:#eff6ff;color:#2563eb;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-left:4px;">0</span>
+        </button>
+      </div>
+
+      <div class="modal-body p-0" style="overflow-y:auto;background:#f8fafc;height:600px;">
+        <form id="sinvForm" onsubmit="event.preventDefault(); saveSINV();">
+        <input type="hidden" id="sinv_id">
+
+        {# ══ TAB 1: CONTENT ══ #}
+        <div class="pur-tab-pane active" id="tab_content">
+
+          {# ── Section 1: Invoice Info ── #}
+          <div class="pur-section">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-info-circle"></i>
+                {% if ar %}معلومات الفاتورة / Sales Invoice Info{% else %}Sales Invoice Info / معلومات الفاتورة{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+
+              {# ── Kind / Payment / Owner / Owner Bank ── #}
+              <div class="f-grid4" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
+                  <select id="sinv_kind" class="f-inp" onchange="onSinvKindChange()">
+                    <option value="Goods">Goods / بضائع</option>
+                    <option value="Services">Services / خدمات</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}طريقة الدفع{% else %}Payment{% endif %}<span class="f-req">*</span></div>
+                  <select id="sinv_payment" class="f-inp" onchange="onSinvPaymentChange()">
+                    <option value="Credit">Credit / آجل</option>
+                    <option value="Cash">Cash / نقدي</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}المالك{% else %}Owner{% endif %}</div>
+                  <select id="sinv_owner" class="f-inp" onchange="loadSinvOwnerBanks(this.value); loadOwnerWarehouses(this.value);">
+                    <option value="">-- {% if ar %}اختر المالك{% else %}Select owner{% endif %} --</option>
+                    {% for s in owners %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}حساب بنك المالك{% else %}Owner Bank Account{% endif %}</div>
+                  <select id="sinv_bank_account" class="f-inp" onchange="onSinvBankAccountChange()">
+                    <option value="">-- {% if ar %}اختر المالك أولاً{% else %}Select owner first{% endif %} --</option>
+                  </select>
+                </div>
+              </div>
+
+              {# ── SO selector with required badge ── #}
+              <div class="f-grid2" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">
+                    {% if ar %}رقم أمر البيع{% else %}Sales Order No{% endif %}
+                    <span class="f-req">*</span>
+                    <span id="so_status_badge" style="display:none;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:10px;margin-left:8px;font-weight:700;text-transform:none;letter-spacing:0;">
+                      <i class="fas fa-check-circle me-1"></i><span id="so_status_text"></span>
+                    </span>
+                  </div>
+                  <select id="sinv_so_id" class="f-inp required-field" onchange="onSOChange()" required>
+                    <option value="">-- {% if ar %}اختر أمر بيع معتمد{% else %}Select an Approved SO{% endif %} --</option>
+                    {% for so in sos %}<option value="{{ so.id }}">{{ so.doc_no }}</option>{% endfor %}
+                  </select>
+                  <div id="so_hint" style="font-size:11px;color:#9ca3af;margin-top:4px;">
+                    {% if ar %}مطلوب — اختر أمر البيع لملء الحقول تلقائياً{% else %}Required — selecting a SO will auto-fill all fields below{% endif %}
+                  </div>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}إيصال الاستلام{% else %}Delivery Note{% endif %}</div>
+                  <select id="sinv_dn_id" class="f-inp" onchange="onDnChange()">
+                    <option value="">-- {% if ar %}اختياري{% else %}Optional{% endif %} --</option>
+                  </select>
+                  <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+                    {% if ar %}يظهر فقط إيصالات الاستلام الخاصة بأمر البيع المحدد{% else %}Only DNs linked to the selected SO are listed{% endif %}
+                  </div>
+                </div>
+              </div>
+
+              {# ── Auto-fill banner ── #}
+              <div id="so_filled_banner" class="po-selected-banner">
+                <i class="fas fa-magic"></i>
+                <span>{% if ar %}تم ملء الحقول تلقائياً من أمر البيع:{% else %}Fields auto-filled from Sales Order:{% endif %}
+                  <strong id="so_filled_docno"></strong>
+                </span>
+                <button type="button" onclick="clearSO()"
+                        style="margin-left:auto;background:none;border:1px solid #86efac;border-radius:6px;padding:2px 10px;font-size:11px;color:#15803d;cursor:pointer;">
+                  <i class="fas fa-times me-1"></i>{% if ar %}مسح{% else %}Clear{% endif %}
+                </button>
+              </div>
+
+              {# ── Buyer row ── #}
+              <div class="f-grid3" style="margin-bottom:12px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}</div>
+                  <input type="text" id="sinv_buyer_name" class="f-inp" readonly
+                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من أمر البيع{% else %}Derived from the Sales Order{% endif %}">
+                  <input type="hidden" id="sinv_buyer">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رقم مرجع المشتري{% else %}Buyer Ref No{% endif %}</div>
+                  <input type="text" id="sinv_buyer_ref" class="f-inp">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رقم المستند{% else %}No{% endif %}</div>
+                  <input type="text" id="sinv_doc_no" class="f-inp" readonly
+                         style="background:#f0fdf4;color:#15803d;font-weight:700;font-size:14px;letter-spacing:.5px;"
+                         placeholder="{% if ar %}تلقائي{% else %}Auto{% endif %}">
+                </div>
+              </div>
+
+              {# ── Reference Invoice + Transaction Type ── #}
+              <div class="f-grid2" style="margin-bottom:12px;">
+                <div class="f-item" id="sinv_ref_wrap">
+                  <div class="f-lbl">{% if ar %}الفاتورة المرجعية{% else %}Reference Invoice{% endif %}</div>
+                  <div style="display:flex;gap:8px;align-items:flex-start;">
+                    <button type="button" id="sinv_ref_btn" class="f-inp" onclick="openRefInvoicePicker()"
+                            disabled
+                            style="text-align:left;cursor:pointer;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                      <span id="sinv_ref_btn_label" style="color:#9ca3af;">{% if ar %}اختر نوع المعاملة أولاً{% else %}Select a transaction type first{% endif %}</span>
+                      <i class="fas fa-list-check" style="opacity:.6;"></i>
+                    </button>
+                  </div>
+                  <input type="hidden" id="sinv_reference_invoices">
+                  <div id="sinv_ref_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"></div>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}نوع المعاملة{% else %}Transaction Type{% endif %}</div>
+                  <select id="sinv_transaction_type" class="f-inp" onchange="onTxnTypeChange()">
+                    <option value="">-- {% if ar %}اختر{% else %}Select{% endif %} --</option>
+                    <optgroup label="{% if ar %}قياسي{% else %}Standard{% endif %}">
+                      <option value="STD_INV">{% if ar %}فاتورة قياسية (I){% else %}Standard Invoice (I){% endif %}</option>
+                      <option value="STD_CR">{% if ar %}دائن قياسي (CR){% else %}Standard Credit (CR){% endif %}</option>
+                      <option value="STD_DR">{% if ar %}مدين قياسي (DR){% else %}Standard Debit (DR){% endif %}</option>
+                    </optgroup>
+                    <optgroup label="{% if ar %}مبسط{% else %}Simplified{% endif %}">
+                      <option value="SMP_INV">{% if ar %}فاتورة مبسطة (I){% else %}Simplified Invoice (I){% endif %}</option>
+                      <option value="SMP_CR">{% if ar %}دائن مبسط (CR){% else %}Simplified Credit (CR){% endif %}</option>
+                      <option value="SMP_DR">{% if ar %}مدين مبسط (DR){% else %}Simplified Debit (DR){% endif %}</option>
+                    </optgroup>
+                  </select>
+                  <input type="hidden" id="sinv_invoice_category">
+                  <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+                    {% if ar %}يحدد قائمة الفواتير المرجعية (قياسي / مبسط){% else %}Determines which saved invoices you can reference (standard / simplified){% endif %}
+                  </div>
+                </div>
+              </div>
+
+              {# ── Status + Dates ── #}
+              <div class="f-grid4" style="margin-bottom:12px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div>
+                  <select id="sinv_status" class="f-inp" onchange="onSinvStatusChange()">
+                    <option value="Open" selected>Open</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Closed">Closed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</div>
+                  <input type="date" id="sinv_posting_date" class="f-inp" dir="ltr" disabled
+                         title="{% if ar %}يتم تفعيله تلقائياً عند تغيير الحالة عن Open{% else %}Activates automatically once status leaves Open{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ التسليم{% else %}Delivery Date{% endif %}</div>
+                  <input type="date" id="sinv_delivery_date" class="f-inp" dir="ltr">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</div>
+                  <input type="date" id="sinv_doc_date" class="f-inp" dir="ltr" readonly
+                         style="background:#f8fafc;color:#374151;"
+                         title="{% if ar %}دائماً تاريخ اليوم{% else %}Always today's date{% endif %}">
+                </div>
+              </div>
+              <div class="f-item" style="margin-bottom:12px;max-width:260px;">
+                <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
+                <select id="sinv_account_code" class="f-inp" onchange="onSinvAccountCodeChange()" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                  <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
+                </select>
+              </div>
+              <div class="f-grid2" style="margin-bottom:0;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}ملاحظات{% else %}Remarks{% endif %}</div>
+                  <textarea id="sinv_remarks" class="f-inp" rows="2" style="resize:vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section 2: Line Items ── #}
+          <div class="pur-section" style="margin-top:10px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-list-ul"></i>
+                {% if ar %}بنود الفاتورة / Invoice Items{% else %}Invoice Items / بنود الفاتورة{% endif %}
+                <span id="liCount" style="background:#eff6ff;color:#2563eb;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:8px;">0</span>
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <button type="button" onclick="addLiRow()"
+                        style="background:#2563eb;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">
+                  <i class="fas fa-plus me-1"></i>{% if ar %}إضافة بند{% else %}Add Line{% endif %}
+                </button>
+                <span style="font-size:11px;color:#6b7280;">
+                  <i class="fas fa-info-circle me-1"></i>
+                  {% if ar %}المبلغ الخاضع = (الكمية × السعر − الخصم) + الشحن{% else %}Taxable = (Qty × Rate − Discount) + Freight{% endif %}
+                </span>
+              </div>
+              <div class="li-wrap">
+                <table class="li-table">
+                  <thead><tr>
+                    <th style="width:30px;">#</th>
+                    <th style="min-width:120px;">{% if ar %}الرمز{% else %}Item Code{% endif %}</th>
+                    <th style="min-width:170px;">{% if ar %}اسم الصنف{% else %}Item Name{% endif %}</th>
+                    <th style="min-width:150px;">{% if ar %}الوصف{% else %}Description{% endif %}</th>
+                    <th style="min-width:100px;">{% if ar %}المستودع{% else %}Warehouse{% endif %}</th>
+                    <th style="width:110px;">UoM</th>
+                    <th style="width:65px;">{% if ar %}الكمية{% else %}QTY{% endif %}</th>
+                    <th style="width:75px;">{% if ar %}سعر أمر البيع{% else %}SO Rate{% endif %}</th>
+                    <th style="width:60px;">{% if ar %}الخصم{% else %}Disc.{% endif %}</th>
+                    <th style="width:60px;">{% if ar %}الشحن{% else %}Freight{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}الخاضع{% else %}Taxable{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}كود الضريبة{% else %}Tax Code{% endif %}</th>
+                    <th style="width:65px;">{% if ar %}الضريبة{% else %}Tax Amt{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+                    <th style="width:34px;"></th>
+                  </tr></thead>
+                  <tbody id="liBody"></tbody>
+                  <tfoot>
+                    <tr style="background:#f1f5f9;">
+                      <td colspan="13" style="text-align:right;padding:7px 10px;font-weight:600;font-size:12px;color:#374151;">
+                        {% if ar %}المجموع الإجمالي{% else %}Grand Total{% endif %}
+                      </td>
+                      <td style="padding:7px 8px;font-weight:700;color:#1e3a5f;font-size:13px;" id="li_grand_total">SAR 0.00</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section 3: Summary ── #}
+          <div class="pur-section" style="margin-top:10px;margin-bottom:16px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-calculator"></i>
+                {% if ar %}ملخص فاتورة البيع{% else %}Sales Invoice Summary{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div class="pur-summary">
+                <div class="sum-line"><span>{% if ar %}الإجمالي قبل الخصم{% else %}Total before discount{% endif %}</span><span id="s_total_bd" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}إجمالي الخصم{% else %}Total discount{% endif %}</span><span id="s_total_disc" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}الشحن{% else %}Freight{% endif %}</span><span id="s_total_fr" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}الإجمالي بدون ضريبة{% else %}Total Excl. VAT (SAR){% endif %}</span><span id="s_excl_vat" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}مبلغ ضريبة القيمة المضافة{% else %}VAT Amount (SAR){% endif %}</span><span id="s_vat_amt" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-total-row">
+                  <span style="font-weight:700;font-size:14px;">{% if ar %}الإجمالي شامل الضريبة{% else %}Total Incl. VAT (SAR){% endif %}</span>
+                  <span id="s_incl_vat" style="font-size:18px;font-weight:800;">SAR 0.00</span>
+                </div>
+                <div class="sum-doc-row">
+                  <span style="color:#374151;">{% if ar %}المرفقات{% else %}Documents Attached{% endif %}</span>
+                  <span id="s_doc_count" style="background:#eff6ff;color:#2563eb;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section 4: General Receipt Ledger (GRL) -- collapsed by default ── #}
+          <div class="pur-section" style="margin:14px 18px 18px;">
+            <button type="button" id="grlSecHdr" onclick="togGrlSec(this)" style="width:100%;border:none;cursor:pointer;text-align:left;background:#1e3a5f;color:#fff;padding:10px 14px;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
+              <span><i class="fas fa-book me-1"></i>{% if ar %}دفتر الاستلام العام (GRL){% else %}General Receipt Ledger (GRL){% endif %}</span>
+              <i class="fas fa-chevron-down" style="color:#fff;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body" style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:14px;background:#fff;">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">
+                <div>
+                  <label class="grl-lbl">{% if ar %}رقم القيد{% else %}Je No{% endif %}</label>
+                  <input type="text" id="grl_je_no" class="grl-inp" readonly style="background:#f0fdf4;color:#15803d;font-weight:700;" placeholder="{% if ar %}يُنشأ عند الترحيل{% else %}Assigned on Post{% endif %}">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}رقم GRL{% else %}GRL No{% endif %}</label>
+                  <input type="text" id="grl_no" class="grl-inp" readonly style="background:#f0fdf4;color:#15803d;font-weight:700;" placeholder="{% if ar %}يُنشأ تلقائياً{% else %}Auto-generated{% endif %}">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}المصدر / Origin{% else %}Origin{% endif %}</label>
+                  <input type="text" id="grl_origion" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</label>
+                  <input type="date" id="grl_posting_date" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}تاريخ الاستحقاق{% else %}Due Date{% endif %}</label>
+                  <input type="date" id="grl_due_date" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</label>
+                  <input type="date" id="grl_document_date" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}البيان{% else %}Narration{% endif %}</label>
+                  <input type="text" id="grl_narration" name="grl_narration" class="grl-inp" oninput="grlSyncRowNarrations()" placeholder="{% if ar %}بيان اختياري{% else %}Optional narration{% endif %}">
+                </div>
+              </div>
+              <div style="margin-bottom:8px;">
+                <div style="font-weight:700;font-size:12px;color:#334155;">{% if ar %}تفاصيل القيد{% else %}GRL Detail{% endif %}</div>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="grl-table" id="grlDetailTable">
+                  <thead>
+                    <tr>
+                      <th style="min-width:120px;">{% if ar %}الرمز{% else %}Code{% endif %}</th>
+                      <th style="min-width:90px;">{% if ar %}حساب ضبط{% else %}Control Account{% endif %}</th>
+                      <th style="min-width:100px;">{% if ar %}رقم مرجع المشتري{% else %}Reference Code{% endif %}</th>
+                      <th>{% if ar %}اسم الحساب (EN){% else %}Account Name (EN){% endif %}</th>
+                      <th>{% if ar %}اسم الحساب (AR){% else %}Account Name (AR){% endif %}</th>
+                      <th style="text-align:right;min-width:100px;">{% if ar %}مدين{% else %}Debit{% endif %}</th>
+                      <th style="text-align:right;min-width:100px;">{% if ar %}دائن{% else %}Credit{% endif %}</th>
+                      <th style="min-width:140px;">{% if ar %}البيان{% else %}Narration{% endif %}</th>
+                    </tr>
+                  </thead>
+                  <tbody id="grlDetailBody">
+                    <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:14px;">{% if ar %}اضغط ترحيل{% else %}Click Post{% endif %}</td></tr>
+                  </tbody>
+                  <tfoot>
+                    <tr style="font-weight:700;background:#f8fafc;">
+                      <td colspan="5" style="text-align:right;">{% if ar %}الإجمالي{% else %}Total{% endif %}</td>
+                      <td style="text-align:right;" id="grlTotDebit">0.00</td>
+                      <td style="text-align:right;" id="grlTotCredit">0.00</td>
+                      <td id="grlBalance"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p style="font-size:11px;color:#94a3b8;margin:8px 0 0;">
+                {% if ar %}سجلان ثابتان لكل بند، يتم توليدهما تلقائياً عند الترحيل ولا يمكن حذفهما. يمكن تعديل حقل البيان.{% else %}Exactly two fixed records per line item, generated automatically on Post -- they cannot be added or removed. The narration can still be edited.{% endif %}
+              </p>
+            </div>
+          </div>
+
+        </div>{# end tab_content #}
+
+        {# ══ TAB 2: ATTACHMENTS ══ #}
+        <div class="pur-tab-pane" id="tab_attach">
+          <div style="padding:20px;">
+            <div id="attDrop"
+                 style="border:2px dashed #bfdbfe;border-radius:12px;padding:40px 24px;
+                        text-align:center;background:#f0f9ff;cursor:pointer;
+                        display:flex;flex-direction:column;align-items:center;justify-content:center;
+                        min-height:180px;transition:all 0.15s;"
+                 onclick="document.getElementById('attInput').click()"
+                 ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff';"
+                 ondragleave="this.style.borderColor='#bfdbfe';this.style.background='#f0f9ff';"
+                 ondrop="event.preventDefault();this.style.borderColor='#bfdbfe';this.style.background='#f0f9ff';handleFiles(event.dataTransfer.files);">
+              <i class="fas fa-cloud-upload-alt" style="font-size:36px;color:#60a5fa;margin-bottom:12px;"></i>
+              <div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px;">
+                {% if ar %}اسحب الملفات هنا أو انقر للتصفح{% else %}Drag & drop files here or click to browse{% endif %}
+              </div>
+              <div style="font-size:12px;color:#9ca3af;">PDF, Word, Excel, Images (max 20MB each)</div>
+              <input type="file" id="attInput" multiple
+                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+                     style="display:none;" onchange="handleFiles(this.files)">
+            </div>
+            <div id="attList" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;"></div>
+            <div id="existAttList" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        </form>
+      </div>
+
+      <div class="pur-footer" style="justify-content:flex-end;gap:10px;">
+        <button class="btn-f btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" id="grlPostBtn" class="btn-f" onclick="grlPost()" style="background:#2563eb;color:#fff;"
+                {% if is_basic_mode %}disabled title="{% if ar %}الترحيل مقفل في الخطة الأساسية{% else %}Posting is locked on the Basic plan{% endif %}"{% endif %}>
+          <i class="fas fa-check me-1"></i>{% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}
+        </button>
+        <button class="btn-f btn-save" onclick="saveSINV()">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ فاتورة البيع / Save{% else %}Save Sales Invoice / حفظ{% endif %}
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# Delete Confirm #}
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog modal-sm"><div class="modal-content" style="border-radius:10px;overflow:hidden;">
+    <div class="modal-header border-0"><h6 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>{% if ar %}تأكيد الحذف{% else %}Confirm Delete{% endif %}</h6>
+    <button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><p id="delTxt" class="fw-semibold mb-0"></p></div>
+    <div class="modal-footer border-0">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+      <button class="btn btn-sm btn-danger" id="delBtn">{% if ar %}حذف{% else %}Delete{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Reference Invoice picker -->
+<div class="modal fade" id="refInvModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:700;font-size:15px;"><i class="fas fa-list-check me-2"></i>{% if ar %}اختر الفواتير المرجعية{% else %}Select Reference Invoices{% endif %}</div>
+          <div id="refInvSubtitle" style="font-size:12px;opacity:.85;margin-top:3px;"></div>
+        </div>
+        <button type="button" class="btn-close" style="filter:brightness(0) invert(1);opacity:.8;" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <input type="text" id="refInvSearch" class="f-inp" style="flex:1;" oninput="renderRefInvRows()"
+                 placeholder="{% if ar %}بحث برقم المستند أو المشتري...{% else %}Search by doc no or buyer...{% endif %}">
+          <span id="refInvCount" style="font-size:12px;color:#6b7280;white-space:nowrap;"></span>
+        </div>
+        <div style="max-height:420px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead>
+              <tr style="background:#f8fafc;position:sticky;top:0;">
+                <th style="padding:8px 10px;width:36px;text-align:center;"><input type="checkbox" id="refInvSelectAll" onclick="toggleRefInvAll(this)"></th>
+                <th style="padding:8px 10px;text-align:left;">{% if ar %}رقم المستند{% else %}Doc No{% endif %}</th>
+                <th style="padding:8px 10px;text-align:left;">{% if ar %}المشتري{% else %}Buyer{% endif %}</th>
+                <th style="padding:8px 10px;text-align:left;">{% if ar %}التاريخ{% else %}Date{% endif %}</th>
+                <th style="padding:8px 10px;text-align:right;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+              </tr>
+            </thead>
+            <tbody id="refInvBody">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:#9ca3af;">{% if ar %}جارٍ التحميل...{% else %}Loading...{% endif %}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style="padding:12px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span id="refInvSelCount" style="font-size:12px;color:#6b7280;"></span>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+          <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="applyRefInvSelection()">
+            <i class="fas fa-check me-1"></i>{% if ar %}تأكيد الاختيار{% else %}Apply Selection{% endif %}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const CSRF  = '{{ csrf_token() }}';
+let _liIdx = 0;
+let _attachments = [];
+let _sinvModal = null;
+let _isFetchingDocNo = false;
+let _itemsCache = null;
+let _itemsLoading = null;
+let _levelFive = [];
+let _levelFiveLoaded = false;
+let _refInvData = [];
+let _refInvSelected = [];
+let _sinvPosted = false;   // true once this SINV's posting_status is 'Posted' -- blocks re-Post
+
+/* Same open/close mechanics as togSec(), but keeps the chevron white --
+   this header stays on its dark navy background whether open or closed. */
+function togGrlSec(btn) {
+  const body = btn.nextElementSibling;
+  const ch   = btn.querySelector('.fa-chevron-up, .fa-chevron-down');
+  const open = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  if (ch) ch.className = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+}
+
+/* GRL starts collapsed every time the Add/Edit form opens, regardless of
+   whatever state the user left it in during an earlier visit this session. */
+function grlCollapseSec(){
+  const btn = document.getElementById('grlSecHdr');
+  if(!btn) return;
+  const body = btn.nextElementSibling;
+  if(body) body.classList.remove('open');
+  const ch = btn.querySelector('.fa-chevron-up, .fa-chevron-down');
+  if(ch) ch.className = 'fas fa-chevron-down';
+}
+
+/* Reflects _sinvPosted on the Post & Save button -- disabled + relabeled
+   once this SINV has already been posted (duplicate-posting prevention). */
+function grlUpdatePostBtnState(){
+  const btn = document.getElementById('grlPostBtn');
+  if(!btn) return;
+  btn.disabled = _sinvPosted;
+  btn.style.opacity = _sinvPosted ? '0.55' : '1';
+  btn.style.cursor = _sinvPosted ? 'not-allowed' : 'pointer';
+  btn.title = _sinvPosted ? (IS_AR?'تم ترحيل فاتورة البيع هذه مسبقاً.':'This Sales Invoice has already been posted.') : '';
+}
+
+/* ══ Document Number Fetch - FIXED: Ensures proper increment ══ */
+async function fetchDocNo() {
+  if (_isFetchingDocNo) return;
+  _isFetchingDocNo = true;
+  try {
+    const url = '/sales/next-doc-no?type=SINV&force_new=true&_=' + Date.now();
+    const res = await fetch(url);
+    const d = await res.json();
+    if (d.doc_no) {
+      document.getElementById('sinv_doc_no').value = d.doc_no;
+      document.getElementById('sinvDocBadge').textContent = d.doc_no;
+    }
+  } catch(e) {
+    console.error('Error fetching doc no:', e);
+  } finally {
+    _isFetchingDocNo = false;
+  }
+}
+
+/* ══ GRN/DN list (for cascading SO → DN dropdown) ══ */
+const _dnList = [
+  {% for d in dns %}{ id: {{ d.id }}, doc_no: '{{ d.doc_no }}', sales_order_id: {{ d.sales_order_id or 'null' }} },{% endfor %}
+];
+
+function refreshDnOptions(soId) {
+  const sel = document.getElementById('sinv_dn_id');
+  if (!sel) return;
+  const matching = _dnList.filter(g => String(g.sales_order_id) === String(soId));
+  sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'اختياري' : 'Optional') + ' --</option>'
+    + matching.map(g => `<option value="${g.id}">${g.doc_no}</option>`).join('');
+}
+
+/* Delivery Note's own Kind takes priority over the Sales Order's (which
+   onSOChange() already set as the base value) once a specific DN is
+   picked -- rebuilds the already-rendered line-item dropdowns via
+   onSinvKindChange() if that actually changes the effective Kind, since
+   those dropdowns were rendered for whichever Kind was in effect at the
+   time. Clearing the DN selection leaves Kind at the Sales Order's own
+   value (already correct -- no explicit revert needed). */
+async function onDnChange() {
+  const dnId = document.getElementById('sinv_dn_id').value;
+  if (!dnId) return;
+  try {
+    const res = await fetch('/sales/delivery/' + dnId + '/summary');
+    if (!res.ok) return;
+    const dn = await res.json();
+    const kindEl = document.getElementById('sinv_kind');
+    if (dn.kind && kindEl && dn.kind !== kindEl.value) {
+      kindEl.value = dn.kind;
+      onSinvKindChange();
+    }
+    // Account Code likewise takes the Delivery Note's own value over the
+    // Sales Order's (already set by onSOChange()) once a specific DN is picked.
+    if (dn.account_code) {
+      document.getElementById('sinv_account_code').innerHTML = accountCodeOptionsHtml(dn.account_code);
+    }
+  } catch (e) {
+    console.error('Failed to load Delivery Note:', e);
+  }
+}
+
+/* ══ Owner bank accounts → bank dropdown ══ */
+function loadSinvOwnerBanks(ownerId, selectedId) {
+  const sel = document.getElementById('sinv_bank_account');
+  if (!sel) return;
+  if (!ownerId) { sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'اختر المالك أولاً' : 'Select owner first') + ' --</option>'; return; }
+  fetch('/sales/owners/' + ownerId + '/banks').then(r=>r.json()).then(banks=>{
+    let html = '<option value="">-- ' + (IS_AR ? 'اختر حساباً' : 'Select account') + ' --</option>';
+    (banks||[]).forEach(b=>{
+      const label=(b.bank_name||b.bank_name_en||'')+(b.account_number?' — '+b.account_number:'');
+      html += '<option value="'+b.id+'"'+(String(b.id)===String(selectedId)?' selected':'')+'>'+label+'</option>';
+    });
+    sel.innerHTML=html;
+  }).catch(()=>{ sel.innerHTML='<option value="">-- '+(IS_AR?'لا توجد حسابات':'No accounts')+' --</option>'; });
+}
+
+/* ══ Picking a Bank Account implies a Cash payment, and picking Credit
+   implies no specific bank account is used yet -- mirrors the same rule
+   on the Purchase Invoice/Debit Memo screens. ══ */
+function onSinvBankAccountChange() {
+  if (document.getElementById('sinv_bank_account').value) {
+    document.getElementById('sinv_payment').value = 'Cash';
+  }
+}
+
+function onSinvPaymentChange() {
+  if (document.getElementById('sinv_payment').value === 'Credit') {
+    document.getElementById('sinv_bank_account').value = '';
+  }
+}
+
+/* ══ Transaction type + Reference invoice picker ══ */
+function txnCategory(txn) {
+  if (txn === 'STD_CR' || txn === 'STD_DR' || txn === 'STD_INV') return 'standard';
+  if (txn === 'SMP_CR' || txn === 'SMP_DR' || txn === 'SMP_INV') return 'simplified';
+  return '';
+}
+
+function txnNeedsReference(txn) {
+  return txn === 'STD_CR' || txn === 'STD_DR' || txn === 'SMP_CR' || txn === 'SMP_DR';
+}
+
+function onTxnTypeChange() {
+  const txn = document.getElementById('sinv_transaction_type').value;
+  const cat = txnCategory(txn);
+  document.getElementById('sinv_invoice_category').value = cat;
+  const btn = document.getElementById('sinv_ref_btn');
+  const lbl = document.getElementById('sinv_ref_btn_label');
+  const wrap = document.getElementById('sinv_ref_wrap');
+  _refInvSelected = [];
+  document.getElementById('sinv_reference_invoices').value = '';
+  renderRefChips();
+  if (txnNeedsReference(txn)) {
+    if (wrap) wrap.style.display = '';
+    btn.disabled = false;
+    btn.style.cursor = 'pointer';
+    lbl.textContent = IS_AR ? 'اختر الفواتير المرجعية...' : 'Select reference invoices...';
+    lbl.style.color = '#374151';
+  } else {
+    if (wrap) wrap.style.display = (txn ? 'none' : '');
+    btn.disabled = true;
+    btn.style.cursor = 'not-allowed';
+    lbl.textContent = IS_AR ? 'اختر نوع المعاملة أولاً' : 'Select a transaction type first';
+    lbl.style.color = '#9ca3af';
+  }
+}
+
+function openRefInvoicePicker() {
+  const cat = document.getElementById('sinv_invoice_category').value;
+  if (!cat) return;
+  const editId = document.getElementById('sinv_id').value;
+  const sub = document.getElementById('refInvSubtitle');
+  if (sub) sub.textContent = (IS_AR ? 'الفئة: ' : 'Category: ')
+      + (cat === 'standard' ? (IS_AR?'قياسي':'Standard') : (IS_AR?'مبسط':'Simplified'));
+  document.getElementById('refInvSearch').value = '';
+  document.getElementById('refInvBody').innerHTML =
+    `<tr><td colspan="5" style="text-align:center;padding:24px;color:#9ca3af;">${IS_AR?'جارٍ التحميل...':'Loading...'}</td></tr>`;
+  new bootstrap.Modal(document.getElementById('refInvModal')).show();
+  let url = '/sales/invoices/reference-list?category=' + encodeURIComponent(cat);
+  if (editId) url += '&exclude=' + encodeURIComponent(editId);
+  fetch(url).then(r => r.json()).then(data => {
+    _refInvData = data || [];
+    renderRefInvRows();
+  }).catch(() => {
+    document.getElementById('refInvBody').innerHTML =
+      `<tr><td colspan="5" style="text-align:center;padding:24px;color:#dc2626;">${IS_AR?'فشل التحميل':'Failed to load'}</td></tr>`;
+  });
+}
+
+function renderRefInvRows() {
+  const q = (document.getElementById('refInvSearch').value || '').toLowerCase();
+  const body = document.getElementById('refInvBody');
+  const rows = _refInvData.filter(r =>
+    !q || (r.doc_no || '').toLowerCase().includes(q) || (r.buyer_name || '').toLowerCase().includes(q));
+  document.getElementById('refInvCount').textContent =
+    rows.length + ' ' + (IS_AR ? 'فاتورة' : 'invoices');
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:#9ca3af;">${IS_AR?'لا توجد فواتير محفوظة لهذه الفئة':'No saved invoices for this category'}</td></tr>`;
+    updateRefSelCount();
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const checked = _refInvSelected.includes(r.id) ? 'checked' : '';
+    const total = Number(r.total_incl_vat || 0).toLocaleString('en-SA', {minimumFractionDigits:2});
+    return `<tr style="border-top:1px solid #f1f5f9;">
+      <td style="padding:7px 10px;text-align:center;"><input type="checkbox" value="${r.id}" ${checked} onchange="onRefInvToggle(${r.id},this.checked)"></td>
+      <td style="padding:7px 10px;font-weight:600;color:#2563eb;">${r.doc_no||''}</td>
+      <td style="padding:7px 10px;">${r.buyer_name||'—'}</td>
+      <td style="padding:7px 10px;">${r.document_date||'—'}</td>
+      <td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;">${total}</td>
+    </tr>`;
+  }).join('');
+  updateRefSelCount();
+}
+
+function onRefInvToggle(id, checked) {
+  id = Number(id);
+  if (checked) { if (!_refInvSelected.includes(id)) _refInvSelected.push(id); }
+  else { _refInvSelected = _refInvSelected.filter(x => x !== id); }
+  updateRefSelCount();
+}
+
+function toggleRefInvAll(cb) {
+  const q = (document.getElementById('refInvSearch').value || '').toLowerCase();
+  const rows = _refInvData.filter(r =>
+    !q || (r.doc_no || '').toLowerCase().includes(q) || (r.buyer_name || '').toLowerCase().includes(q));
+  if (cb.checked) rows.forEach(r => { if (!_refInvSelected.includes(r.id)) _refInvSelected.push(r.id); });
+  else { const ids = rows.map(r => r.id); _refInvSelected = _refInvSelected.filter(x => !ids.includes(x)); }
+  renderRefInvRows();
+}
+
+function updateRefSelCount() {
+  const el = document.getElementById('refInvSelCount');
+  if (el) el.textContent = _refInvSelected.length + ' ' + (IS_AR ? 'محدد' : 'selected');
+}
+
+function applyRefInvSelection() {
+  document.getElementById('sinv_reference_invoices').value = _refInvSelected.join(',');
+  renderRefChips();
+  bootstrap.Modal.getInstance(document.getElementById('refInvModal'))?.hide();
+}
+
+function renderRefChips() {
+  const wrap = document.getElementById('sinv_ref_chips');
+  const lbl  = document.getElementById('sinv_ref_btn_label');
+  if (!wrap) return;
+  if (!_refInvSelected.length) {
+    wrap.innerHTML = '';
+    if (lbl && !document.getElementById('sinv_ref_btn').disabled)
+      lbl.textContent = IS_AR ? 'اختر الفواتير المرجعية...' : 'Select reference invoices...';
+    return;
+  }
+  const byId = {};
+  _refInvData.forEach(r => byId[r.id] = r.doc_no);
+  wrap.innerHTML = _refInvSelected.map(id =>
+    `<span style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:5px;">
+       ${byId[id] || ('#'+id)}
+       <i class="fas fa-times" style="cursor:pointer;" onclick="removeRefChip(${id})"></i>
+     </span>`).join('');
+  if (lbl) lbl.textContent = _refInvSelected.length + ' ' + (IS_AR ? 'محدد' : 'selected');
+}
+
+function removeRefChip(id) {
+  _refInvSelected = _refInvSelected.filter(x => x !== Number(id));
+  document.getElementById('sinv_reference_invoices').value = _refInvSelected.join(',');
+  renderRefChips();
+}
+
+/* ══ Posting Date: empty + disabled while status = Open ══ */
+function onSinvStatusChange() {
+  const statusEl = document.getElementById('sinv_status');
+  const postEl   = document.getElementById('sinv_posting_date');
+  if (!statusEl || !postEl) return;
+  if (statusEl.value !== 'Open') {
+    postEl.disabled = false;
+    if (!postEl.value) postEl.value = new Date().toISOString().split('T')[0];
+  } else {
+    postEl.disabled = true;
+    postEl.value = '';
+  }
+}
+
+/* ══ SO SELECTION → AUTO-FILL ALL FIELDS (buyer locked, lines locked) ══ */
+let _soPullInProgress = false;
+
+/* ══ Item master cache for line-item dropdowns ══ */
+function loadItemsCache() {
+  if (_itemsCache) return Promise.resolve(_itemsCache);
+  if (_itemsLoading) return _itemsLoading;
+  _itemsLoading = fetch('/items/data').then(r => r.json()).then(data => {
+    _itemsCache = data || []; return _itemsCache;
+  }).catch(() => { _itemsCache = []; return _itemsCache; });
+  return _itemsLoading;
+}
+
+function _itemById(id) {
+  id = String(id);
+  return (_itemsCache || []).find(i => String(i.id) === id);
+}
+
+function _itemOptionsHtml(selId) {
+  const opts = (_itemsCache || []).map(i =>
+    `<option value="${i.id}" ${String(i.id)===String(selId)?'selected':''}>${(i.name_en||i.item_code||'')}</option>`).join('');
+  return `<option value="">-- ${IS_AR?'اختر صنف':'Select item'} --</option>` + opts;
+}
+
+/* Kind = Services: line items pick a Chart-of-Accounts (Level Five) code
+   directly instead of an Item Master item -- this single combined dropdown
+   is keyed by the account's CODE (not a numeric id, unlike _itemOptionsHtml
+   above, since a Level Five row's own `id` lives in a different table's PK
+   space than ItemMaster's and must never be confused with it). Kind =
+   Goods keeps the existing Item Master mechanism (_itemOptionsHtml/
+   _itemById) untouched. */
+async function loadLevelFive() {
+  try {
+    const res = await fetch('/coa/level-five/data');
+    const all = await res.json();
+    _levelFive = (all || []).filter(a => (a.status || 'active') === 'active');
+    _levelFiveLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Level Five accounts:', e);
+    _levelFive = [];
+  }
+}
+
+function _isServicesKind() {
+  const el = document.getElementById('sinv_kind');
+  return !!el && el.value === 'Services';
+}
+
+function _glOptionsHtml(selectedCode) {
+  const opts = _levelFive.map(a => {
+    const label = a.drawers + (a.drawers_ar ? ' / ' + a.drawers_ar : '');
+    return `<option value="${a.code}" ${a.code===selectedCode?'selected':''}>${label}</option>`;
+  }).join('');
+  return `<option value="">-- ${IS_AR?'اختر حساب':'Select account'} --</option>` + opts;
+}
+
+/* Item Code column -- Goods-kind counterpart of _itemOptionsHtml (keyed by
+   item_code and labeled by it, instead of by id and labeled by name), and
+   Services-kind counterpart of _glOptionsHtml (labeled by the account's own
+   code instead of its drawer name). Kept as a separate visible dropdown
+   next to Item Name, mirroring the Code/Name pair already used on Purchase
+   Request/Quotation/Return Note/Debit Memo and Sale Return Note -- picking
+   either one syncs the other (see onLiItemChange()). */
+function _itemCodeOptionsHtml(selectedCode) {
+  const opts = (_itemsCache || []).map(i =>
+    `<option value="${i.item_code}" ${i.item_code===selectedCode?'selected':''}>${i.item_code||''}</option>`).join('');
+  let html = `<option value="">-- ${IS_AR?'الكود':'Code'} --</option>` + opts;
+  if (selectedCode && !(_itemsCache || []).some(i => i.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _glCodeOptionsHtml(selectedCode) {
+  const opts = _levelFive.map(a =>
+    `<option value="${a.code}" ${a.code===selectedCode?'selected':''}>${a.code}</option>`).join('');
+  return `<option value="">-- ${IS_AR?'الكود':'Code'} --</option>` + opts;
+}
+
+function _uomOptionsHtml(item, selUom) {
+  let uoms = [];
+  if (item && item.uoms && item.uoms.length) uoms = item.uoms.map(u => u.uom_name || u.unit_name || u.name || u.uom).filter(Boolean);
+  if (item && item.uom && !uoms.includes(item.uom)) uoms.unshift(item.uom);
+  if (!uoms.length) uoms = [selUom || 'unit'];
+  if (selUom && !uoms.includes(selUom)) uoms.unshift(selUom);
+  return uoms.map(u => `<option value="${u}" ${u===selUom?'selected':''}>${u}</option>`).join('');
+}
+
+async function onSOChange() {
+  const soId = document.getElementById('sinv_so_id').value;
+  const sel   = document.getElementById('sinv_so_id');
+  const banner = document.getElementById('so_filled_banner');
+  const badge  = document.getElementById('so_status_badge');
+  const hint   = document.getElementById('so_hint');
+
+  sel.classList.toggle('required-field', !soId);
+  refreshDnOptions(soId);
+
+  if (!soId) {
+    banner.style.display = 'none';
+    badge.style.display  = 'none';
+    hint.style.display   = 'block';
+    if(typeof grlPreviewFromSO==='function') grlPreviewFromSO('');
+    return;
+  }
+
+  let so;
+  _soPullInProgress = true;
+  try {
+    const res = await fetch('/sales/orders/' + soId + '/summary');
+    if (!res.ok) throw new Error('Failed to fetch SO');
+    so = await res.json();
+  } catch(e) {
+    console.error('Failed to load SO:', e);
+    alert(IS_AR ? 'فشل تحميل أمر البيع' : 'Failed to load Sales Order');
+    _soPullInProgress = false;
+    return;
+  }
+  _soPullInProgress = false;
+
+  // ⭐ Auto-fill buyer
+  document.getElementById('sinv_buyer').value = so.buyer_id || '';
+  document.getElementById('sinv_buyer_name').value = so.buyer_name || '';
+
+  const vref = document.getElementById('sinv_buyer_ref');
+  if (vref && so.buyer_ref_no) vref.value = so.buyer_ref_no;
+
+  // ⭐ Kind comes from the selected Sales Order by default -- overridden by
+  // the Delivery Note's own Kind below if/when a specific DN is picked
+  // (Delivery Note takes priority over Sales Order as the Kind source,
+  // since it's the more specific selection). Must happen before the line
+  // items below are added, so their Item Code/Name dropdowns render for
+  // the right Kind (Item Master vs. Level Five) from the start.
+  if (so.kind) document.getElementById('sinv_kind').value = so.kind;
+
+  // ⭐ Account Code comes from the selected Sales Order, not left at
+  // TAX_CODES[0] (the form's own generic default) -- overridden by the
+  // Delivery Note's own value in onDnChange() if/when a specific DN is picked.
+  if (so.account_code) {
+    document.getElementById('sinv_account_code').innerHTML = accountCodeOptionsHtml(so.account_code);
+  }
+
+  // ⭐ Auto-fill line items from SO
+  document.getElementById('liBody').innerHTML = '';
+  _liIdx = 0;
+  await loadItemsCache();
+  await loadLevelFive();
+  if (so.items && so.items.length > 0) {
+    so.items.forEach(li => {
+      if (!li.item_id && li.item_code) {
+        const m = (_itemsCache || []).find(i => i.item_code === li.item_code);
+        if (m) li.item_id = m.id;
+      }
+      addLiRow(li);
+    });
+  } else {
+    addLiRow();
+  }
+  recalcSummary();
+  updLiCount();
+
+  // Show banner
+  document.getElementById('so_filled_docno').textContent = so.doc_no || '';
+  document.getElementById('so_status_text').textContent  = so.status || '';
+  banner.style.display = 'flex';
+  badge.style.display  = 'inline-flex';
+  hint.style.display   = 'none';
+  sel.style.borderColor = '#86efac';
+  if(typeof grlPreviewFromSO==='function') grlPreviewFromSO(soId);
+}
+
+function clearSO() {
+  document.getElementById('sinv_so_id').value = '';
+  document.getElementById('so_filled_banner').style.display = 'none';
+  document.getElementById('so_status_badge').style.display  = 'none';
+  document.getElementById('so_hint').style.display          = 'block';
+  document.getElementById('sinv_so_id').classList.add('required-field');
+  document.getElementById('sinv_so_id').style.borderColor = '';
+  ['sinv_buyer_name','sinv_buyer_ref'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  document.getElementById('sinv_buyer').value = '';
+  refreshDnOptions('');
+  document.getElementById('liBody').innerHTML = '';
+  _liIdx = 0;
+  addLiRow();
+  recalcSummary(); updLiCount();
+  if(typeof grlPreviewFromSO==='function') grlPreviewFromSO('');
+}
+
+/* ══ Section toggle ══ */
+function togSec(btn) {
+  const body = btn.nextElementSibling;
+  const ch   = btn.querySelector('.fa-chevron-up, .fa-chevron-down');
+  const open = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  btn.classList.toggle('open', !open);
+  if (ch) ch.className  = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+  if (ch) ch.style.cssText = open ? 'color:#9ca3af;font-size:11px;' : 'color:#2563eb;font-size:11px;';
+}
+
+/* ══ Tab switch ══ */
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.pur-tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.pur-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ══ Owner → Warehouse cascade ══ */
+let _ownerWarehouses = [];
+function _warehouseOptionsHtml(selected) {
+  const sel = selected || (_ownerWarehouses.length ? _ownerWarehouses[0].warehouse_name : '');
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += _ownerWarehouses.map(w => {
+    const label = (IS_AR && w.warehouse_name_ar) ? w.warehouse_name_ar : w.warehouse_name;
+    const optSel = w.warehouse_name === sel ? ' selected' : '';
+    return `<option value="${w.warehouse_name}"${optSel}>${label}</option>`;
+  }).join('');
+  if (sel && !_ownerWarehouses.some(w => w.warehouse_name === sel)) {
+    html += `<option value="${sel}" selected>${sel}</option>`;
+  }
+  return html;
+}
+async function loadOwnerWarehouses(ownerId) {
+  document.querySelectorAll('select[name="li_warehouse[]"]').forEach(sel => { sel.value = ''; });
+  if (!ownerId) {
+    _ownerWarehouses = [];
+  } else {
+    try {
+      const res = await fetch('/owners/' + ownerId + '/warehouses');
+      _ownerWarehouses = await res.json();
+    } catch (e) {
+      _ownerWarehouses = [];
+    }
+  }
+  document.querySelectorAll('select[name="li_warehouse[]"]').forEach(sel => {
+    sel.innerHTML = _warehouseOptionsHtml('');
+  });
+}
+
+/* ══ Account Code (header) — populated from the sales tax code master.
+   SINV's own line-item Tax Code is a fixed inherited value, so there is no
+   cascade into line items here, only the header dropdown. ══ */
+let TAX_CODES = [];
+function taxCodeLabel(t) {
+  return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
+}
+function accountCodeOptionsHtml(selected) {
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += TAX_CODES.map(t =>
+    `<option value="${t.account_code}"${t.account_code === selected ? ' selected' : ''}>${taxCodeLabel(t)}</option>`
+  ).join('');
+  return html;
+}
+function loadTaxCodes() {
+  return fetch('/sales-tax-codes/data')
+    .then(r => r.json())
+    .then(d => {
+      TAX_CODES = (d || []).filter(t => (t.status || 'Active') === 'Active');
+      const accEl = document.getElementById('sinv_account_code');
+      if (accEl) {
+        const cur = accEl.value;
+        accEl.innerHTML = accountCodeOptionsHtml(cur);
+        accEl.value = cur;
+      }
+    })
+    .catch(() => { TAX_CODES = []; });
+}
+document.addEventListener('DOMContentLoaded', loadTaxCodes);
+function onSinvAccountCodeChange() {}
+
+/* ══ Line Items — item/desc/qty/rate editable; Tax Code fixed/inherited ══ */
+function addLiRow(d) {
+  const idx = _liIdx++;
+  d = d || {};
+  const servicesKind = _isServicesKind();
+  const itemId = d.item_id || '';
+  const codeOptsHtml = servicesKind ? _glCodeOptionsHtml(d.item_code||'') : _itemCodeOptionsHtml(d.item_code||'');
+  const nameOptsHtml = servicesKind ? _glOptionsHtml(d.item_code||'') : _itemOptionsHtml(itemId);
+  const row = `<tr id="plr_${idx}">
+    <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
+    <td><select class="li-inp" name="li_item_code[]" id="plcode_${idx}" onchange="onLiItemChange(${idx},'code')" style="width:110px;">${codeOptsHtml}</select></td>
+    <td>
+      <select class="li-inp" id="plitem_${idx}" onchange="onLiItemChange(${idx},'name')" style="min-width:160px;">${nameOptsHtml}</select>
+      <input type="hidden" name="li_item_id[]" id="pliid_${idx}" value="${servicesKind ? '' : itemId}">
+    </td>
+    <td><input type="text" class="li-inp" name="li_item_desc[]" id="pldesc_${idx}" value="${d.item_desc||d.description||''}" style="min-width:140px;"></td>
+    <td><select class="li-inp" name="li_warehouse[]" id="plwh_${idx}" style="min-width:100px;">${_warehouseOptionsHtml(d.warehouse||'')}</select></td>
+    <td><select class="li-inp" name="li_uom[]" id="pluom_${idx}" style="width:105px;">${_uomOptionsHtml(_itemById(itemId), d.uom||'unit')}</select></td>
+    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||0}"      oninput="recalcLi(${idx})" style="width:70px;background:#fffbeb;" title="${IS_AR?'يملأ تلقائياً من الصنف':'Auto-filled from item SO rate'}"></td>
+    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" id="plt_${idx}"  name="li_taxable_disp[]" value="${d.taxable||0}" readonly
+         style="width:76px;background:#fffbeb;color:#92400e;font-weight:600;"></td>
+    <td><input type="text" class="li-inp" name="li_tax_code[]" id="pltc_${idx}" value="${d.tax_code||'VAT15'}" readonly style="width:78px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${d.tax_amount||0}" readonly style="width:62px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${d.total||0}" readonly style="width:76px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+    <td style="text-align:center;"><button type="button" onclick="removeLi(${idx})" title="${IS_AR?'حذف':'Remove'}" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;"><i class="fas fa-trash"></i></button></td>
+  </tr>`;
+  document.getElementById('liBody').insertAdjacentHTML('beforeend', row);
+  recalcLi(idx);
+  updLiCount();
+}
+
+/* source = 'code' or 'name' -- whichever of the two selects the user just
+   changed; the other is kept in sync so both always describe the same
+   item/account. */
+function onLiItemChange(idx, source) {
+  const codeSel = document.getElementById('plcode_'+idx);
+  const nameSel = document.getElementById('plitem_'+idx);
+
+  if (_isServicesKind()) {
+    // Both selects are keyed by the same value (the account's own code) in
+    // Services mode, so syncing them is just copying the value across.
+    const code = source === 'code' ? codeSel.value : nameSel.value;
+    if (codeSel.value !== code) codeSel.value = code;
+    if (nameSel.value !== code) nameSel.value = code;
+    const acc = _levelFive.find(a => a.code === code);
+    document.getElementById('pliid_'+idx).value = '';
+    const desc = document.getElementById('pldesc_'+idx);
+    if (desc) desc.value = acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+    const uomSel = document.getElementById('pluom_'+idx);
+    if (uomSel) uomSel.innerHTML = _uomOptionsHtml(null, 'unit');
+    recalcLi(idx);
+    return;
+  }
+
+  // Goods: the code select is keyed by item_code, the name select by the
+  // item's own numeric id -- resolve whichever one changed to find the
+  // item, then push its other identifier onto the sibling select.
+  let item;
+  if (source === 'code') {
+    item = (_itemsCache || []).find(i => i.item_code === codeSel.value);
+    nameSel.value = item ? item.id : '';
+  } else {
+    item = _itemById(nameSel.value);
+    codeSel.value = item ? (item.item_code || '') : '';
+  }
+  document.getElementById('pliid_'+idx).value = item ? item.id : '';
+  const desc = document.getElementById('pldesc_'+idx);
+  if (item && !desc.value) desc.value = item.item_desc || item.name_en || '';
+  const rt = document.getElementById('plrt_'+idx);
+  if (item) rt.value = Number(item.so_rate || 0).toFixed(2);
+  const uomSel = document.getElementById('pluom_'+idx);
+  if (uomSel) uomSel.innerHTML = _uomOptionsHtml(item, item ? item.uom : 'unit');
+  recalcLi(idx);
+}
+
+function onSinvKindChange() {
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const m = (row.id || '').match(/^plr_(\d+)$/);
+    if (!m) return;
+    const idx = parseInt(m[1]);
+    const codeSel = document.getElementById('plcode_' + idx);
+    const nameSel = document.getElementById('plitem_' + idx);
+    if (!codeSel || !nameSel) return;
+    const servicesKind = _isServicesKind();
+    codeSel.innerHTML = servicesKind ? _glCodeOptionsHtml('') : _itemCodeOptionsHtml('');
+    nameSel.innerHTML = servicesKind ? _glOptionsHtml('') : _itemOptionsHtml('');
+    onLiItemChange(idx, 'code');
+  });
+}
+
+function removeLi(idx) {
+  const r = document.getElementById('plr_'+idx); if (r) r.remove();
+  recalcSummary(); updLiCount();
+}
+
+function taxRateOf(code) {
+  if (code === 'VAT15') return 15;
+  if (code === 'VAT0' || code === 'EXEMPT') return 0;
+  const m = String(code || '').match(/(\d+(?:\.\d+)?)\s*%/);
+  return m ? parseFloat(m[1]) : 0;
+}
+function recalcLi(idx) {
+  const g = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
+  const qty = g('plq_'+idx), rate = g('plrt_'+idx), disc = g('pld_'+idx), fr = g('plf_'+idx);
+  const tcEl = document.getElementById('pltc_'+idx);
+  const taxRate = tcEl ? taxRateOf(tcEl.value) : 0;
+  const taxable = Math.max(0, (qty * rate - disc) + fr);
+  const taxAmt  = Math.round(taxable * taxRate / 100 * 100) / 100;
+  const total   = taxable + taxAmt;
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = v.toFixed(2); };
+  set('plt_'+idx, taxable); set('plta_'+idx, taxAmt); set('pltot_'+idx, total);
+  recalcSummary();
+}
+
+function recalcSummary() {
+  let bd=0, disc=0, fr=0, vat=0;
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const g = n => parseFloat(row.querySelector(`[name="${n}[]"]`)?.value || 0) || 0;
+    bd += g('li_qty') * g('li_rate'); disc += g('li_discount'); fr += g('li_freight');
+    vat += parseFloat(row.querySelector('[name="li_tax_amount_disp[]"]')?.value || 0) || 0;
+  });
+  const excl = (bd - disc) + fr, incl = excl + vat;
+  const fmt = n => 'SAR ' + n.toLocaleString('en-SA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const s = id => document.getElementById(id);
+  if(s('s_total_bd'))   s('s_total_bd').textContent   = fmt(bd);
+  if(s('s_total_disc')) s('s_total_disc').textContent = fmt(disc);
+  if(s('s_total_fr'))   s('s_total_fr').textContent   = fmt(fr);
+  if(s('s_excl_vat'))   s('s_excl_vat').textContent   = fmt(excl);
+  if(s('s_vat_amt'))    s('s_vat_amt').textContent     = fmt(vat);
+  if(s('s_incl_vat'))   s('s_incl_vat').textContent   = fmt(incl);
+  if(s('li_grand_total')) s('li_grand_total').textContent = fmt(incl);
+}
+
+function updLiCount() {
+  const n = document.querySelectorAll('#liBody tr').length;
+  const el = document.getElementById('liCount'); if (el) el.textContent = n;
+}
+
+/* ══ Attachments ══ */
+function handleFiles(files) {
+  for (const f of files) {
+    if (_attachments.find(x => x.name === f.name)) continue;
+    _attachments.push(f);
+    const div = document.createElement('div'); div.className = 'att-item';
+    div.id = 'att_' + f.name.replace(/[^a-z0-9]/gi,'_');
+    div.innerHTML = `<span><i class="fas fa-file me-2" style="color:#60a5fa;"></i><strong>${f.name}</strong>
+      <span style="color:#9ca3af;margin-left:8px;font-size:11px;">${(f.size/1024).toFixed(1)} KB</span></span>
+      <button type="button" class="att-rm" onclick="removeAtt('${f.name}')"><i class="fas fa-times"></i></button>`;
+    document.getElementById('attList').appendChild(div);
+  }
+  updDocCount();
+}
+
+function removeAtt(name) {
+  _attachments = _attachments.filter(f => f.name !== name);
+  const el = document.getElementById('att_' + name.replace(/[^a-z0-9]/gi,'_'));
+  if (el) el.remove();
+  updDocCount();
+}
+
+function updDocCount() {
+  const total = _attachments.length + document.querySelectorAll('#existAttList .att-item').length;
+  const el = document.getElementById('s_doc_count'), badge = document.getElementById('attBadge');
+  if (el) el.textContent = total; if (badge) badge.textContent = total;
+}
+
+/* ══ Open Add ══ */
+async function openAddSINV() {
+  _liIdx = 0; _attachments = [];
+  document.getElementById('sinv_id').value = '';
+  document.getElementById('sinvTitle').innerHTML = '<i class="fas fa-file-invoice me-2"></i>' + (IS_AR ? 'إضافة فاتورة شراء' : 'Add Sales Invoice');
+  
+  const poSel = document.getElementById('sinv_so_id');
+  poSel.value = '';
+  poSel.style.borderColor = '';
+  poSel.classList.add('required-field');
+  document.getElementById('so_filled_banner').style.display = 'none';
+  document.getElementById('so_status_badge').style.display  = 'none';
+  document.getElementById('so_hint').style.display          = 'block';
+  refreshDnOptions('');
+  
+  ['sinv_buyer_name','sinv_buyer_ref','sinv_remarks'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  document.getElementById('sinv_buyer').value = '';
+  document.getElementById('sinv_doc_no').value = '';
+  
+  document.getElementById('sinv_transaction_type').value = '';
+  _refInvSelected = [];
+  onTxnTypeChange();
+  document.getElementById('sinvDocBadge').textContent = '...';
+
+  _sinvPosted = false;
+  if(typeof grlReset==='function') grlReset();
+  if(typeof grlSyncMaster==='function') grlSyncMaster();
+  grlPreviewNextNos();
+  grlCollapseSec();
+  grlUpdatePostBtnState();
+
+  // ⭐ Fetch fresh document number
+  await fetchDocNo();
+  if(typeof grlSyncMaster==='function') grlSyncMaster();
+
+  document.getElementById('sinv_status').value = 'Open';
+  document.getElementById('sinv_kind').value = 'Goods';
+  document.getElementById('sinv_payment').value = 'Credit';
+  const ownerSel = document.getElementById('sinv_owner');
+  ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
+  loadSinvOwnerBanks(ownerSel.value);
+  const accSel = document.getElementById('sinv_account_code');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  await loadOwnerWarehouses(ownerSel.value);
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('sinv_posting_date').value = '';
+  document.getElementById('sinv_posting_date').disabled = true;
+  document.getElementById('sinv_delivery_date').value = today;
+  document.getElementById('sinv_doc_date').value = today;
+  document.getElementById('liBody').innerHTML = '';
+  document.getElementById('attList').innerHTML = '';
+  document.getElementById('existAttList').innerHTML = '';
+  recalcSummary(); updLiCount(); updDocCount();
+  
+  switchTab('tab_content', document.querySelector('.pur-tab'));
+  document.querySelectorAll('.pur-section-hdr').forEach(btn => {
+    btn.classList.add('open'); btn.nextElementSibling.classList.add('open');
+    const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
+    if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
+  });
+  
+  await loadItemsCache();
+  await loadLevelFive();
+  addLiRow();
+
+  if (!_sinvModal) {
+    const modalEl = document.getElementById('sinvModal');
+    if (modalEl) {
+      _sinvModal = new bootstrap.Modal(modalEl);
+    }
+  }
+  if (_sinvModal) {
+    _sinvModal.show();
+  }
+}
+
+/* ══ Open Edit ══ */
+function openEditSINV(id) {
+  fetch('/sales/invoices/' + id + '/json')
+    .then(r => {
+      if (!r.ok) throw new Error('Failed to fetch invoice data');
+      return r.json();
+    })
+    .then(async d => {
+      console.log('Edit data:', d);
+      _liIdx = 0; _attachments = [];
+      document.getElementById('sinv_id').value = id;
+      grlLoad(id);   // load the saved GRL for this SINV into the section
+      grlCollapseSec();
+      _sinvPosted = (d.posting_status === 'Posted');
+      grlUpdatePostBtnState();
+      document.getElementById('sinvTitle').innerHTML = '<i class="fas fa-edit me-2"></i>' + (IS_AR ? 'تعديل فاتورة شراء' : 'Edit Sales Invoice');
+      
+      const poSel = document.getElementById('sinv_so_id');
+      const poIdValue = d.sales_order_id || d.so_id || '';
+      poSel.value = poIdValue;
+      poSel.style.borderColor = poIdValue ? '#86efac' : '';
+      poSel.classList.toggle('required-field', !poIdValue);
+      document.getElementById('so_filled_banner').style.display = poIdValue ? 'flex' : 'none';
+      document.getElementById('so_filled_docno').textContent = d.so_no || d.so_doc_no || '';
+      document.getElementById('so_hint').style.display = poIdValue ? 'none' : 'block';
+      refreshDnOptions(poIdValue);
+      document.getElementById('sinv_dn_id').value = d.delivery_note_id || '';
+      
+      document.getElementById('sinv_doc_no').value = d.doc_no || '';
+      document.getElementById('sinvDocBadge').textContent = d.doc_no || '';
+      document.getElementById('sinv_status').value = d.status || 'Open';
+      document.getElementById('sinv_kind').value = d.kind || 'Goods';
+      document.getElementById('sinv_payment').value = d.payment_method || 'Credit';
+      const ownerSel = document.getElementById('sinv_owner');
+      ownerSel.value = d.owner_id || '';
+      if (!ownerSel.value && ownerSel.options.length > 1) ownerSel.selectedIndex = 1;
+      loadSinvOwnerBanks(ownerSel.value, d.bank_account_id || '');
+      const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
+      document.getElementById('sinv_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+      await loadOwnerWarehouses(ownerSel.value);
+      document.getElementById('sinv_buyer').value = d.buyer_id || '';
+      document.getElementById('sinv_buyer_name').value = d.buyer_name || '';
+      const vr = document.getElementById('sinv_buyer_ref');  if(vr) vr.value = d.buyer_ref_no||'';
+      const rm = document.getElementById('sinv_remarks');     if(rm) rm.value = d.remarks||'';
+      
+      document.getElementById('sinv_transaction_type').value = d.transaction_type || '';
+      onTxnTypeChange();
+      _refInvSelected = (d.reference_invoices || '')
+        .split(',').map(s => parseInt(s,10)).filter(n => !isNaN(n));
+      document.getElementById('sinv_reference_invoices').value = _refInvSelected.join(',');
+      renderRefChips();
+      document.getElementById('sinv_posting_date').disabled = (d.status === 'Open');
+      document.getElementById('sinv_posting_date').value  = d.posting_date  || '';
+      document.getElementById('sinv_delivery_date').value = d.delivery_date || '';
+      document.getElementById('sinv_doc_date').value      = new Date().toISOString().split('T')[0];
+      
+      document.getElementById('liBody').innerHTML = '';
+      await loadLevelFive();
+      loadItemsCache().then(() => {
+        document.getElementById('liBody').innerHTML = '';
+        if (d.items && d.items.length > 0) {
+          d.items.forEach(li => {
+            if (!li.item_id && li.item_code) {
+              const m = (_itemsCache || []).find(i => i.item_code === li.item_code);
+              if (m) li.item_id = m.id;
+            }
+            addLiRow(li);
+          });
+        } else {
+          addLiRow();
+        }
+        recalcSummary(); updLiCount();
+      });
+      
+      document.getElementById('attList').innerHTML = '';
+      document.getElementById('existAttList').innerHTML = '';
+      if (d.attachments) {
+        d.attachments.forEach(a => {
+          const div = document.createElement('div'); div.className = 'att-item';
+          div.innerHTML = `<span><i class="fas fa-file me-2" style="color:#60a5fa;"></i><strong>${a.filename}</strong></span>`;
+          document.getElementById('existAttList').appendChild(div);
+        });
+      }
+      
+      recalcSummary(); updLiCount(); updDocCount();
+      switchTab('tab_content', document.querySelector('.pur-tab'));
+      document.querySelectorAll('.pur-section-hdr').forEach(btn => {
+        btn.classList.add('open'); btn.nextElementSibling.classList.add('open');
+        const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
+        if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
+      });
+      
+      if (!_sinvModal) {
+        const modalEl = document.getElementById('sinvModal');
+        if (modalEl) {
+          _sinvModal = new bootstrap.Modal(modalEl);
+        }
+      }
+      if (_sinvModal) {
+        _sinvModal.show();
+      }
+    })
+    .catch(error => {
+      console.error('Error loading invoice:', error);
+      alert(IS_AR ? 'خطأ في تحميل بيانات الفاتورة' : 'Error loading invoice data');
+    });
+}
+
+/* ══ Save ══ */
+async function saveSINV() {
+  // ⭐ Ensure we have a document number
+  const docNo = document.getElementById('sinv_doc_no').value;
+  if (!docNo || docNo === '...' || docNo === 'NEW' || docNo === '') {
+    alert(IS_AR ? 'جاري تحميل رقم المستند... يرجى الانتظار' : 'Loading document number... please wait');
+    await fetchDocNo();
+    const newDocNo = document.getElementById('sinv_doc_no').value;
+    if (!newDocNo || newDocNo === '...' || newDocNo === '') {
+      alert(IS_AR ? 'فشل في توليد رقم المستند' : 'Failed to generate document number');
+      return;
+    }
+  }
+  
+  const soId = document.getElementById('sinv_so_id').value;
+  if (!soId) {
+    document.getElementById('sinv_so_id').classList.add('required-field');
+    document.getElementById('sinv_so_id').focus();
+    document.getElementById('sinv_so_id').style.borderColor = '#ef4444';
+    alert(IS_AR ? 'الرجاء اختيار أمر البيع أولاً' : 'Please select a Sales Order first');
+    return;
+  }
+  if (_soPullInProgress) {
+    alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات أمر البيع' : 'Please wait — still loading data from the Sales Order');
+    return;
+  }
+  
+  const id  = document.getElementById('sinv_id').value;
+  const url = id ? `/sales/invoices/${id}/edit` : '/sales/invoices/add';
+  const fd  = new FormData();
+  
+  fd.append('csrf_token', CSRF);
+  fd.append('so_id', soId);
+  fd.append('dn_id', document.getElementById('sinv_dn_id')?.value || '');
+  fd.append('status', document.getElementById('sinv_status').value);
+  fd.append('kind', document.getElementById('sinv_kind').value);
+  fd.append('payment_method', document.getElementById('sinv_payment').value);
+  fd.append('owner_id', document.getElementById('sinv_owner').value || '');
+  fd.append('account_code', document.getElementById('sinv_account_code').value || '');
+  fd.append('bank_account_id', document.getElementById('sinv_bank_account').value || '');
+  fd.append('buyer_id', document.getElementById('sinv_buyer').value || '');
+  fd.append('buyer_ref_no', document.getElementById('sinv_buyer_ref')?.value || '');
+  fd.append('transaction_type', document.getElementById('sinv_transaction_type')?.value || '');
+  fd.append('invoice_category', document.getElementById('sinv_invoice_category')?.value || '');
+  fd.append('reference_invoices', document.getElementById('sinv_reference_invoices')?.value || '');
+  fd.append('remarks', document.getElementById('sinv_remarks')?.value || '');
+  fd.append('posting_date', document.getElementById('sinv_posting_date').value || '');
+  fd.append('delivery_date', document.getElementById('sinv_delivery_date').value || '');
+  fd.append('document_date', document.getElementById('sinv_doc_date').value || '');
+  
+  const rows = document.querySelectorAll('#liBody tr');
+  console.log('Number of line items:', rows.length);
+  
+  rows.forEach((row, index) => {
+    const g = n => {
+      const el = row.querySelector(`[name="${n}[]"]`);
+      return el ? el.value : '';
+    };
+    fd.append('li_item_code[]', g('li_item_code'));
+    fd.append('li_item_desc[]', g('li_item_desc'));
+    fd.append('li_warehouse[]', g('li_warehouse'));
+    fd.append('li_uom[]', g('li_uom'));
+    fd.append('li_qty[]', g('li_qty'));
+    fd.append('li_rate[]', g('li_rate'));
+    fd.append('li_discount[]', g('li_discount'));
+    fd.append('li_freight[]', g('li_freight'));
+    fd.append('li_tax_code[]', g('li_tax_code'));
+  });
+  
+  _attachments.forEach(f => fd.append('attachments', f));
+  
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: fd
+    });
+    
+    const contentType = res.headers.get('content-type');
+    let data;
+    
+    if (contentType && contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      console.error('Non-JSON response:', text.substring(0, 500));
+      throw new Error('Server returned non-JSON response');
+    }
+    
+    console.log('Server response:', data);
+    
+    if (data.ok) {
+      if (_sinvModal) {
+        _sinvModal.hide();
+      }
+      loadData();
+      alert(IS_AR ? 'تم الحفظ بنجاح' : 'Saved successfully');
+    } else {
+      console.error('Save error:', data);
+      alert(data.error || data.message || (IS_AR ? 'حدث خطأ أثناء الحفظ' : 'Error saving invoice'));
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    alert(IS_AR ? 'خطأ في الاتصال بالخادم: ' + error.message : 'Server error: ' + error.message);
+  }
+}
+
+/* ══ Delete ══ */
+function confDelSINV(id, docNo) {
+  document.getElementById('delTxt').textContent = (IS_AR ? 'حذف: ' : 'Delete: ') + docNo + '?';
+  document.getElementById('delBtn').onclick = () => {
+    fetch('/sales/invoices/' + id + '/delete', {
+      method:'POST', 
+      headers:{'X-CSRFToken':CSRF}, 
+      body:new URLSearchParams({csrf_token:CSRF})
+    }).then(r => r.json()).then(d => {
+      if (d.ok) { 
+        bootstrap.Modal.getInstance(document.getElementById('delModal'))?.hide(); 
+        loadData(); 
+      }
+    });
+  };
+  new bootstrap.Modal(document.getElementById('delModal')).show();
+}
+
+/* ══ AG-GRID ENTERPRISE (EXACTLY LIKE EMPLOYEES) ══ */
+function rStatus(p) {
+  const v = p.value || 'Open';
+  const labels = {
+    Open: IS_AR ? 'مفتوح' : 'Open',
+    Pending: IS_AR ? 'معلق' : 'Pending',
+    Approved: IS_AR ? 'معتمد' : 'Approved',
+    Closed: IS_AR ? 'مغلق' : 'Closed',
+    Cancelled: IS_AR ? 'ملغي' : 'Cancelled'
+  };
+  const classes = {
+    Open: 'st-open',
+    Pending: 'st-pending',
+    Approved: 'st-approved',
+    Closed: 'st-closed',
+    Cancelled: 'st-cancelled'
+  };
+  return `<span class="st-pill ${classes[v] || classes.Open}">
+      <i class="fas fa-circle" style="font-size:6px;"></i>
+      ${labels[v] || labels.Open}
+  </span>`;
+}
+
+function rPostingStatus(p) {
+  const posted = p.value === 'Posted';
+  const label = posted ? (IS_AR ? 'مُرحّل' : 'Posted') : (IS_AR ? 'محفوظ' : 'Saved');
+  return `<span class="st-pill ${posted ? 'st-approved' : 'st-open'}">
+      <i class="fas fa-circle" style="font-size:6px;"></i>
+      ${label}
+  </span>`;
+}
+
+function rSAR(p) {
+  return p.value != null
+    ? `<span style="font-weight:600;font-variant-numeric:tabular-nums;">${parseFloat(p.value).toLocaleString('en-SA',{minimumFractionDigits:2})}</span>`
+    : '';
+}
+
+class ActR {
+  init(p) {
+    this.g = document.createElement('div');
+    this.g.style.cssText = 'display:flex;align-items:center;gap:4px;height:100%;';
+    const d = p.data;
+    const docNo = (d.doc_no || '').replace(/'/g, "\\'");
+    this.g.innerHTML = `
+      <button class="ag-ab ag-ab-view" onclick="window.location='/sales/invoices/${d.id}/view'" title="${IS_AR?'عرض':'View'}"><i class="fas fa-eye"></i></button>
+      <button class="ag-ab ag-ab-edit" onclick="openEditSINV(${d.id})" title="${IS_AR?'تعديل':'Edit'}"><i class="fas fa-pencil-alt"></i></button>
+      <button class="ag-ab ag-ab-print" onclick="window.open('/sales/invoices/${d.id}/print','_blank')" title="${IS_AR?'طباعة':'Print'}"><i class="fas fa-print"></i></button>
+      <button class="ag-ab ag-ab-del"  onclick="confDelSINV(${d.id},'${docNo}')" title="${IS_AR?'حذف':'Delete'}"><i class="fas fa-trash"></i></button>`;
+  }
+  getGui() { return this.g; }
+}
+
+const AG_LOCALE = IS_AR ? {
+  filterOoo: 'تصفية...',
+  equals: 'يساوي',
+  notEqual: 'لا يساوي',
+  contains: 'يحتوي على',
+  notContains: 'لا يحتوي على',
+  startsWith: 'يبدأ بـ',
+  endsWith: 'ينتهي بـ',
+  blank: 'فارغ',
+  notBlank: 'غير فارغ',
+  lessThan: 'أقل من',
+  greaterThan: 'أكبر من',
+  applyFilter: 'تطبيق',
+  clearFilter: 'مسح',
+  resetFilter: 'إعادة تعيين',
+  addFilterCondition: '+ إضافة قاعدة',
+  matchAll: 'يطابق الكل',
+  matchAny: 'يطابق أي',
+  andCondition: 'و',
+  orCondition: 'أو',
+  noRowsToShow: 'لا توجد بيانات',
+  loadingOoo: 'جاري التحميل...',
+  searchOoo: 'بحث...',
+  sortAscending: 'تصاعدي',
+  sortDescending: 'تنازلي',
+} : {
+  filterOoo: 'Filter...',
+  applyFilter: 'Apply',
+  clearFilter: 'Clear',
+  resetFilter: 'Reset',
+  addFilterCondition: '+ Add Rule',
+  matchAll: 'Match All',
+  matchAny: 'Match Any',
+  noRowsToShow: 'No records found',
+  searchOoo: 'Search...',
+};
+
+const defCol = {
+  sortable: true,
+  unSortIcon: true,
+  resizable: true,
+  filter: true,
+  floatingFilter: true,
+  suppressMenu: false,
+  enableRowGroup: true,
+  enablePivot: true,
+  enableValue: true,
+  menuTabs: ['filterMenuTab', 'columnsMenuTab', 'generalMenuTab'],
+  filterParams: {
+    buttons: ['apply', 'reset', 'clear'],
+    closeOnApply: true,
+    maxNumConditions: 10
+  }
+};
+
+const cols = [
+  {headerName:'#',field:'id',width:65,floatingFilter:false,suppressMenu:true,checkboxSelection:true,headerCheckboxSelection:true,pinned:IS_AR?'right':'left',sortable:false,resizable:false},
+  {headerName:IS_AR?'رقم المستند':'Doc No',field:'doc_no',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'النوع':'Kind',field:'kind',width:100,filter:'agSetColumnFilter',filterParams:{values:['Goods','Services'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'طريقة الدفع':'Payment Method',field:'payment_method',width:130,filter:'agSetColumnFilter',filterParams:{values:['Credit','Cash'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'أمر البيع':'SO No',field:'so_no',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'إيصال الاستلام':'DN No',field:'dn_no',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'المشتري':'Buyer',field:'buyer_name',minWidth:170,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'رقم المرجع':'Buyer Ref No',field:'buyer_ref_no',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'نوع المعاملة':'Transaction Type',field:'transaction_type',width:140,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'فئة الفاتورة':'Invoice Category',field:'invoice_category',width:140,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'حالة الترحيل':'Posting Status',field:'posting_status',width:120,cellRenderer:rPostingStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Saved','Posted'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الشحن':'Freight',field:'total_freight',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الإجمالي بدون ضريبة':'Total Excl. VAT',field:'total_excl_vat',width:140,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'ضريبة القيمة المضافة':'VAT',field:'vat_amount',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الإجمالي':'Total Incl. VAT',field:'total_incl_vat',width:140,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'تاريخ الإنشاء':'Created At',field:'created_at',width:150,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'أنشئ بواسطة':'Created By',field:'created_by_name',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'إجراءات':'Actions',field:'_a',width:156,pinned:IS_AR?'left':'right',
+   sortable:false,suppressMenu:true,floatingFilter:false,resizable:false,
+   cellRenderer:ActR,cellStyle:{overflow:'visible',padding:'0 6px'}},
+];
+
+let gridApi;
+
+document.addEventListener('DOMContentLoaded', function() {
+  const el = document.getElementById('sinvGrid');
+  if (!el) return;
+  
+  agGrid.createGrid(el, {
+    columnDefs: cols,
+    multiSortKey: 'ctrl',
+    rowData: [],
+    pagination: true,
+    paginationPageSize: 20, paginationPageSizeSelector:[20,50,100],
+    animateRows: true,
+    enableRtl: IS_AR,
+    defaultColDef: defCol,
+    localeText: AG_LOCALE,
+    
+    // ── ENTERPRISE FEATURES (EXACTLY LIKE EMPLOYEES) ──
+    sideBar: {
+      toolPanels: [
+        {
+          id: 'columns',
+          labelDefault: IS_AR ? 'الأعمدة' : 'Columns',
+          labelKey: 'columns',
+          iconKey: 'columns',
+          toolPanel: 'agColumnsToolPanel'
+        },
+        {
+          id: 'filters',
+          labelDefault: IS_AR ? 'الفلاتر' : 'Filters',
+          labelKey: 'filters',
+          iconKey: 'filter',
+          toolPanel: 'agFiltersToolPanel'
+        }
+      ],
+      defaultToolPanel: ''
+    },
+    rowGroupPanelShow: 'always',
+    pivotPanelShow: 'always',
+    groupDisplayType: 'groupRows',
+    
+    rowSelection: 'multiple',
+    suppressRowClickSelection: true,
+    
+    onGridReady(p) {
+      gridApi = p.api;
+      if (window.GridKit) { GridKit.enhance(p, 'sinvGrid', { storageKey: 'sales_sinv', exportName: 'Sales Invoices' }); }
+      loadData();
+    },
+    onFilterChanged() { upd(); },
+    onPaginationChanged() { upd(); },
+    onSelectionChanged() { upd(); },
+    getRowStyle(p) { return p.node.rowIndex % 2 === 0 ? { background: '#fff' } : { background: '#fafbfc' }; }
+  });
+  
+  // Check for edit param in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const editId = urlParams.get('edit');
+  if (editId) {
+    setTimeout(() => {
+      openEditSINV(parseInt(editId));
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }, 500);
+  }
+});
+
+function loadData() {
+  var savedFilters = gridApi ? gridApi.getFilterModel() : null;
+  
+  fetch('/sales/invoices/data')
+    .then(r => r.json())
+    .then(d => {
+      if (gridApi) {
+        gridApi.setGridOption('rowData', d);
+        if (savedFilters && Object.keys(savedFilters).length) {
+          gridApi.setFilterModel(savedFilters);
+        }
+        upd();
+      }
+    })
+    .catch(console.error);
+}
+
+function upd() {
+  if (!gridApi) return;
+  const total = gridApi.getDisplayedRowCount();
+  const selected = gridApi.getSelectedRows().length;
+  const text = selected > 0 
+    ? `${selected} ${IS_AR ? 'محدد' : 'selected'}`
+    : `${total} ${IS_AR ? 'فاتورة' : 'invoices'}`;
+  document.getElementById('selText').textContent = text;
+  document.getElementById('pageInfo').textContent = `${total} ${IS_AR ? 'فواتير' : 'invoices'}`;
+}
+
+/* ══ GRL section (auto-generated preview) -- mirrors pinv_list.html in the
+   purchase module exactly, including the Reference Code column: when this
+   invoice's buyer has their own control account configured (via the
+   Buyer form's Chart of Account picker), record 1 is replaced with the
+   buyer's own control account and Reference Code shows the buyer's own
+   subsidiary code (see _apply_buyer_control_account() in sales.py). ══ */
+const _grlToday = () => new Date().toISOString().split('T')[0];
+
+function _grlEmptyDetailHtml(){
+  return '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:14px;">'+
+    (IS_AR?'تُنشأ السطور تلقائياً عند الحفظ':'Rows are generated automatically on save')+'</td></tr>';
+}
+
+function grlReset(){
+  ['grl_je_no','grl_no','grl_origion','grl_posting_date','grl_due_date','grl_document_date','grl_narration'].forEach(id=>{
+    const e=document.getElementById(id); if(e) e.value='';
+  });
+  const body=document.getElementById('grlDetailBody');
+  if(body) body.innerHTML=_grlEmptyDetailHtml();
+}
+
+/* Add mode, before anything is saved: show what GRL No / Je No would be
+   assigned, matching how the doc number itself already previews via
+   fetchDocNo(). Overwritten with the real values once Post actually runs. */
+function grlPreviewNextNos(){
+  fetch('/sales/invoices/next-grl-je-no').then(r=>r.json()).then(d=>{
+    if(!d.ok) return;
+    const g=id=>document.getElementById(id);
+    if(g('grl_no')) g('grl_no').value = d.grl_no || '';
+    if(g('grl_je_no')) g('grl_je_no').value = d.je_no || '';
+  }).catch(e=>console.error('GRL/Je No preview failed:', e));
+}
+
+/* Fill the read-only master fields from the current SINV form values. */
+function grlSyncMaster(){
+  const g=id=>document.getElementById(id);
+  const origin = g('sinv_doc_no')?.value || g('sinvDocBadge')?.textContent || '';
+  if(g('grl_origion')) g('grl_origion').value = origin;
+  if(g('grl_posting_date')) g('grl_posting_date').value = _grlToday();
+  if(g('grl_due_date')) g('grl_due_date').value = g('sinv_delivery_date')?.value || '';
+  if(g('grl_document_date')) g('grl_document_date').value = _grlToday();
+}
+
+/* ══ Editable GRL detail grid (2 records PER invoice line item) ══ */
+let _grlAllowedPairs = [];
+
+function grlEnsureAccounts(){ return Promise.resolve(_grlAccounts||[]); }
+let _grlAccounts = [];   // kept for compatibility; unused for options now
+
+/* Build <option>s from a specific allowed-account list for one record. */
+function grlAccountOptions(list, sel){
+  const opts = ['<option value="">'+(IS_AR?'اختر...':'Select...')+'</option>'];
+  (list||[]).forEach(a=>{
+    if(!a.code) return;
+    opts.push('<option value="'+a.code+'"'+(a.code===sel?' selected':'')+'>'+a.code+'</option>');
+  });
+  return opts.join('');
+}
+
+function grlRowCount(){
+  return document.querySelectorAll('#grlDetailBody tr[data-grl-row]').length;
+}
+
+function _grlControlLabel(v){
+  return (v||'').trim() === 'Yes' ? (IS_AR?'نعم':'Yes') : (IS_AR?'لا':'No');
+}
+
+/* r = row data; pairIndex = which source line item this row belongs to;
+   recIndex = 0 for record 1 (item account), 1 for record 2 (Auto Code
+   Selection account) -- together they pick the allowed-account list. */
+function grlMakeRow(r, pairIndex, recIndex){
+  r = r || {};
+  const pair = _grlAllowedPairs[pairIndex] || [[], []];
+  const allowed = pair[recIndex] || [];
+  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
+  const tr=document.createElement('tr');
+  tr.setAttribute('data-grl-row','1');
+  tr.setAttribute('data-grl-pair', pairIndex);
+  tr.setAttribute('data-grl-rec', recIndex);
+  tr.innerHTML =
+    '<td><select class="grl-code f-inp" onchange="grlOnCodeChange(this)" style="min-width:110px;padding:5px 7px;font-size:12px;">'+grlAccountOptions(allowed, r.code||'')+'</select></td>'+
+    '<td><input type="text" class="grl-control" readonly disabled value="'+esc(_grlControlLabel(r.control_account))+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;text-align:center;">'+
+      '<input type="hidden" class="grl-control-val" value="'+esc(r.control_account||'No')+'"></td>'+
+    '<td><input type="text" class="grl-ref" readonly value="'+esc(r.reference_code||'')+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;" title="'+(IS_AR?'رقم مرجع المشتري':'Buyer reference number')+'"></td>'+
+    '<td><input type="text" class="grl-en" readonly value="'+esc(r.account_name||'')+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;"></td>'+
+    '<td><input type="text" class="grl-ar" readonly dir="rtl" value="'+esc(r.account_name_ar||'')+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;"></td>'+
+    '<td><input type="number" step="0.01" class="grl-debit" value="'+(Number(r.debit||0)).toFixed(2)+'" oninput="grlRecalc()" style="width:100px;border:1px solid #cbd5e1;border-radius:5px;padding:5px 7px;font-size:12px;text-align:right;"></td>'+
+    '<td><input type="number" step="0.01" class="grl-credit" value="'+(Number(r.credit||0)).toFixed(2)+'" oninput="grlRecalc()" style="width:100px;border:1px solid #cbd5e1;border-radius:5px;padding:5px 7px;font-size:12px;text-align:right;"></td>'+
+    '<td><input type="text" class="grl-narr" value="'+esc(r.narration||'')+'" style="width:100%;border:1px solid #e2e8f0;border-radius:5px;padding:5px 7px;font-size:12px;" placeholder="'+(IS_AR?'بيان':'Narration')+'"></td>';
+  return tr;
+}
+
+/* pairIndex/recIndex select which allowed-account list this row is
+   constrained to (see _grlAllowedPairs) -- must already be populated by
+   the caller (grlRenderAllRecords / grlLoad) before this runs. */
+function grlAddRow(data, pairIndex, recIndex){
+  const body=document.getElementById('grlDetailBody');
+  const ph=body.querySelector('td[colspan]'); if(ph) body.innerHTML='';
+  const tr=grlMakeRow(data, pairIndex, recIndex);
+  body.appendChild(tr);
+  // if the row has a preselected code but no names, fill them from its allowed list
+  const selCode = tr.querySelector('.grl-code');
+  if(selCode && selCode.value && !(data&&data.account_name)) grlOnCodeChange(selCode);
+  grlSyncRowNarrations();
+  grlRecalc();
+}
+
+/* Mirror the master Narration into both detail rows as it's typed, locking
+   them read-only while it has a value; once the master is cleared, each
+   row's narration goes back to being independently editable. */
+function grlSyncRowNarrations(){
+  const master = document.getElementById('grl_narration')?.value || '';
+  document.querySelectorAll('#grlDetailBody .grl-narr').forEach(inp=>{
+    if(master){
+      inp.value = master;
+      inp.readOnly = true;
+      inp.style.background = '#f3f4f6';
+    } else {
+      inp.readOnly = false;
+      inp.style.background = '';
+    }
+  });
+}
+
+function grlOnCodeChange(sel){
+  const tr=sel.closest('tr');
+  const pairIndex = parseInt(tr.getAttribute('data-grl-pair')||'0',10);
+  const recIndex = parseInt(tr.getAttribute('data-grl-rec')||'0',10);
+  const pair = _grlAllowedPairs[pairIndex] || [[], []];
+  const a=(pair[recIndex]||[]).find(x=>x.code===sel.value);
+  tr.querySelector('.grl-en').value = a ? (a.drawer_en||'') : '';
+  tr.querySelector('.grl-ar').value = a ? (a.drawer_ar||'') : '';
+}
+
+function grlRecalc(){
+  let td=0, tc=0;
+  document.querySelectorAll('#grlDetailBody tr[data-grl-row]').forEach(tr=>{
+    td += parseFloat(tr.querySelector('.grl-debit')?.value)||0;
+    tc += parseFloat(tr.querySelector('.grl-credit')?.value)||0;
+  });
+  const g=id=>document.getElementById(id);
+  if(g('grlTotDebit')) g('grlTotDebit').textContent = td.toFixed(2);
+  if(g('grlTotCredit')) g('grlTotCredit').textContent = tc.toFixed(2);
+  const bal=g('grlBalance');
+  if(bal){
+    if(grlRowCount()===0){ bal.textContent=''; }
+    else if(Math.abs(td-tc)<0.005){
+      bal.innerHTML='<span style="color:#16a34a;font-weight:700;"><i class="fas fa-check-circle me-1"></i>'+(IS_AR?'متوازن':'Balanced')+'</span>';
+    } else {
+      bal.innerHTML='<span style="color:#dc2626;font-weight:700;"><i class="fas fa-exclamation-circle me-1"></i>'+(IS_AR?'غير متوازن':'Not balanced')+'</span>';
+    }
+  }
+  return Math.abs(td-tc)<0.005;
+}
+
+/* Validate before save/post: exactly balanced, codes chosen. */
+function grlValidate(){
+  const rows=[...document.querySelectorAll('#grlDetailBody tr[data-grl-row]')];
+  if(rows.length===0) return true;   // nothing entered yet
+  for(const tr of rows){
+    if(!tr.querySelector('.grl-code').value){
+      alert(IS_AR?'اختر رمز الحساب لكل سجل.':'Select an account code for each record.');
+      return false;
+    }
+  }
+  if(!grlRecalc()){
+    alert(IS_AR?'يجب أن يتساوى إجمالي المدين مع إجمالي الدائن.':'Total Debit must equal Total Credit.');
+    return false;
+  }
+  return true;
+}
+
+/* Render TWO GRL records for EVERY source line item (same {code,
+   account_name, account_name_ar, code1, account_name1, account_name_ar1,
+   nature1, control_account, control_account1, debit} shape returned by
+   both /grl-build and /grl-preview) -- a 3-item SINV produces 3 pairs = 6
+   rows. silent=true suppresses the "mapping missing" alerts, for the
+   passive Add-mode preview -- grlPost() (an explicit user action) still
+   surfaces them. Returns true only if every line rendered successfully. */
+async function grlRenderAllRecords(lines, silent){
+  lines = lines || [];
+  for (const ln of lines) {
+    if(!ln.code){
+      if(!silent) alert(IS_AR?'تعيين حساب المستوى الخامس مفقود للصنف المحدد.':'Level 5 account mapping is missing for the selected item.');
+      return false;
+    }
+    if(!ln.code1){
+      if(!silent) alert(IS_AR?'لا يوجد رمز اختيار تلقائي معرّف لنموذج فاتورة البيع. اذهب إلى دليل الحسابات > اختيار الكود التلقائي.':'No Auto Code Selection is configured for the Sales Invoice form. Go to Chart of Accounts > Auto Code Selection.');
+      return false;
+    }
+  }
+  // Build one allowed-account pair per source line, THEN render -- pairs
+  // must exist before grlAddRow/grlOnCodeChange reference them by index.
+  _grlAllowedPairs = lines.map(ln => [
+    [{code:ln.code,  drawer_en:ln.account_name,  drawer_ar:ln.account_name_ar}],
+    [{code:ln.code1, drawer_en:ln.account_name1, drawer_ar:ln.account_name_ar1}],
+  ]);
+  const body=document.getElementById('grlDetailBody'); body.innerHTML='';
+  lines.forEach((ln, pairIndex) => {
+    const r1Debit=Number(ln.debit||0), r1Credit=Number(ln.credit||0);
+    const total = r1Debit + r1Credit;   // SINV line Total Incl. VAT (SAR)
+    const nature2Debit = (ln.nature1 || 'Credit') === 'Debit';
+    // Record 1 (normally the item's own Level Five account, Debit = Total).
+    // When the invoice's buyer has a control account configured, the
+    // backend (_apply_buyer_control_account in sales.py) replaces this
+    // with the buyer's own account instead -- so respect whichever side
+    // the backend actually computed here.
+    grlAddRow({code:ln.code,  account_name:ln.account_name,  account_name_ar:ln.account_name_ar,
+      control_account: ln.control_account, reference_code: ln.reference_code, debit: r1Debit, credit: r1Credit}, pairIndex, 0);
+    // Record 2 (Auto Code Selection account for this form): follows its own
+    // configured nature — Debit = Total if nature is Debit, else Credit = Total.
+    grlAddRow({code:ln.code1, account_name:ln.account_name1, account_name_ar:ln.account_name_ar1,
+      control_account: ln.control_account1,
+      debit: nature2Debit ? total : 0, credit: nature2Debit ? 0 : total}, pairIndex, 1);
+  });
+  grlRecalc();
+  return true;
+}
+
+/* Add mode, before anything is saved: preview the GRL records computed
+   from the selected SO's own line items (which the SINV's line items get
+   pulled from 1:1) -- matching how GRL No / Je No already preview. Every
+   SO line gets its own pair of records, not just the first. */
+function grlPreviewFromSO(soId){
+  if(!soId){
+    const body=document.getElementById('grlDetailBody');
+    if(body) body.innerHTML=_grlEmptyDetailHtml();
+    grlRecalc();
+    return;
+  }
+  fetch('/sales/orders/'+soId+'/grl-preview?form=sales_invoice').then(r=>r.json()).then(async d=>{
+    if(!d.ok || !d.lines || !d.lines.length) return;
+    await grlRenderAllRecords(d.lines, true);
+  }).catch(e=>console.error('GRL preview failed:', e));
+}
+
+/* Validates + builds the FormData Post & Save submits -- mirrors
+   saveSINV()'s own field collection exactly, plus the grl_narration field
+   Post needs. */
+async function _buildSINVFormData() {
+  const docNo = document.getElementById('sinv_doc_no').value;
+  if (!docNo || docNo === '...' || docNo === 'NEW' || docNo === '') {
+    alert(IS_AR ? 'جاري تحميل رقم المستند... يرجى الانتظار' : 'Loading document number... please wait');
+    await fetchDocNo();
+    const newDocNo = document.getElementById('sinv_doc_no').value;
+    if (!newDocNo || newDocNo === '...' || newDocNo === '') {
+      alert(IS_AR ? 'فشل في توليد رقم المستند' : 'Failed to generate document number');
+      return null;
+    }
+  }
+
+  const soId = document.getElementById('sinv_so_id').value;
+  if (!soId) {
+    document.getElementById('sinv_so_id').classList.add('required-field');
+    document.getElementById('sinv_so_id').focus();
+    document.getElementById('sinv_so_id').style.borderColor = '#ef4444';
+    alert(IS_AR ? 'الرجاء اختيار أمر البيع أولاً' : 'Please select a Sales Order first');
+    return null;
+  }
+  if (_soPullInProgress) {
+    alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات أمر البيع' : 'Please wait — still loading data from the Sales Order');
+    return null;
+  }
+
+  const fd = new FormData();
+  fd.append('csrf_token', CSRF);
+  fd.append('so_id', soId);
+  fd.append('dn_id', document.getElementById('sinv_dn_id')?.value || '');
+  fd.append('status', document.getElementById('sinv_status').value);
+  fd.append('kind', document.getElementById('sinv_kind').value);
+  fd.append('payment_method', document.getElementById('sinv_payment').value);
+  fd.append('owner_id', document.getElementById('sinv_owner').value || '');
+  fd.append('account_code', document.getElementById('sinv_account_code').value || '');
+  fd.append('bank_account_id', document.getElementById('sinv_bank_account').value || '');
+  fd.append('buyer_id', document.getElementById('sinv_buyer').value || '');
+  fd.append('buyer_ref_no', document.getElementById('sinv_buyer_ref')?.value || '');
+  fd.append('transaction_type', document.getElementById('sinv_transaction_type')?.value || '');
+  fd.append('invoice_category', document.getElementById('sinv_invoice_category')?.value || '');
+  fd.append('reference_invoices', document.getElementById('sinv_reference_invoices')?.value || '');
+  fd.append('remarks', document.getElementById('sinv_remarks')?.value || '');
+  fd.append('posting_date', document.getElementById('sinv_posting_date').value || '');
+  fd.append('delivery_date', document.getElementById('sinv_delivery_date').value || '');
+  fd.append('document_date', document.getElementById('sinv_doc_date').value || '');
+  fd.append('grl_narration', document.getElementById('grl_narration')?.value || '');
+
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+    fd.append('li_item_code[]', g('li_item_code'));
+    fd.append('li_item_desc[]', g('li_item_desc'));
+    fd.append('li_warehouse[]', g('li_warehouse'));
+    fd.append('li_uom[]', g('li_uom'));
+    fd.append('li_qty[]', g('li_qty'));
+    fd.append('li_rate[]', g('li_rate'));
+    fd.append('li_discount[]', g('li_discount'));
+    fd.append('li_freight[]', g('li_freight'));
+    fd.append('li_tax_code[]', g('li_tax_code'));
+  });
+
+  _attachments.forEach(f => fd.append('attachments', f));
+  return fd;
+}
+
+/* Post & Save: validate + save the Sales Invoice, then create/refresh its
+   GRL and linked Journal Entry -- ALL as one atomic server-side transaction
+   (see sinv_post_and_save() in sales.py). Works for a brand-new SINV or an
+   existing one, in a single request either way. Refuses to run twice on
+   an already-posted SINV (duplicate-posting prevention). */
+async function grlPost(){
+  if(_sinvPosted){
+    alert(IS_AR?'تم ترحيل فاتورة البيع هذه مسبقاً.':'This Sales Invoice has already been posted.');
+    return;
+  }
+  if(grlRowCount()===0){
+    alert(IS_AR?'لا توجد سجلات GRL لترحيلها. اختر أمر بيع معتمد أولاً.':'No GRL detail records to post. Select an approved Sales Order first.');
+    return;
+  }
+  if(!grlValidate()) return;
+
+  const fd = await _buildSINVFormData();
+  if(!fd) return;
+
+  const id = document.getElementById('sinv_id').value;
+  if(id) fd.set('id', id);
+  fd.set('grl_origion', document.getElementById('grl_origion')?.value || '');
+  fd.set('grl_posting_date', document.getElementById('grl_posting_date')?.value || '');
+  fd.set('grl_due_date', document.getElementById('grl_due_date')?.value || '');
+  document.querySelectorAll('#grlDetailBody tr[data-grl-row]').forEach(tr=>{
+    fd.append('d_code[]', tr.querySelector('.grl-code')?.value || '');
+    fd.append('d_control_account[]', tr.querySelector('.grl-control-val')?.value || 'No');
+    fd.append('d_reference_code[]', tr.querySelector('.grl-ref')?.value || '');
+    fd.append('d_account_name[]', tr.querySelector('.grl-en')?.value || '');
+    fd.append('d_account_name_ar[]', tr.querySelector('.grl-ar')?.value || '');
+    fd.append('d_debit[]', tr.querySelector('.grl-debit')?.value || '0');
+    fd.append('d_credit[]', tr.querySelector('.grl-credit')?.value || '0');
+    fd.append('d_narration[]', tr.querySelector('.grl-narr')?.value || '');
+  });
+
+  try {
+    const res = await fetch('/sales/invoices/post-and-save', { method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd });
+    const data = await res.json();
+    if(data.ok){
+      document.getElementById('sinv_id').value = data.id;
+      document.getElementById('sinv_doc_no').value = data.doc_no || '';
+      document.getElementById('sinvDocBadge').textContent = data.doc_no || '';
+      if(data.grl && data.grl.grl_no){ const g=document.getElementById('grl_no'); if(g) g.value=data.grl.grl_no; }
+      if(data.grl && data.grl.je_no){ const g=document.getElementById('grl_je_no'); if(g) g.value=data.grl.je_no; }
+      _sinvPosted = true;
+      grlUpdatePostBtnState();
+      if(_sinvModal) _sinvModal.hide();
+      loadData();
+      alert(IS_AR?'تم الترحيل والحفظ بنجاح':'Posted & saved successfully');
+    } else {
+      alert(data.error || (IS_AR?'فشل الترحيل':'Post failed'));
+    }
+  } catch(e){
+    console.error('Post & Save failed:', e);
+    alert(IS_AR?'خطأ في الشبكة':'Network error');
+  }
+}
+
+/* Not-yet-posted SINV (opened in Edit mode): preview the GRL records from
+   its own already-saved line items -- mirrors grlPreviewFromSO(), used
+   when adding, so Post & Save has something to submit either way. Every
+   SINV line gets its own pair of records, not just the first. */
+async function grlPreviewFromSINV(sinvId){
+  try{
+    const bd = await fetch('/sales/invoices/'+sinvId+'/grl-build').then(r=>r.json());
+    if(!bd.ok || !bd.lines || !bd.lines.length) return;
+    await grlRenderAllRecords(bd.lines, true);
+  }catch(e){ console.error('GRL preview (edit) failed:', e); }
+}
+
+/* Load the saved GRL master (+ detail if already posted) for an existing SINV. */
+function grlLoad(sinvId){
+  if(!sinvId){ grlReset(); grlSyncMaster(); return; }
+  fetch('/sales/invoices/'+sinvId+'/grl').then(r=>r.json()).then(async d=>{
+    if(!d.ok || !d.grl){ grlReset(); grlSyncMaster(); return; }
+    const m=d.grl, g=id=>document.getElementById(id);
+    if(g('grl_no')) g('grl_no').value = m.grl_no || '';
+    if(g('grl_je_no')) g('grl_je_no').value = m.je_no || '';
+    if(g('grl_origion')) g('grl_origion').value = m.origion || '';
+    if(g('grl_posting_date')) g('grl_posting_date').value = m.posting_date || '';
+    if(g('grl_due_date')) g('grl_due_date').value = m.due_date || '';
+    if(g('grl_document_date')) g('grl_document_date').value = m.document_date || '';
+    if(g('grl_narration')) g('grl_narration').value = m.narration || '';
+    // details render into the editable grid (via grlAddRow) -- saved rows
+    // come in pairs (record 1 = item account, record 2 = Auto Code
+    // Selection account), one pair per invoice line item.
+    const rows=m.details||[];
+    if(rows.length){
+      // Fetch each line's current mapped accounts so every row's dropdown
+      // is constrained (falls back to the row's own saved code/names if the
+      // line count no longer lines up, e.g. lines changed after posting).
+      fetch('/sales/invoices/'+sinvId+'/grl-build').then(r=>r.json()).then(bd=>{
+        const lines = (bd.ok && bd.lines) ? bd.lines : [];
+        const pairCount = Math.ceil(rows.length / 2);
+        _grlAllowedPairs = [];
+        for (let p = 0; p < pairCount; p++) {
+          const first  = rows[p*2];
+          const second = rows[p*2+1];
+          const ln = lines[p] || {};
+          _grlAllowedPairs.push([
+            [{code:(first?first.code:ln.code),   drawer_en:(first?first.account_name:ln.account_name),   drawer_ar:(first?first.account_name_ar:ln.account_name_ar)}],
+            [{code:(second?second.code:ln.code1), drawer_en:(second?second.account_name:ln.account_name1), drawer_ar:(second?second.account_name_ar:ln.account_name_ar1)}],
+          ]);
+        }
+        const body=g('grlDetailBody'); if(body) body.innerHTML='';
+        rows.forEach((r, i) => {
+          grlAddRow({code:r.code, reference_code:r.reference_code, account_name:r.account_name, account_name_ar:r.account_name_ar,
+                     control_account:r.control_account, debit:r.debit, credit:r.credit, narration:r.narration},
+                     Math.floor(i/2), i % 2);
+        });
+        grlRecalc();
+      }).catch(e=>console.error('GRL allowed-accounts load failed:', e));
+    } else {
+      // Not posted yet (empty shell, m.id is null): reset, then preview
+      // the next GRL No / Je No and the two records this SINV would post,
+      // same as Add mode does before anything is saved.
+      grlReset(); grlSyncMaster();
+      if(g('grl_narration')) g('grl_narration').value = m.narration || '';
+      grlPreviewNextNos();
+      await grlPreviewFromSINV(sinvId);
+    }
+  }).catch(e=>console.error('GRL load failed:', e));
+}
+</script>
+{% endblock %}

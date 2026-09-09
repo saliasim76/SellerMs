@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}أنواع البدلات{% else %}Allowance Types{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}أنواع البدلات{% else %}Allowance Types{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}أنواع البدلات{% else %}Allowance Types{% endif %}</h2>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-green" data-bs-toggle="modal" data-bs-target="#atModal" onclick="openAdd()"><i class="fas fa-plus"></i></button>
+      {% endif %}
+      <a class="tool-btn" href="/io/allowance-types/export?fmt=xlsx" style="text-decoration:none;" title="{% if ar %}تصدير{% else %}Export{% endif %}"><i class="fas fa-file-export"></i></a>
+      <a class="tool-btn" href="/io/allowance-types/template?fmt=xlsx" style="text-decoration:none;" title="Template"><i class="fas fa-file-download"></i></a>
+      {% if current_user.is_admin() %}
+      <button type="button" class="tool-btn" title="{% if ar %}استيراد{% else %}Import{% endif %}" onclick="document.getElementById('atImp').click()"><i class="fas fa-file-import"></i></button>
+      <input type="file" id="atImp" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="ioImport(this,'allowance-types')">
+      {% endif %}
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" class="search-input" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="filterRows(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>{% if ar %}الكود{% else %}Code{% endif %}</th>
+          <th>{% if ar %}الاسم (English){% else %}Name (English){% endif %}</th>
+          <th>{% if ar %}الاسم (Arabic){% else %}Name (Arabic){% endif %}</th>
+          <th>{% if ar %}الوصف{% else %}Description{% endif %}</th>
+          <th style="width:90px">{% if ar %}نشيط{% else %}Active{% endif %}</th>
+          {% if current_user.is_admin() %}
+          <th style="width:100px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in types %}
+        <tr class="data-row">
+          <td>{{ loop.index }}</td>
+          <td><span class="code-badge">{{ t.allowance_code }}</span></td>
+          <td class="fw-semibold">{{ t.allowance_name_en }}</td>
+          <td dir="rtl" style="text-align:right">{{ t.allowance_name_ar or '—' }}</td>
+          <td style="color:#6b7280;font-size:12px">{{ t.description or '—' }}</td>
+          <td>
+            {% if t.is_active %}
+            <span class="st-active">{% if ar %}نشيط{% else %}Active{% endif %}</span>
+            {% else %}
+            <span class="st-inactive">{% if ar %}غير نشيط{% else %}Inactive{% endif %}</span>
+            {% endif %}
+          </td>
+          {% if current_user.is_admin() %}
+          <td class="text-center">
+            <button class="action-btn action-btn-edit"
+                    onclick="openEdit({{ t.id }},'{{ t.allowance_code }}','{{ t.allowance_name_en|e }}','{{ t.allowance_name_ar|e }}','{{ t.description|e }}',{{ 'true' if t.is_active else 'false' }})">
+              <i class="fas fa-pencil-alt"></i>
+            </button>
+            <form method="POST" action="{{ url_for('lookups.delete_allowance_type', id=t.id) }}" class="d-inline"
+                  onsubmit="return confirm('{% if ar %}حذف هذا النوع؟{% else %}Delete this type?{% endif %}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="action-btn action-btn-delete"><i class="fas fa-trash"></i></button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-row"><i class="fas fa-tags fa-2x mb-2 d-block"></i>{% if ar %}لا توجد أنواع بدلات{% else %}No allowance types yet{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count">{{ types|length }} {% if ar %}نوع{% else %}type(s){% endif %}</span>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="atModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="atModalTitle">{% if ar %}إضافة نوع بدل{% else %}Add Allowance Type{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="atForm" method="POST" action="{{ url_for('lookups.add_allowance_type') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{% if ar %}الكود{% else %}Code{% endif %}</label>
+            <input type="text" name="allowance_code" id="at_code" class="form-control" readonly
+                   placeholder="{% if ar %}تلقائي{% else %}Auto{% endif %}"
+                   style="text-transform:uppercase;background:#f8fafc;color:#15803d;font-weight:700;">
+          </div>
+
+          <div class="pl-row mb-3">
+            <div class="pl-field-wrap">
+              <div class="pl-labels"><span class="pl-label-en" style="direction:ltr;text-align:left;display:block;">
+                {% if ar %}الاسم (English){% else %}Name (English){% endif %} <span style="color:#ef4444">*</span>
+              </span></div>
+              <div class="pl-en-wrap">
+                <input type="text" name="allowance_name_en" id="at_en" class="pl-input pl-input-en" dir="ltr" required
+                       placeholder="e.g. Housing" oninput="atTrans(this,'at_ar','en')">
+                {% if not ar %}<button type="button" class="pl-retranslate pl-retranslate-en" onclick="atRetrans('at_ar','at_en','ar')"><i class="fas fa-sync-alt"></i></button>{% endif %}
+              </div>
+            </div>
+            <div class="pl-field-wrap">
+              <div class="pl-labels pl-labels-ar"><span class="pl-label-ar" style="direction:rtl;text-align:right;display:block;">
+                {% if ar %}الاسم{% else %}الاسم (Arabic){% endif %}
+              </span></div>
+              <div class="pl-ar-wrap">
+                <input type="text" name="allowance_name_ar" id="at_ar" class="pl-input pl-input-ar" dir="rtl"
+                       placeholder="{% if ar %}مثال: بدل السكن{% else %}بدل السكن{% endif %}" oninput="atTrans(this,'at_en','ar')">
+                <span class="pl-spin" id="at_spin"></span>
+                {% if ar %}<button type="button" class="pl-retranslate pl-retranslate-ar" onclick="atRetrans('at_en','at_ar','en')"><i class="fas fa-sync-alt"></i></button>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{% if ar %}الوصف{% else %}Description{% endif %}</label>
+            <textarea name="description" id="at_desc" class="form-control" rows="2"
+                      dir="{% if ar %}rtl{% else %}ltr{% endif %}"></textarea>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input type="checkbox" name="is_active" id="at_active" class="form-check-input" checked value="on">
+            <label for="at_active" class="form-check-label fw-semibold">{% if ar %}نشيط{% else %}Active{% endif %}</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" class="pl-footer-btn pl-btn-save" onclick="submitAtForm()">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TR = '{{ url_for("sellers.translate_text") }}';
+const CSRF = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if ar else 'false' }};
+let _atTimer = null;
+
+function openAdd() {
+  document.getElementById('atModalTitle').textContent = IS_AR ? 'إضافة نوع بدل' : 'Add Allowance Type';
+  document.getElementById('atForm').action = '{{ url_for("lookups.add_allowance_type") }}';
+  document.getElementById('atForm').reset();
+  document.getElementById('at_active').checked = true;
+  document.getElementById('at_code').value = IS_AR ? '...' : '...';
+  fetch('{{ url_for("lookups.allowance_type_next_code") }}')
+    .then(r => r.json())
+    .then(d => { document.getElementById('at_code').value = d.allowance_code || ''; })
+    .catch(() => { document.getElementById('at_code').value = ''; });
+}
+
+function openEdit(id, code, nameEn, nameAr, desc, isActive) {
+  document.getElementById('atModalTitle').textContent = IS_AR ? 'تعديل نوع البدل' : 'Edit Allowance Type';
+  document.getElementById('atForm').action = `/allowance-types/${id}/edit`;
+  document.getElementById('at_code').value = code;
+  document.getElementById('at_en').value = nameEn;
+  document.getElementById('at_ar').value = nameAr;
+  document.getElementById('at_desc').value = desc;
+  document.getElementById('at_active').checked = isActive;
+  new bootstrap.Modal(document.getElementById('atModal')).show();
+}
+
+function atTrans(src, targetId, srcLang) {
+  if (!IS_AR && srcLang === 'ar') return;
+  if ( IS_AR && srcLang === 'en') return;
+  clearTimeout(_atTimer);
+  const text = src.value.trim(), tgt = document.getElementById(targetId);
+  if (!text) { if (tgt) tgt.value = ''; return; }
+  const tgtLang = srcLang === 'en' ? 'ar' : 'en';
+  const spin = document.getElementById('at_spin');
+  if (spin) spin.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:11px;color:#9ca3af"></i>';
+  _atTimer = setTimeout(() => {
+    fetch(TR, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+                body: JSON.stringify({text, direction:`${srcLang}|${tgtLang}`}) })
+    .then(r=>r.json()).then(d=>{ if(d.translated&&tgt) tgt.value=d.translated; if(spin) spin.innerHTML=''; })
+    .catch(()=>{ if(spin) spin.innerHTML=''; });
+  }, 700);
+}
+function atRetrans(targetId, srcId, tgtLang) {
+  const src = document.getElementById(srcId), tgt = document.getElementById(targetId);
+  const text = src ? src.value.trim() : '';
+  if (!text || !tgt) return;
+  const srcLang = tgtLang === 'ar' ? 'en' : 'ar';
+  fetch(TR, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+              body: JSON.stringify({text, direction:`${srcLang}|${tgtLang}`}) })
+  .then(r=>r.json()).then(d=>{ if(d.translated) tgt.value=d.translated; });
+}
+function submitAtForm() {
+  const codeEl = document.getElementById('at_code');
+  if (codeEl.value === '...' || codeEl.value === '') {
+    alert(IS_AR ? 'جاري تحميل الكود... يرجى الانتظار' : 'Loading code... please wait');
+    return;
+  }
+  if (validateForm(document.getElementById('atForm'))) document.getElementById('atForm').submit();
+}
+function filterRows(q) {
+  document.querySelectorAll('.data-row').forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

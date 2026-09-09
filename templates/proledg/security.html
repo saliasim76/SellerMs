@@ -1,0 +1,154 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+{% from "proledg/_components.html" import checklist, faq, cta_banner %}
+
+{% block title %}Security — Proledge{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-center">
+      <div class="breadcrumb"><a href="{{ url_for('proledg.home') }}">Home</a> &rarr; Security</div>
+      <h1>Your numbers tie out — and stay protected</h1>
+      <p class="hero-sub">Proledge is built with audit-grade accounting discipline and security tuned for real small-business risk — a single locked posting engine that always reconciles, paired with two-factor authentication, session hardening and managed cloud backups.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight">
+  <div class="container">
+    <div class="grid grid-4">
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('shield-check') }}</div><h3>Watertight by design</h3><p>One locked posting engine; cancelled &amp; reversal vouchers are always excluded, so every report reconciles to the same number.</p></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('lock') }}</div><h3>2FA &amp; session hardening</h3><p>TOTP two-factor auth, short-lived sessions, no-cache headers and PDF-download lockdown.</p></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('cloud') }}</div><h3>Cloud-hosted &amp; backed up</h3><p>Enterprise cloud infrastructure with managed backups and secure, short-lived document links.</p></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('user') }}</div><h3>Granular permissions</h3><p>Per-user, per-form access plus optional N-of-M approval workflows before a voucher posts.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="split-row flush">
+      <div class="split-copy">
+        <h2>A single locked engine no module can route around</h2>
+        <p>Every voucher in Proledge — sales, purchases, banking, inventory moves, production, payroll — posts through one locked 20-parameter double-entry engine. No screen and no module gets its own back door, so the books can't drift out of balance.</p>
+        <p>A universal exclusion rule means cancelled and reversal vouchers drop out of every report, but the audit trail stays intact. The result: your Trial Balance, master balances and every report reconcile to the same number.</p>
+        {{ checklist([
+          "One locked 20-parameter posting engine for every voucher type",
+          "Cancelled & reversal vouchers excluded universally — never partially",
+          "Reversible, contra-based cancellation keeps the audit trail whole",
+          "Trial Balance, master balances and reports tie to one number",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-row"><span class="mock-label">Sales Invoice &middot; SI-2041</span><span class="mock-status ok">Reconciled ✓</span></div>
+          <div class="mock-row"><span class="mock-label">Sales Invoice &middot; SI-2042 (cancelled)</span><span class="mock-status muted">Excluded</span></div>
+          <div class="mock-row"><span class="mock-label">Reversal JV &middot; RV-118</span><span class="mock-status muted">Excluded</span></div>
+          <div class="mock-row"><span class="mock-label">Bank Receipt &middot; BR-119</span><span class="mock-status ok">Reconciled ✓</span></div>
+          <div class="mock-row"><span class="mock-label">Production Order &middot; PO-57</span><span class="mock-status ok">Reconciled ✓</span></div>
+          <div class="mock-row highlight"><span class="mock-label">Trial Balance</span><span class="mock-status ok">Reconciled ✓</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="split-row reverse flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('lock') }} ACCOUNT &amp; DEVICE SECURITY</div>
+        <h2>Designed around the lost-laptop threat</h2>
+        <p>The realistic risk for a small business isn't a nation-state — it's a laptop left in a taxi with a session still open. Proledge is built for exactly that. Turn on TOTP two-factor auth with any authenticator app, and sessions stay short — about four hours — so an abandoned device doesn't stay logged in for long.</p>
+        <p>Aggressive no-cache headers mean hitting the browser's Back button after sign-out won't resurrect a financial screen, and logins are session-only. Invoices and documents open inline as view-only PDFs, with downloads locked down under owner control. Enterprise teams can also require single sign-on with Microsoft Entra — so access follows your own identity provider, and a departing employee loses access the moment they're off-boarded, with no separate password to revoke.</p>
+        {{ checklist([
+          "TOTP 2FA via any standard authenticator app",
+          "Short ~4-hour sessions, session-only login",
+          "Aggressive no-cache headers — Back button reveals nothing",
+          "Inline PDF viewing with owner-controlled download lockdown",
+          "Granular per-user, per-form permissions + optional approvals",
+          "Optional single sign-on (SSO) with Microsoft Entra for Enterprise",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-panel-title">Account &amp; device security</div>
+          <div class="mock-row"><span class="mock-label">Authenticator code &middot; TOTP</span><span class="mock-status ok">Verified ✓</span></div>
+          <div class="mock-row"><span class="mock-label">Session lifetime</span><span class="mock-sub">4 hours</span></div>
+          <div class="mock-row"><span class="mock-label">Browser back after sign-out</span><span class="mock-status muted">No cached pages</span></div>
+          <div class="mock-row"><span class="mock-label">Invoice PDF</span><span class="mock-status muted">View-only</span></div>
+          <div class="mock-row"><span class="mock-label">Download lockdown</span><span class="mock-status muted">Owner-controlled</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="split-row flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('cloud') }} INFRASTRUCTURE &amp; DATA</div>
+        <h2>Hosted, backed up and isolated per tenant</h2>
+        <p>Proledge is a cloud-hosted SaaS running on enterprise cloud infrastructure with managed backups, so you're not responsible for patching a server or scheduling your own database dumps. Attachments and source documents are stored with short-lived secure links and long-term retention.</p>
+        <p>Every company's data is isolated per tenant: each company keeps its own books, currency and chart of accounts, and screens and reports are scoped to the company you're working in.</p>
+        {{ checklist([
+          "Enterprise cloud infrastructure with managed database backups",
+          "Managed backups — no manual database dumps to schedule",
+          "Attachments via short-lived secure links, long-term retention",
+          "Each company's data isolated per tenant",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-row"><span class="mock-label">{{ icon('building') }} Northwind Trading</span><span class="mock-status muted">Locked</span></div>
+          <div class="mock-row"><span class="mock-label">{{ icon('building') }} Apex Manufacturing</span><span class="mock-status muted">Locked</span></div>
+          <div class="mock-row"><span class="mock-label">{{ icon('cloud') }} Managed backup</span><span class="mock-status ok">Nightly ✓</span></div>
+          <div class="mock-row"><span class="mock-label">{{ icon('paperclip') }} Attachment link</span><span class="mock-status muted">Short-lived</span></div>
+          <div class="mock-row highlight"><span class="mock-label">Data isolation enforced</span><span class="mock-status ok">Enforced ✓</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="callout">
+      <div class="icon-tile">{{ icon('award') }}</div>
+      <h3>No badges we haven't earned</h3>
+      <p>We don't paste certification logos onto this page that we haven't actually earned. Rather than imply blanket compliance, we'd rather be straight with you: we walk security-conscious teams through our controls in detail on a call. <a href="{{ url_for('proledg.contact') }}">Talk to our team &rarr;</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('file') }} SECURITY FAQ</div>
+      <h2>Questions security-conscious teams ask</h2>
+    </div>
+    {{ faq([
+      ("Where is my data hosted?", "Proledge runs on enterprise-grade cloud infrastructure with regional hosting options, managed patching, and encrypted storage at rest and in transit."),
+      ("Are there backups?", "Yes — managed, automated backups run on a regular schedule with no manual database dumps for you to maintain, so your books are always recoverable."),
+      ("Do you support 2FA?", "Yes. Every account can turn on TOTP two-factor authentication with any standard authenticator app, and Enterprise plans can require SSO with Microsoft Entra."),
+      ("Who can see my data across companies?", "Each company's books, currency and chart of accounts are isolated per tenant. A user only sees the companies they've explicitly been granted access to."),
+      ("Can I restrict what users do?", "Yes — permissions are granular down to the per-user, per-form level, with optional N-of-M approval workflows before any voucher can post."),
+    ]) }}
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    {{ cta_banner(
+      "Want to dig into the details?",
+      "We're happy to walk your team through Proledge's accounting integrity and security controls — then you can start a free trial whenever you're ready.",
+      "Talk to our team", url_for('proledg.contact'),
+      "Start free trial", url_for('proledg.contact')
+    ) }}
+  </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}البدلات{% else %}Employee Allowances{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('employees.list_employees') }}">{% if ar %}الموظفون{% else %}Employees{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}البدلات{% else %}Allowances{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}البدلات{% else %}Employee Allowances{% endif %}</h2>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-green" data-bs-toggle="modal" data-bs-target="#addModal"
+              title="{% if ar %}إضافة بدل{% else %}Add Allowance{% endif %}">
+        <i class="fas fa-plus"></i>
+      </button>
+      {% endif %}
+      <a href="{{ url_for('employees.list_employees') }}" class="tool-btn"
+         title="{% if ar %}رجوع{% else %}Back{% endif %}">
+        <i class="fas fa-arrow-left"></i>
+      </a>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="srch" class="search-input"
+               placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}"
+               oninput="filterRows(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead>
+        <tr>
+          <th style="width:50px">#</th>
+          <th>{% if ar %}كود الموظف{% else %}Employee Code{% endif %}</th>
+          <th>{% if ar %}اسم الموظف{% else %}Employee Name{% endif %}</th>
+          <th>{% if ar %}اسم البدل{% else %}Allowance Name{% endif %}</th>
+          <th>{% if ar %}الاسم (Arabic){% else %}Name (Arabic){% endif %}</th>
+          <th style="width:130px">{% if ar %}المبلغ{% else %}Amount{% endif %}</th>
+          {% if current_user.is_admin() %}
+          <th class="text-center" style="width:100px">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="data-row">
+          <td>{{ loop.index }}</td>
+          <td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-size:11px;padding:3px 8px;border-radius:4px;">
+            {{ row.employee.employee_code }}</span></td>
+          <td class="fw-semibold">
+            {% if ar and row.employee.name_ar %}{{ row.employee.name_ar }}{% else %}{{ row.employee.name }}{% endif %}
+          </td>
+          <td>{{ row.allowance.name }}</td>
+          <td dir="rtl" style="text-align:right">{{ row.allowance.name_ar or '—' }}</td>
+          <td>
+            <span style="font-weight:600;color:#15803d;">
+              {{ '{:,.2f}'.format(row.allowance.amount) }}
+            </span>
+          </td>
+          {% if current_user.is_admin() %}
+          <td class="text-center">
+            <button class="action-btn action-btn-edit"
+                    onclick="openEdit({{ row.allowance.id }},
+                                     '{{ row.allowance.name|e }}',
+                                     '{{ row.allowance.name_ar|e }}',
+                                     {{ row.allowance.amount }},
+                                     {{ row.employee.id }})">
+              <i class="fas fa-pencil-alt"></i>
+            </button>
+            <form method="POST"
+                  action="{{ url_for('lookups.delete_allowance', id=row.allowance.id) }}"
+                  class="d-inline"
+                  onsubmit="return confirm('{% if ar %}حذف هذا البدل؟{% else %}Delete this allowance?{% endif %}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="action-btn action-btn-delete">
+                <i class="fas fa-trash"></i>
+              </button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="empty-row">
+            <i class="fas fa-list-ul fa-2x mb-2 d-block"></i>
+            {% if ar %}لا توجد بدلات مضافة{% else %}No allowances added yet{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="proledg-pagination">
+    <span class="page-count">
+      {{ rows|length }} {% if ar %}بدل{% else %}allowance(s){% endif %}
+      &nbsp;|&nbsp;
+      {% if ar %}الإجمالي:{% else %}Total:{% endif %}
+      <strong style="color:#15803d">
+        {{ '{:,.2f}'.format(rows|sum(attribute='allowance.amount')) }}
+      </strong>
+    </span>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ════════════════════════════════════════════ #}
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="modalTitle">
+          {% if ar %}إضافة بدل{% else %}Add Allowance{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="allowForm" method="POST" action="{{ url_for('lookups.add_allowance') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          {# Employee dropdown #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              {% if ar %}الموظف{% else %}Employee{% endif %}<span style="color:#ef4444">*</span>
+            </label>
+            <select name="employee_id" id="a_emp" class="form-select" required
+                    dir="{% if ar %}rtl{% else %}ltr{% endif %}">
+              <option value="">{% if ar %}-- اختر موظف --{% else %}-- Select Employee --{% endif %}</option>
+              {% for emp in employees %}
+              <option value="{{ emp.id }}">
+                {{ emp.employee_code }} —
+                {% if ar and emp.name_ar %}{{ emp.name_ar }}{% else %}{{ emp.name }}{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {# Bilingual name row #}
+          <div class="pl-row mb-3">
+            <div class="pl-field-wrap">
+              <div class="pl-labels">
+                <span class="pl-label-en" style="direction:ltr;text-align:left;display:block;">
+                  {% if ar %}اسم البدل (English){% else %}Allowance Name{% endif %}
+                  <span style="color:#ef4444">*</span>
+                </span>
+              </div>
+              <div class="pl-en-wrap">
+                <input type="text" name="name" id="a_en" class="pl-input pl-input-en" dir="ltr"
+                       required placeholder="{% if ar %}Name{% else %}e.g. Housing{% endif %}"
+                       oninput="aTranslate(this,'a_ar','en')">
+                {% if not ar %}
+                <button type="button" class="pl-retranslate pl-retranslate-en"
+                        onclick="aRetrans('a_ar','a_en','ar')" title="Translate EN → AR">
+                  <i class="fas fa-sync-alt"></i>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+            <div class="pl-field-wrap">
+              <div class="pl-labels pl-labels-ar">
+                <span class="pl-label-ar" style="direction:rtl;text-align:right;display:block;">
+                  {% if ar %}اسم البدل{% else %}اسم البدل (Arabic){% endif %}
+                </span>
+              </div>
+              <div class="pl-ar-wrap">
+                <input type="text" name="name_ar" id="a_ar" class="pl-input pl-input-ar" dir="rtl"
+                       placeholder="{% if ar %}مثال: بدل السكن{% else %}مثال: بدل السكن{% endif %}"
+                       oninput="aTranslate(this,'a_en','ar')">
+                <span class="pl-spin" id="a_spin"></span>
+                {% if ar %}
+                <button type="button" class="pl-retranslate pl-retranslate-ar"
+                        onclick="aRetrans('a_en','a_ar','en')" title="ترجمة AR → EN">
+                  <i class="fas fa-sync-alt"></i>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# Amount #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              {% if ar %}المبلغ{% else %}Amount{% endif %}<span style="color:#ef4444">*</span>
+            </label>
+            <input type="number" name="amount" id="a_amount" class="form-control"
+                   step="0.01" min="0" required placeholder="0.00"
+                   dir="{% if ar %}rtl{% else %}ltr{% endif %}">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" class="pl-footer-btn pl-btn-save" onclick="if(validateForm(document.getElementById('allowForm')))submitForm()">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TRANSLATE_URL = '{{ url_for("sellers.translate_text") }}';
+const CSRF          = '{{ csrf_token() }}';
+const IS_AR         = {{ 'true' if ar else 'false' }};
+let _aTimer = null;
+
+/* ── Auto-translate (primary side only) ── */
+function aTranslate(src, targetId, srcLang) {
+  if (!IS_AR && srcLang === 'ar') return;  // EN portal: ignore AR keystrokes
+  if ( IS_AR && srcLang === 'en') return;  // AR portal: ignore EN keystrokes
+  clearTimeout(_aTimer);
+  const text = src.value.trim(), tgt = document.getElementById(targetId);
+  if (!text) { if (tgt) tgt.value = ''; return; }
+  const spin = document.getElementById('a_spin');
+  if (spin) spin.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:11px;color:#9ca3af"></i>';
+  _aTimer = setTimeout(() => {
+    const tgtLang = srcLang === 'en' ? 'ar' : 'en';
+    fetch(TRANSLATE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ text, direction: `${srcLang}|${tgtLang}` })
+    }).then(r => r.json()).then(d => {
+      if (d.translated && tgt) tgt.value = d.translated;
+      if (spin) spin.innerHTML = '';
+    }).catch(() => { if (spin) spin.innerHTML = ''; });
+  }, 700);
+}
+
+function aRetrans(targetId, srcId, tgtLang) {
+  const src = document.getElementById(srcId), tgt = document.getElementById(targetId);
+  const text = src ? src.value.trim() : '';
+  if (!text || !tgt) return;
+  const srcLang = tgtLang === 'ar' ? 'en' : 'ar';
+  fetch(TRANSLATE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ text, direction: `${srcLang}|${tgtLang}` })
+  }).then(r => r.json()).then(d => { if (d.translated) tgt.value = d.translated; });
+}
+
+/* ── Open edit modal ── */
+function openEdit(id, name, nameAr, amount, empId) {
+  document.getElementById('modalTitle').textContent =
+    IS_AR ? 'تعديل البدل' : 'Edit Allowance';
+  document.getElementById('allowForm').action = `/allowances/${id}/edit`;
+  document.getElementById('a_emp').value  = empId;
+  document.getElementById('a_en').value   = name;
+  document.getElementById('a_ar').value   = nameAr;
+  document.getElementById('a_amount').value = amount;
+  new bootstrap.Modal(document.getElementById('addModal')).show();
+}
+
+/* ── Reset form on Add click ── */
+document.querySelector('[data-bs-target="#addModal"]')?.addEventListener('click', () => {
+  document.getElementById('modalTitle').textContent =
+    IS_AR ? 'إضافة بدل' : 'Add Allowance';
+  document.getElementById('allowForm').action = '{{ url_for("lookups.add_allowance") }}';
+  document.getElementById('allowForm').reset();
+});
+
+function submitForm() { document.getElementById('allowForm').submit(); }
+
+/* ── Table search ── */
+function filterRows(q) {
+  document.querySelectorAll('.data-row').forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

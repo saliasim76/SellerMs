@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}نسخ احتياطي واستعادة قاعدة البيانات{% else %}Database Backup & Restore{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}نسخ احتياطي واستعادة قاعدة البيانات{% else %}Database Backup & Restore{% endif %}</li>
+{% endblock %}
+{% block content %}
+<style>
+  .db-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px;max-width:720px;}
+  .db-card-hdr{padding:14px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;}
+  .db-card-hdr i{font-size:16px;}
+  .db-card-hdr h3{margin:0;font-size:14px;font-weight:700;color:#1e293b;}
+  .db-card-body{padding:18px;}
+  .db-card-body p{font-size:13px;color:#64748b;margin:0 0 14px;}
+  .db-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .15s;}
+  .db-btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;}
+  .db-btn-primary:hover{filter:brightness(1.08);}
+  .db-btn-danger{background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;}
+  .db-btn-danger:hover{filter:brightness(1.08);}
+  .db-btn:disabled{opacity:.6;cursor:not-allowed;}
+  .db-danger-card{border-color:#fecaca;}
+  .db-danger-card .db-card-hdr{background:#fef2f2;border-bottom-color:#fecaca;}
+  .db-warn-box{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:12.5px;color:#92400e;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start;}
+  .db-warn-box i{margin-top:2px;flex-shrink:0;}
+  .db-file-row{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .db-file-row input[type=file]{flex:1;min-width:220px;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:12.5px;}
+  .db-status{font-size:12.5px;margin-top:12px;padding:10px 12px;border-radius:8px;display:none;}
+  .db-status.ok{background:#dcfce7;color:#15803d;display:block;}
+  .db-status.err{background:#fee2e2;color:#b91c1c;display:block;}
+  .db-status.busy{background:#eff6ff;color:#1d4ed8;display:block;}
+</style>
+
+<div style="padding:8px 4px 16px;">
+  <h2 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:4px;">{% if ar %}نسخ احتياطي واستعادة قاعدة البيانات{% else %}Database Backup & Restore{% endif %}</h2>
+  <p style="font-size:13px;color:#64748b;margin:0;">{% if ar %}تنزيل نسخة كاملة من قاعدة البيانات في ملف واحد، أو استعادة قاعدة البيانات من ملف سابق.{% else %}Download a complete copy of the database as a single file, or restore the database from a previous backup.{% endif %}</p>
+</div>
+
+{# ── Backup ── #}
+<div class="db-card">
+  <div class="db-card-hdr"><i class="fas fa-database text-primary"></i><h3>{% if ar %}نسخ احتياطي{% else %}Backup{% endif %}</h3></div>
+  <div class="db-card-body">
+    <p>{% if ar %}يقوم بإنشاء ملف واحد (JSON) يحتوي على بنية جميع الجداول وبياناتها بالكامل. احتفظ بهذا الملف في مكان آمن. يمكن استعادته لاحقاً من هذه الصفحة فقط.{% else %}Creates a single JSON file containing the structure and full data of every table. Keep this file somewhere safe. It can only be restored back from this page.{% endif %}</p>
+    <button type="button" class="db-btn db-btn-primary" id="backupBtn" onclick="downloadBackup()">
+      <i class="fas fa-download"></i>
+      <span id="backupBtnText">{% if ar %}تنزيل نسخة احتياطية{% else %}Download Backup{% endif %}</span>
+    </button>
+    <div id="backupStatus" class="db-status"></div>
+    <hr style="border-color:#e2e8f0;margin:18px 0;">
+    <p>{% if ar %}يقوم بإنشاء ملف .sql قياسي (بنية + بيانات كاملة) يمكن استيراده مباشرة عبر phpMyAdmin أو أمر mysql، دون الحاجة لهذا التطبيق.{% else %}Creates a standard .sql file (full structure + data) that can be imported directly via phpMyAdmin's Import tab or the mysql command line -- no need for this app to read it back.{% endif %}</p>
+    <button type="button" class="db-btn db-btn-primary" id="backupSqlBtn" onclick="downloadBackupSql()">
+      <i class="fas fa-file-code"></i>
+      <span id="backupSqlBtnText">{% if ar %}تنزيل نسخة SQL{% else %}Download SQL Backup{% endif %}</span>
+    </button>
+    <div id="backupSqlStatus" class="db-status"></div>
+  </div>
+</div>
+
+{# ── Restore ── #}
+<div class="db-card db-danger-card">
+  <div class="db-card-hdr"><i class="fas fa-exclamation-triangle text-danger"></i><h3>{% if ar %}استعادة{% else %}Restore{% endif %}</h3></div>
+  <div class="db-card-body">
+    <div class="db-warn-box">
+      <i class="fas fa-triangle-exclamation"></i>
+      <div>
+        {% if ar %}
+        <strong>هذا إجراء خطير.</strong> ستحل بيانات الملف المرفوع محل قاعدة البيانات الحالية بالكامل — كل شيء تم إدخاله بعد إنشاء هذه النسخة الاحتياطية سيُفقد. يقوم النظام تلقائياً بحفظ نسخة أمان من قاعدة البيانات الحالية على الخادم قبل المتابعة، لكن يجب استخدام هذا الإجراء بحذر شديد.
+        {% else %}
+        <strong>This is a destructive action.</strong> The uploaded file will completely replace the current database -- anything entered since that backup was taken will be lost. The system automatically saves a safety copy of the current database on the server before proceeding, but use this with great care.
+        {% endif %}
+      </div>
+    </div>
+    <div class="db-file-row">
+      <input type="file" id="restoreFile" accept=".json">
+    </div>
+    <button type="button" class="db-btn db-btn-danger" id="restoreBtn" onclick="confirmRestore()">
+      <i class="fas fa-upload"></i>
+      <span id="restoreBtnText">{% if ar %}استعادة قاعدة البيانات{% else %}Restore Database{% endif %}</span>
+    </button>
+    <div id="restoreStatus" class="db-status"></div>
+  </div>
+</div>
+
+{# ── Restore confirmation modal ── #}
+<div class="modal fade" id="restoreConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+      <div class="modal-header border-0" style="background:#fef2f2;">
+        <h6 class="modal-title text-danger fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>{% if ar %}تأكيد الاستعادة{% else %}Confirm Restore{% endif %}</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:#374151;">
+          {% if ar %}
+          سيؤدي هذا إلى حذف كل البيانات الحالية واستبدالها بمحتوى الملف المرفوع بشكل نهائي. للتأكيد، اكتب <strong>RESTORE</strong> في الحقل أدناه.
+          {% else %}
+          This will permanently delete all current data and replace it with the uploaded file's contents. To confirm, type <strong>RESTORE</strong> below.
+          {% endif %}
+        </p>
+        <input type="text" id="restoreConfirmInput" class="form-control" placeholder="{% if ar %}اكتب RESTORE هنا{% else %}Type RESTORE here{% endif %}" autocomplete="off">
+      </div>
+      <div class="modal-footer border-0">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button class="btn btn-sm btn-danger" id="restoreConfirmBtn" onclick="doRestore()" disabled>{% if ar %}استعادة{% else %}Restore{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF  = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if ar else 'false' }};
+let _restoreModal = null;
+
+document.addEventListener('DOMContentLoaded', function(){
+  const modalEl = document.getElementById('restoreConfirmModal');
+  if (modalEl) _restoreModal = new bootstrap.Modal(modalEl);
+  const input = document.getElementById('restoreConfirmInput');
+  if (input) {
+    input.addEventListener('input', function(){
+      document.getElementById('restoreConfirmBtn').disabled = (input.value.trim() !== 'RESTORE');
+    });
+  }
+});
+
+function _setStatus(id, cls, msg){
+  const el = document.getElementById(id);
+  el.className = 'db-status ' + cls;
+  el.textContent = msg;
+}
+
+async function downloadBackup(){
+  const btn = document.getElementById('backupBtn');
+  btn.disabled = true;
+  document.getElementById('backupBtnText').textContent = IS_AR ? 'جارٍ الإنشاء...' : 'Generating...';
+  _setStatus('backupStatus', 'busy', IS_AR ? 'جارٍ إنشاء النسخة الاحتياطية...' : 'Generating backup...');
+  try {
+    const res = await fetch('/admin/db-backup/download', {method:'POST', headers:{'X-CSRFToken':CSRF}});
+    if (!res.ok) {
+      const d = await res.json().catch(()=>({}));
+      throw new Error(d.error || ('HTTP ' + res.status));
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const fname = m ? m[1] : 'sellerms_backup.json';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    _setStatus('backupStatus', 'ok', (IS_AR ? 'تم التنزيل: ' : 'Downloaded: ') + fname);
+  } catch (e) {
+    _setStatus('backupStatus', 'err', (IS_AR ? 'فشل: ' : 'Failed: ') + e.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('backupBtnText').textContent = IS_AR ? 'تنزيل نسخة احتياطية' : 'Download Backup';
+  }
+}
+
+async function downloadBackupSql(){
+  const btn = document.getElementById('backupSqlBtn');
+  btn.disabled = true;
+  document.getElementById('backupSqlBtnText').textContent = IS_AR ? 'جارٍ الإنشاء...' : 'Generating...';
+  _setStatus('backupSqlStatus', 'busy', IS_AR ? 'جارٍ إنشاء ملف SQL...' : 'Generating SQL file...');
+  try {
+    const res = await fetch('/admin/db-backup/download-sql', {method:'POST', headers:{'X-CSRFToken':CSRF}});
+    if (!res.ok) {
+      const d = await res.json().catch(()=>({}));
+      throw new Error(d.error || ('HTTP ' + res.status));
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const fname = m ? m[1] : 'sellerms_backup.sql';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    _setStatus('backupSqlStatus', 'ok', (IS_AR ? 'تم التنزيل: ' : 'Downloaded: ') + fname);
+  } catch (e) {
+    _setStatus('backupSqlStatus', 'err', (IS_AR ? 'فشل: ' : 'Failed: ') + e.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('backupSqlBtnText').textContent = IS_AR ? 'تنزيل نسخة SQL' : 'Download SQL Backup';
+  }
+}
+
+function confirmRestore(){
+  const fileInp = document.getElementById('restoreFile');
+  if (!fileInp.files || !fileInp.files[0]) {
+    _setStatus('restoreStatus', 'err', IS_AR ? 'اختر ملف النسخة الاحتياطية أولاً' : 'Select a backup file first');
+    return;
+  }
+  document.getElementById('restoreConfirmInput').value = '';
+  document.getElementById('restoreConfirmBtn').disabled = true;
+  if (_restoreModal) _restoreModal.show();
+}
+
+async function doRestore(){
+  const fileInp = document.getElementById('restoreFile');
+  const file = fileInp.files[0];
+  if (!file) return;
+
+  if (_restoreModal) _restoreModal.hide();
+  const btn = document.getElementById('restoreBtn');
+  btn.disabled = true;
+  document.getElementById('restoreBtnText').textContent = IS_AR ? 'جارٍ الاستعادة...' : 'Restoring...';
+  _setStatus('restoreStatus', 'busy', IS_AR ? 'جارٍ إنشاء نسخة أمان ثم الاستعادة... لا تغلق هذه الصفحة.' : 'Creating a safety backup, then restoring... do not close this page.');
+
+  const fd = new FormData();
+  fd.append('backup_file', file);
+  try {
+    const res = await fetch('/admin/db-backup/restore', {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd});
+    const d = await res.json();
+    if (d.ok) {
+      _setStatus('restoreStatus', 'ok', IS_AR ? 'تمت الاستعادة بنجاح. جارٍ إعادة تحميل الصفحة...' : 'Restore completed successfully. Reloading the page...');
+      setTimeout(function(){ location.reload(); }, 1500);
+      return;
+    } else {
+      _setStatus('restoreStatus', 'err', d.error || (IS_AR ? 'فشلت الاستعادة' : 'Restore failed'));
+    }
+  } catch (e) {
+    _setStatus('restoreStatus', 'err', (IS_AR ? 'خطأ في الاتصال: ' : 'Connection error: ') + e.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('restoreBtnText').textContent = IS_AR ? 'استعادة قاعدة البيانات' : 'Restore Database';
+  }
+}
+</script>
+{% endblock %}

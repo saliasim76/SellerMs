@@ -1,0 +1,184 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+{% from "proledg/_components.html" import checklist, cta_banner %}
+
+{% block title %}Features — Proledge{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-center">
+      <div class="breadcrumb"><a href="{{ url_for('proledg.home') }}">Home</a> &rarr; Features</div>
+      <h1>The accounting depth most cloud tools leave out</h1>
+      <p class="hero-sub">Every capability a finance team needs, on one locked double-entry engine — accounting, inventory, procurement, payroll and warehouse.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="split-row flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('lock') }} THE CORE</div>
+        <h2>One locked double-entry core that always balances</h2>
+        <p>Underneath every feature on this page is a single, locked posting engine — whether a number arrives from a sales invoice, a payroll journal or a manufacturing job card, it lands in the same balanced, double-entry ledger. That's why margins never quietly slip out of your Trial Balance.</p>
+        {{ checklist([
+          "Every voucher balanced by a single locked posting engine",
+          "One chart of accounts and sub-ledger per company",
+          "Cancelled & reversal vouchers always excluded, so every report reconciles to the same number",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-panel-title">Voucher entry</div>
+          <div class="mock-row"><span class="mock-label">Debits</span><span class="mock-sub">$18,420.00</span></div>
+          <div class="mock-row"><span class="mock-label">Credits</span><span class="mock-sub">$18,420.00</span></div>
+          <div class="mock-row"><span class="mock-label">Suspense / unposted</span><span class="mock-status muted">0.00</span></div>
+          <div class="mock-row highlight"><span class="mock-label">Cancelled &amp; reversals</span><span class="mock-status muted">Excluded</span></div>
+          <a href="{{ url_for('proledg.contact') }}" class="btn btn-primary btn-block">Post entry</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('book') }} EVERYTHING IN THE BOX</div>
+      <h2>Real, full-featured accounting</h2>
+      <p>Not a cut-down ledger. The complete day-to-day toolkit a growing finance team actually runs on.</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-tile">{{ icon('book') }}</div><h3>General ledger &amp; chart of accounts</h3><p>A multi-tier chart of accounts, customisable per company, with unlimited sub-ledgers on the locked double-entry general ledger engine.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('file') }}</div><h3>Full voucher suite</h3><p>Cash &amp; credit sales and purchases, asset purchases, debit &amp; credit returns — everything posts as journal, contra, cash or bank.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('users') }}</div><h3>Accounts receivable &amp; payable</h3><p>Customer and supplier ledgers with statements, aging and payment settlement, so receivables and payables always reconcile.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('file') }}</div><h3>Branded PDF invoicing</h3><p>Generate clean, branded PDF invoices straight from a voucher — ready to send, with your logo and layout on every document.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('settings') }}</div><h3>Custom document designer</h3><p>Upload a sample of the look you want and generate a matching document layout — no developer or code needed. Fine-tune, save, and print.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('bank') }}</div><h3>Banking &amp; cash</h3><p>Reconcile bank statements against your books with automated OFX/CSV import, matching transactions instantly against the ledger.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('box') }}</div><h3>Multi-warehouse inventory</h3><p>Stock across multiple warehouses on weighted-average costing, with a full audit trail — every movement ties back to a voucher.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('clipboard') }}</div><h3>Over/short delivery tolerance</h3><p>Set a per-item delivery tolerance, and automatically flag and settle short- or over-delivered quantities without manual correction.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('bar-chart') }}</div><h3>Financial statements</h3><p>Trial Balance, Balance Sheet and Profit &amp; Loss generated straight from the ledger — exportable, drillable, and always current.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('folder') }}</div><h3>Party statements &amp; registers</h3><p>Per-party statements for any customer or supplier, with running balance and register drill-down your team can resolve in a click.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('lock') }}</div><h3>Fiscal year control</h3><p>A fixed fiscal year with flexible period control — closed periods lock automatically so posted history can't be edited.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('refresh') }}</div><h3>Guided Excel onboarding</h3><p>Don't lose weeks of history on setup. Import your existing books with a guided Excel import mapped to your chart of accounts.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('clipboard') }} PROCUREMENT &amp; CONTROLS</div>
+      <h2>Control the spend, not just record it</h2>
+      <p>A full buy-side workflow with the approvals, budgets and supplier controls a growing finance team needs — the kind of governance you'd expect from far heavier systems.</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-tile">{{ icon('file') }}</div><h3>Requisition &rarr; RFQ &rarr; PO</h3><p>Raise a purchase requisition, send an RFQ to competing suppliers, compare quotes side-by-side, and issue the PO — all with one audit trail.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('bank') }}</div><h3>Payment run</h3><p>Pick a due date and a bank, select multiple supplier invoices, and let Proledge queue them into one payment run — no per-invoice entries.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('bar-chart') }}</div><h3>Budget vs actual</h3><p>Set a budget by account per period for any project, department or cost center — and compare budget vs actual live, without waiting for month-end.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('shield-check') }}</div><h3>Approval workflows</h3><p>Route any voucher for approval — N-of-M sign-off, department chains, conditional thresholds — before it can post to the ledger.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('shield') }}</div><h3>Supplier compliance</h3><p>Hold each supplier's bank details and tax status on file, with automatic reminders when a compliance document is missing or expiring.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('user') }}</div><h3>New-party approval &amp; terms</h3><p>Optionally require a new supplier or customer to be approved before their first invoice posts, with payment terms enforced automatically.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('users') }} PAYROLL &amp; PEOPLE</div>
+      <h2>Payroll that runs your whole month</h2>
+      <p>Start simple and grow into full-stack payroll — attendance, leave and pay elements — without leaving your ledger. Every run posts straight through the double-entry engine.</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-tile">{{ icon('layers') }}</div><h3>Simple or full-stack</h3><p>Run a quick monthly payroll, or switch on the full stack — attendance, leave, wage and overtime — without switching systems.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('dollar') }}</div><h3>Salaried, daily &amp; hourly</h3><p>Multiple pay types on one payroll run — salaried, daily-wage and hourly — no separate system for blue-collar staff.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('clipboard') }}</div><h3>Attendance &amp; overtime registers</h3><p>A clock-in/clock-out register with overtime rules that ties directly into payroll calculations, with a visible audit trail.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('refresh') }}</div><h3>Salary elements, auto-posted</h3><p>Build the salary structure once and every allowance, deduction and reimbursement posts automatically — no manual journals.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('user') }}</div><h3>Leave, recruitment &amp; settlement</h3><p>Leave types with entitlement carry-over, and full &amp; final settlement calculated automatically when an employee exits.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('bar-chart') }}</div><h3>Corrections, arrears &amp; advances</h3><p>Run corrections or arrears on a past period and let payroll calculate the difference — advances tracked and recovered on schedule.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="split-row flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('box') }} COSTING YOU CAN TRUST</div>
+        <h2>Costing you can trust, down to the row</h2>
+        <p>Inventory is valued on weighted-average costing, and every movement is written to the ledger — so the cost you see is what's actually recorded, and it reconciles down to inventory valuation.</p>
+        {{ checklist([
+          "Weighted-average costing on every stock move",
+          "Full stock ledger with per-item WAC at any point in time",
+          "Stock take & adjustment — counted quantities valued at WAC",
+          "Value-only revaluation to bring inventory to net realisable value",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-panel-title">Costing &middot; Item WAC</div>
+          <div class="mock-row"><span class="mock-label">Opening</span><span class="mock-sub">1,200 units</span></div>
+          <div class="mock-row"><span class="mock-label">Goods receipt</span><span class="mock-sub">+300 units</span></div>
+          <div class="mock-row"><span class="mock-label">New weighted-average cost</span><span class="mock-status ok">$12.84</span></div>
+          <div class="mock-row"><span class="mock-label">Stock take adjustment</span><span class="mock-status warn">-4 units</span></div>
+          <div class="mock-row highlight"><span class="mock-label">Revaluation to NRV</span><span class="mock-status ok">Posted ✓</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-row reverse">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('building') }} A HOME FOR EVERY COMPANY</div>
+        <h2>A home for every company</h2>
+        {{ checklist([
+          "A per-company workspace, scoped to the entity you're in",
+          "Quick-access shortcuts for the entries you use most",
+          "A clean dashboard for daily entry and review",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-panel-title">Company workspace</div>
+          <div class="mock-row"><span class="mock-label">Sales &amp; receivables</span></div>
+          <div class="mock-row"><span class="mock-label">Purchases &amp; inventory</span></div>
+          <div class="mock-row"><span class="mock-label">Banking &amp; cash</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('settings') }} MODULAR BY DESIGN</div>
+      <h2>16 modules, switch on what you need</h2>
+      <p>Core accounting is just the start. Activate advanced modules per company as you grow — here are four of them.</p>
+    </div>
+    <div class="grid grid-4">
+      <div class="module-card"><div class="icon-tile">{{ icon('globe') }}</div><div><h3>Multi-Currency <span class="card-tag">CORE</span></h3><p>Invoice &amp; pay in any currency.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('factory') }}</div><div><h3>Manufacturing &amp; BOMs <span class="card-tag">CORE</span></h3><p>Multi-level BOMs, backflushed.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('box') }}</div><div><h3>Landed Cost</h3><p>Freight &amp; duty into stock cost.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('briefcase') }}</div><div><h3>Fixed Assets</h3><p>Depreciation posts automatically.</p></div></div>
+    </div>
+    <div style="text-align:center; margin-top:32px;">
+      <a href="{{ url_for('proledg.modules') }}" class="link-arrow">See all modules {{ icon('arrow-right') }}</a>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    {{ cta_banner(
+      "Put every company on one accurate engine",
+      "Start your free trial today — no credit card, no commitment. Spin up your first company in minutes.",
+      "Start free trial", url_for('proledg.contact'),
+      "See how it works", url_for('proledg.modules')
+    ) }}
+  </div>
+</section>
+
+{% endblock %}

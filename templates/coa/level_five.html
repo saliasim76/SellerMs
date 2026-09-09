@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "coa/_level_macro.html" import coa_level_page %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}دليل الحسابات — المستوى الخامس{% else %}Chart of Accounts — Level 5{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('coa.level_one_list') }}">{% if ar %}دليل الحسابات{% else %}Chart of Accounts{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}المستوى الخامس{% else %}Level 5{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+{{ coa_level_page(
+     5,
+     'Chart of Accounts — Level 5', 'دليل الحسابات — المستوى الخامس',
+     {'list':'coa.level_five_list','add':'coa.level_five_add','delete':'coa.level_five_delete','next_code':'coa.level_five_next_code'},
+     12, 'Transactional Account',
+     rows, pg, parents, level_ones,
+     q, parent, sort, status, ar, current_user) }}
+{% endblock %}

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="{{ current_locale }}" {% if current_locale=='ar' %}dir="rtl"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if current_locale=='ar' %}تسجيل الدخول – نظام إدارة البائعين{% else %}Login – Seller Master System{% endif %}</title>
+  {% if current_locale=='ar' %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
+  {% else %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  {% endif %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-body">
+{% set ar = current_locale == 'ar' %}
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-logo"><i class="fas fa-store-alt fa-3x"></i></div>
+      <h2>{% if ar %}نظام إدارة البائعين{% else %}Seller Master System{% endif %}</h2>
+      <p class="text-muted">{% if ar %}تسجيل الدخول إلى حسابك{% else %}Sign in to your account{% endif %}</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show">
+      {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}{% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('auth.login') }}">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">
+          <i class="fas fa-user me-1 text-primary"></i>
+          {% if ar %}اسم المستخدم{% else %}Username{% endif %}
+        </label>
+        {{ form.username(class="form-control form-control-lg", placeholder="admin") }}
+        {% if form.username.errors %}<div class="text-danger small mt-1">{{ form.username.errors[0] }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">
+          <i class="fas fa-lock me-1 text-primary"></i>
+          {% if ar %}كلمة المرور{% else %}Password{% endif %}
+        </label>
+        <div class="input-group">
+          {{ form.password(class="form-control form-control-lg", placeholder="••••••••", id="passwordField") }}
+          <button class="btn btn-outline-secondary" type="button" onclick="togglePwd()">
+            <i class="fas fa-eye" id="eyeIcon"></i>
+          </button>
+        </div>
+        {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors[0] }}</div>{% endif %}
+      </div>
+      <div class="mb-4 d-flex justify-content-between align-items-center">
+        <div class="form-check">
+          {{ form.remember_me(class="form-check-input") }}
+          <label class="form-check-label">{% if ar %}تذكرني{% else %}Remember Me{% endif %}</label>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg w-100">
+        <i class="fas fa-sign-in-alt me-2"></i>
+        {% if ar %}تسجيل الدخول{% else %}Sign In{% endif %}
+      </button>
+    </form>
+
+    <div class="login-footer mt-4">
+      <div class="demo-credentials">
+        <p class="text-muted small mb-1"><strong>{% if ar %}بيانات تجريبية:{% else %}Demo Credentials:{% endif %}</strong></p>
+        <p class="text-muted small mb-0"><i class="fas fa-shield-alt text-danger me-1"></i> Admin: <code>admin / Admin@123</code></p>
+        <p class="text-muted small mb-0"><i class="fas fa-user text-info me-1"></i> Staff: <code>staff / Staff@123</code></p>
+      </div>
+    </div>
+
+    <div class="text-end mt-3">
+      <div class="dropdown d-inline-block">
+        <button class="btn btn-link btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+          <i class="fas fa-globe me-1"></i>{% if ar %}العربية{% else %}English{% endif %}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item {% if current_locale=='en' %}active{% endif %}" href="{{ url_for('auth.set_language', lang='en') }}">🇺🇸 English</a></li>
+          <li><a class="dropdown-item {% if current_locale=='ar' %}active{% endif %}" href="{{ url_for('auth.set_language', lang='ar') }}">🇸🇦 العربية</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function togglePwd() {
+  const f=document.getElementById('passwordField'), i=document.getElementById('eyeIcon');
+  f.type=f.type==='password'?'text':'password';
+  i.classList.toggle('fa-eye'); i.classList.toggle('fa-eye-slash');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{{ doc.doc_no }}{% endblock %}
+{% block extra_css %}
+<style>
+.pur-view-hero{background:linear-gradient(135deg,#1e3a5f,#2563eb);border-radius:14px;padding:24px 28px;color:white;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;box-shadow:0 4px 20px rgba(37,99,235,.25);}
+.pur-view-hero h3{margin:0 0 6px;font-size:22px;font-weight:800;}
+.pur-vbadge{display:inline-flex;align-items:center;gap:5px;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;background:rgba(255,255,255,.2);color:white;margin-right:6px;}
+.pur-vbadge.Approved{background:rgba(34,197,94,.35);}
+.pur-vbadge.Cancelled{background:rgba(239,68,68,.35);}
+.pur-vbadge.Closed{background:rgba(107,114,128,.35);}
+.info-card{background:white;border-radius:12px;border:1.5px solid #e2e8f0;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px rgba(0,0,0,.04);}
+.ic-hdr{padding:11px 18px;background:#f8fafc;border-bottom:1.5px solid #e2e8f0;display:flex;align-items:center;gap:8px;}
+.ic-hdr i{width:24px;height:24px;border-radius:6px;background:#eff6ff;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:10px;}
+.ic-hdr span{font-size:12px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.4px;}
+.ic-body{padding:14px 18px;}
+.d-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 24px;}
+.d-row{display:flex;padding:7px 0;border-bottom:1px dashed #f1f5f9;font-size:13px;}
+.d-row:last-child{border-bottom:none;}
+.d-lbl{width:130px;font-weight:600;color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
+.d-val{color:#111827;font-weight:500;flex:1;}
+.d-val.hi{color:#2563eb;font-weight:700;}
+/* Line items */
+.li-vt{width:100%;border-collapse:collapse;font-size:12.5px;}
+.li-vt thead tr{background:#1e3a5f;}
+.li-vt th{padding:9px 10px;font-weight:600;color:white;text-align:left;font-size:11px;text-transform:uppercase;}
+.li-vt td{padding:9px 10px;border-bottom:1px solid #f1f5f9;}
+.li-vt tbody tr:hover td{background:#f0f7ff;}
+/* Summary */
+.sum-card{background:linear-gradient(135deg,#f8fafc,#f0f7ff);border:1.5px solid #bfdbfe;border-radius:10px;padding:16px 18px;}
+.sum-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed #e2e8f0;font-size:13px;}
+.sum-row:last-child{border-bottom:none;}
+.sum-total{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:11px 16px;border-radius:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;}
+.att-chip{display:inline-flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:600;color:#2563eb;margin:3px;}
+.btn-act{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;text-decoration:none;}
+</style>
+{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('sales.srr_list') }}">{% if ar %}طلبات الإرجاع{% else %}Sales Return Requests{% endif %}</a></li>
+<li class="breadcrumb-item active">{{ doc.doc_no }}</li>
+{% endblock %}
+{% block content %}
+<div class="proledg-page" style="max-width:1100px;">
+  <div class="act-bar" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <a href="{{ url_for('sales.srr_list') }}" class="btn-act" style="background:white;color:#374151;border:1.5px solid #d1d5db;"><i class="fas fa-arrow-left"></i>{% if ar %}رجوع{% else %}Back{% endif %}</a>
+    <button class="btn-act" style="background:#f59e0b;color:white;" onclick="window.location='{{ url_for('sales.srr_list') }}?edit={{ doc.id }}'"><i class="fas fa-pencil-alt"></i>{% if ar %}تعديل{% else %}Edit{% endif %}</button>
+  </div>
+
+  {# Hero #}
+  <div class="pur-view-hero">
+    <div>
+      <h3><i class="fas fa-file-alt me-2"></i>{{ doc.doc_no }}</h3>
+      <div>
+        <span class="pur-vbadge {{ doc.status }}">{{ doc.status }}</span>
+        {% if doc.buyer %}<span class="pur-vbadge"><i class="fas fa-store" style="font-size:9px;"></i>{{ doc.buyer.buyer_name_en }}</span>{% endif %}
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:24px;font-weight:800;">SAR {{ '{:,.2f}'.format(doc.total_incl_vat or 0) }}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:3px;">{% if ar %}الإجمالي شامل الضريبة{% else %}Total Incl. VAT{% endif %}</div>
+    </div>
+  </div>
+
+  {# Details #}
+  <div class="info-card">
+    <div class="ic-hdr"><i class="fas fa-info-circle"></i><span>{% if ar %}تفاصيل الطلب{% else %}Request Details{% endif %}</span></div>
+    <div class="ic-body">
+      <div class="d-grid">
+        <div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}رقم المستند{% else %}Doc No{% endif %}</div><div class="d-val hi">{{ doc.doc_no }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}المستخدم{% else %}Requester{% endif %}</div><div class="d-val">{{ doc.requester or '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}الاسم{% else %}Req. Name{% endif %}</div><div class="d-val">{{ doc.requester_name or '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}اعتمد بواسطة{% else %}Approved By{% endif %}</div><div class="d-val">{{ doc.approved_by or '—' }}</div></div>
+        </div>
+        <div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</div><div class="d-val">{{ doc.posting_date.strftime('%d %b %Y') if doc.posting_date else '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}صالح حتى{% else %}Valid Until{% endif %}</div><div class="d-val">{{ doc.valid_until.strftime('%d %b %Y') if doc.valid_until else '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}تاريخ المستند{% else %}Doc Date{% endif %}</div><div class="d-val">{{ doc.document_date.strftime('%d %b %Y') if doc.document_date else '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}التاريخ المطلوب{% else %}Required Date{% endif %}</div><div class="d-val">{{ doc.required_date.strftime('%d %b %Y') if doc.required_date else '—' }}</div></div>
+        </div>
+        <div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}</div><div class="d-val">{{ doc.buyer.buyer_name_en if doc.buyer else '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div><div class="d-val">{{ doc.status }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}ملاحظات{% else %}Remarks{% endif %}</div><div class="d-val">{{ doc.remarks or '—' }}</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Line Items #}
+  <div class="info-card">
+    <div class="ic-hdr"><i class="fas fa-list-ul"></i><span>{% if ar %}بنود الطلب{% else %}Line Items{% endif %} <span style="background:#eff6ff;color:#2563eb;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:6px;">{{ items|length }}</span></span></div>
+    <div style="overflow-x:auto;padding:0;">
+      <table class="li-vt">
+        <thead><tr>
+          <th>#</th><th>{% if ar %}الكود{% else %}Code{% endif %}</th><th>{% if ar %}الوصف{% else %}Description{% endif %}</th>
+          <th>{% if ar %}تاريخ الحاجة{% else %}Req. Date{% endif %}</th><th>{% if ar %}المستودع{% else %}Warehouse{% endif %}</th>
+          <th>UoM</th><th style="text-align:right;">{% if ar %}الكمية{% else %}Qty{% endif %}</th>
+          <th style="text-align:right;">{% if ar %}السعر{% else %}Rate{% endif %}</th>
+          <th style="text-align:right;">{% if ar %}الخصم{% else %}Disc.{% endif %}</th>
+          <th style="text-align:right;">{% if ar %}الشحن{% else %}Freight{% endif %}</th>
+          <th style="text-align:right;">{% if ar %}الخاضع{% else %}Taxable{% endif %}</th>
+          <th>{% if ar %}كود الضريبة{% else %}Tax Code{% endif %}</th>
+          <th style="text-align:right;">{% if ar %}الضريبة{% else %}Tax Amt{% endif %}</th>
+          <th style="text-align:right;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+        </tr></thead>
+        <tbody>
+          {% for li in items %}
+          <tr>
+            <td style="color:#9ca3af;">{{ loop.index }}</td>
+            <td>{{ li.item_code or '—' }}</td>
+            <td><strong>{{ li.item_desc or '—' }}</strong></td>
+            <td>{{ li.required_date.strftime('%d/%m/%Y') if li.required_date else '—' }}</td>
+            <td>{{ li.warehouse or '—' }}</td>
+            <td>{{ li.uom|upper }}</td>
+            <td style="text-align:right;">{{ '{:,.2f}'.format(li.quantity or 0) }}</td>
+            <td style="text-align:right;">{{ '{:,.2f}'.format(li.rate or 0) }}</td>
+            <td style="text-align:right;">{{ '{:,.2f}'.format(li.discount or 0) }}</td>
+            <td style="text-align:right;">{{ '{:,.2f}'.format(li.freight or 0) }}</td>
+            <td style="text-align:right;color:#92400e;font-weight:600;">{{ '{:,.2f}'.format(li.taxable or 0) }}</td>
+            <td>{{ li.tax_code }}</td>
+            <td style="text-align:right;">{{ '{:,.2f}'.format(li.tax_amount or 0) }}</td>
+            <td style="text-align:right;font-weight:700;color:#166534;">{{ '{:,.2f}'.format(li.total or 0) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="14" style="text-align:center;padding:20px;color:#9ca3af;">{% if ar %}لا توجد بنود{% else %}No items{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# Summary + Attachments #}
+  <div style="display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:0;">
+    <div>
+      {% if attachments %}
+      <div class="info-card">
+        <div class="ic-hdr"><i class="fas fa-paperclip"></i><span>{% if ar %}المرفقات{% else %}Attachments{% endif %} ({{ attachments|length }})</span></div>
+        <div class="ic-body">
+          {% for a in attachments %}
+          <span class="att-chip"><i class="fas fa-file"></i>{{ a.filename }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="sum-card">
+      <div style="font-size:11px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;"><i class="fas fa-calculator" style="color:#2563eb;margin-right:6px;"></i>{% if ar %}الملخص{% else %}Summary{% endif %}</div>
+      <div class="sum-row"><span>{% if ar %}قبل الخصم{% else %}Total before discount{% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_before_discount or 0) }}</span></div>
+      <div class="sum-row"><span>{% if ar %}الخصم{% else %}Total discount{% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_discount or 0) }}</span></div>
+      <div class="sum-row"><span>{% if ar %}الشحن{% else %}Freight{% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_freight or 0) }}</span></div>
+      <div class="sum-row"><span>{% if ar %}بدون ضريبة{% else %}Excl. VAT (SAR){% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_excl_vat or 0) }}</span></div>
+      <div class="sum-row"><span>{% if ar %}ضريبة القيمة المضافة{% else %}VAT Amount (SAR){% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.vat_amount or 0) }}</span></div>
+      <div class="sum-total"><span style="font-weight:700;">{% if ar %}الإجمالي شامل الضريبة{% else %}Total Incl. VAT{% endif %}</span><span style="font-size:18px;font-weight:800;">SAR {{ '{:,.2f}'.format(doc.total_incl_vat or 0) }}</span></div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:#374151;">{% if ar %}المرفقات{% else %}Documents Attached{% endif %}</span>
+        <span style="background:#eff6ff;color:#2563eb;padding:2px 12px;border-radius:10px;font-size:12px;font-weight:700;">{{ attachments|length }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

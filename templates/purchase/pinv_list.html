@@ -1,0 +1,2087 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}فواتير الشراء{% else %}Purchase Invoices{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+/* ═══════════════════════════════════════════════════════
+   AG Grid - Enterprise Theme with Proledg styling (EXACTLY LIKE EMPLOYEES)
+   ═══════════════════════════════════════════════════════ */
+.ag-theme-alpine {
+    --ag-font-family:'Segoe UI',system-ui,sans-serif;
+    --ag-font-size:13px;
+    --ag-header-background-color:#1e3a5f;
+    --ag-header-foreground-color:#fff;
+    --ag-border-color:#e2e8f0;
+    --ag-row-hover-color:#eff6ff;
+    --ag-selected-row-background-color:#dbeafe;
+    --ag-header-height:44px;
+    --ag-row-height:44px;
+    --ag-cell-horizontal-padding:12px;
+}
+.ag-theme-alpine .ag-header-cell-label {
+    font-weight:700;
+    font-size:11.5px;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    overflow:visible;
+}
+.ag-theme-alpine .ag-header-cell-text {
+    overflow:visible;
+    text-overflow:clip;
+    white-space:nowrap;
+}
+.ag-theme-alpine .ag-header-cell:hover {
+    background:rgba(255,255,255,.08) !important;
+}
+.ag-theme-alpine .ag-sort-ascending-icon,
+.ag-theme-alpine .ag-sort-descending-icon,
+.ag-theme-alpine .ag-sort-none-icon {
+    color:#94a3b8;
+}
+.ag-theme-alpine .ag-header-icon {
+    color:#94a3b8;
+}
+.ag-theme-alpine .ag-filter {
+    border-radius:10px !important;
+    box-shadow:0 8px 30px rgba(0,0,0,.15) !important;
+    border:1px solid #e2e8f0 !important;
+    overflow:hidden;
+    min-width:260px;
+    background:white;
+}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input {
+    border:1.5px solid #d1d5db !important;
+    border-radius:7px !important;
+    padding:6px 10px !important;
+    font-size:12px !important;
+}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input:focus {
+    outline:none !important;
+    border-color:#2563eb !important;
+    box-shadow:0 0 0 2px rgba(37,99,235,.12) !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel {
+    padding:8px 10px !important;
+    background:#f8fafc !important;
+    border-top:1px solid #e2e8f0 !important;
+    display:flex !important;
+    gap:6px !important;
+    justify-content:space-between !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button {
+    padding:5px 14px !important;
+    border-radius:7px !important;
+    font-size:12px !important;
+    font-weight:600 !important;
+    border:none !important;
+    cursor:pointer !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="applyFilterButton"] {
+    background:linear-gradient(135deg,#16a34a,#15803d) !important;
+    color:white !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="clearFilterButton"],
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="resetFilterButton"] {
+    background:white !important;
+    color:#374151 !important;
+    border:1.5px solid #d1d5db !important;
+}
+.ag-theme-alpine .ag-floating-filter-input input {
+    border:1px solid #e2e8f0 !important;
+    border-radius:5px !important;
+    padding:3px 7px !important;
+    font-size:11px !important;
+}
+.ag-theme-alpine .ag-floating-filter-input input:focus {
+    outline:none !important;
+    border-color:#2563eb !important;
+}
+.ag-theme-alpine .ag-row-even {
+    background:white;
+}
+.ag-theme-alpine .ag-row-odd {
+    background:#fafbfc;
+}
+.ag-theme-alpine .ag-row-hover {
+    background:#eff6ff !important;
+}
+.ag-theme-alpine .ag-cell {
+    border-right:1px solid #f1f5f9 !important;
+}
+
+/* Action buttons (matching Employees/Suppliers) */
+.ag-ab {
+    width:28px;
+    height:28px;
+    border-radius:7px;
+    border:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    cursor:pointer;
+    transition:all .12s;
+}
+.ag-ab:hover {
+    transform:translateY(-1px);
+    box-shadow:0 2px 6px rgba(0,0,0,.2);
+}
+.ag-ab-view { background:#0ea5e9; color:white; }
+.ag-ab-view:hover { background:#0284c7; }
+.ag-ab-edit { background:#f59e0b; color:white; }
+.ag-ab-edit:hover { background:#d97706; }
+.ag-ab-print { background:#2563eb; color:white; }
+.ag-ab-print:hover { background:#1d4ed8; }
+.ag-ab-del { background:#ef4444; color:white; }
+.ag-ab-del:hover { background:#dc2626; }
+
+/* Status pill */
+.st-pill {
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:3px 10px;
+    border-radius:10px;
+    font-size:11px;
+    font-weight:700;
+}
+.st-open { background:#dbeafe; color:#2563eb; }
+.st-pending { background:#fef3c7; color:#d97706; }
+.st-approved { background:#dcfce7; color:#15803d; }
+.st-closed { background:#f1f5f9; color:#6b7280; }
+.st-cancelled { background:#fee2e2; color:#dc2626; }
+
+/* Toolbar (matching Employees/Suppliers) */
+.toolbar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-bottom:14px;
+}
+.toolbar-left, .toolbar-right {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.tool-btn {
+    width:34px;
+    height:34px;
+    border-radius:7px;
+    border:1.5px solid #d1d5db;
+    background:white;
+    color:#6b7280;
+    cursor:pointer;
+    font-size:13px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+    transition:all .12s;
+}
+.tool-btn:hover {
+    border-color:#2563eb;
+    color:#2563eb;
+    background:#eff6ff;
+}
+.tool-btn-green { background:#16a34a; color:white; border:none; }
+.tool-btn-green:hover { background:#15803d; }
+.tool-btn-blue { background:#2563eb; color:white; border:none; }
+.tool-btn-blue:hover { background:#1d4ed8; }
+
+.search-form { position:relative; }
+.search-icon {
+    position:absolute;
+    left:10px;
+    top:50%;
+    transform:translateY(-50%);
+    color:#9ca3af;
+    font-size:12px;
+    z-index:2;
+}
+.search-input {
+    padding:7px 12px 7px 32px;
+    border:1.5px solid #d1d5db;
+    border-radius:7px;
+    font-size:12px;
+    outline:none;
+}
+.search-input:focus { border-color:#2563eb; }
+
+.sel-badge {
+    font-size:11px;
+    color:#6b7280;
+    background:#f1f5f9;
+    padding:4px 10px;
+    border-radius:5px;
+    font-weight:600;
+}
+
+.proledg-pagination {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 16px;
+    background:#f8fafc;
+    border:1px solid #e2e8f0;
+    border-top:none;
+    border-radius:0 0 8px 8px;
+}
+.page-count { font-size:12px; color:#6b7280; font-weight:600; }
+
+/* ── Modal Styles ── */
+.pur-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.pur-hdr h5{margin:0;color:white;font-weight:700;font-size:15px;}
+.pur-badge{background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;margin-left:8px;}
+.pur-tabs{display:flex;border-bottom:2px solid #e2e8f0;padding:0 18px;background:white;}
+.pur-tab{padding:10px 18px;border:none;background:none;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.pur-tab:hover{color:#2563eb;}
+.pur-tab.active{color:#2563eb;border-bottom-color:#2563eb;}
+.pur-tab-pane{display:none!important;padding:0;}
+.pur-tab-pane.active{display:block!important;}
+.pur-section{border:1.5px solid #e2e8f0;border-radius:10px;margin:14px 18px 0;overflow:hidden;}
+.pur-section-hdr{width:100%;background:white;border:none;padding:12px 16px;text-align:left;font-weight:700;font-size:13px;color:#1e3a5f;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:background .1s;}
+.pur-section-hdr:hover{background:#f8fafc;}
+.pur-section-hdr.open{background:#f0f7ff;border-bottom:1.5px solid #e2e8f0;}
+.pur-sec-icon{width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;margin-right:8px;font-size:11px;background:#e0f2fe;color:#0284c7;flex-shrink:0;}
+.pur-section-hdr.open .pur-sec-icon{background:#2563eb;color:white;}
+.pur-section-body{padding:16px 18px;display:none;background:white;}
+.pur-section-body.open{display:block;}
+.f-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-item{display:flex;flex-direction:column;}
+.f-lbl{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+.f-req{color:#ef4444;margin-left:2px;}
+.f-inp{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;transition:border-color .15s;font-family:inherit;box-sizing:border-box;}
+.f-inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.f-inp[readonly]{background:#f8fafc;color:#374151;}
+select.f-inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
+.po-selected-banner{background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;font-size:13px;}
+.po-selected-banner i{color:#16a34a;font-size:16px;}
+.po-selected-banner strong{color:#15803d;}
+.li-wrap{overflow-x:auto;border-radius:8px;border:1.5px solid #e2e8f0;}
+.li-table{width:100%;border-collapse:collapse;font-size:11.5px;min-width:1150px;}
+.li-table thead tr{background:#1e3a5f;}
+.li-table th{padding:9px 7px;font-weight:600;color:white;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;}
+.li-table td{padding:5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+.li-table tbody tr:hover td{background:#f0f7ff;}
+.li-table tbody tr:nth-child(even) td{background:#fafbfc;}
+.li-inp{border:1.5px solid #e5e7eb;border-radius:6px;padding:5px 7px;font-size:11.5px;width:100%;font-family:inherit;}
+.li-inp:focus{outline:none;border-color:#2563eb;}
+.li-inp[readonly]{background:#f3f4f6;color:#374151;}
+select.li-inp{appearance:none;padding-right:16px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;}
+.pur-summary{background:linear-gradient(135deg,#f8fafc,#f0f7ff);border:1.5px solid #bfdbfe;border-radius:10px;padding:16px 18px;}
+.sum-line{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #e2e8f0;font-size:13px;}
+.sum-line:last-child{border-bottom:none;}
+.sum-total-row{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:10px 14px;border-radius:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;}
+.sum-total-row span{color:white;}
+.sum-doc-row{margin-top:8px;padding-top:8px;border-top:1px dashed #bfdbfe;display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.att-item{display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid #e2e8f0;border-radius:7px;padding:7px 12px;font-size:12px;margin-bottom:6px;}
+.att-rm{cursor:pointer;color:#ef4444;background:none;border:none;padding:0;}
+.pur-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#f8fafc;border-top:2px solid #e2e8f0;}
+.btn-f{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+.btn-save{background:linear-gradient(135deg,#16a34a,#15803d);color:white;box-shadow:0 2px 8px rgba(22,163,74,.3);}
+.btn-save:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(22,163,74,.4);}
+.btn-cancel{background:white;color:#374151;border:1.5px solid #d1d5db;}
+.btn-cancel:hover{background:#f9fafb;}
+.grl-lbl{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;}
+.grl-inp{width:100%;padding:8px 11px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box;}
+.grl-inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.grl-addline{background:#eff6ff;color:#2563eb;border:1.5px solid #bfdbfe;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;}
+.grl-addline:hover{background:#dbeafe;}
+.grl-table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px;}
+.grl-table th{background:#1e3a5f;color:#fff;padding:8px 7px;font-size:10.5px;text-transform:uppercase;text-align:left;font-weight:600;}
+.grl-table td{padding:4px 5px;border-bottom:1px solid #f1f5f9;}
+.grl-table td input{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;box-sizing:border-box;}
+.grl-table td input:focus{outline:none;border-color:#2563eb;}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}فواتير الشراء{% else %}Purchase Invoices{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}فواتير الشراء{% else %}Purchase Invoices{% endif %}</h2>
+  
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="tool-btn tool-btn-green" onclick="openAddPINV()"><i class="fas fa-plus"></i></button>
+      <button class="tool-btn tool-btn-blue" onclick="loadData()"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn" onclick="gridApi&&gridApi.setFilterModel(null);document.getElementById('qs').value='';gridApi.setGridOption('quickFilterText','')"><i class="fas fa-times-circle"></i></button>
+      <button class="tool-btn" onclick="gridApi&&gridApi.exportDataAsCsv({fileName:'purchase_invoices.csv'})" title="Export"><i class="fas fa-file-export"></i></button>
+    </div>
+    <div class="toolbar-right d-flex align-items-center gap-3">
+      <div class="sel-badge"><span id="selText">0 {% if ar %}فاتورة{% else %}invoices{% endif %}</span></div>
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="qs" class="search-input" style="width:220px" 
+               placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" 
+               oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">
+    <div id="pinvGrid" class="ag-theme-alpine" style="height:calc(100vh - 260px);min-height:520px;width:100%;"></div>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count" id="pageInfo">–</span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-muted">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="gridApi&&gridApi.setGridOption('paginationPageSize',+this.value)">
+        <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ══ #}
+<div class="modal fade" id="pinvModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width:1060px;">
+    <div class="modal-content" style="border:none;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+
+      <div class="pur-hdr">
+        <div style="display:flex;align-items:center;">
+          <h5 id="pinvTitle"><i class="fas fa-file-invoice me-2"></i>{% if ar %}إضافة فاتورة شراء{% else %}Add Purchase Invoice{% endif %}</h5>
+          <span class="pur-badge" id="pinvDocBadge">NEW</span>
+        </div>
+        <button class="btn-close" style="filter:brightness(0) invert(1);" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="pur-tabs">
+        <button class="pur-tab active" onclick="switchTab('tab_content',this)">
+          <i class="fas fa-file-alt me-1"></i>{% if ar %}المحتوى{% else %}Content{% endif %}
+        </button>
+        <button class="pur-tab" onclick="switchTab('tab_attach',this)">
+          <i class="fas fa-paperclip me-1"></i>{% if ar %}المرفقات{% else %}Attachments{% endif %}
+          <span id="attBadge" style="background:#eff6ff;color:#2563eb;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-left:4px;">0</span>
+        </button>
+      </div>
+
+      <div class="modal-body p-0" style="overflow-y:auto;background:#f8fafc;height:600px;">
+        <form id="pinvForm" onsubmit="event.preventDefault(); savePINV();">
+        <input type="hidden" id="pinv_id">
+
+        {# ══ TAB 1: CONTENT ══ #}
+        <div class="pur-tab-pane active" id="tab_content">
+
+          {# ── Section 1: Invoice Info ── #}
+          <div class="pur-section">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-info-circle"></i>
+                {% if ar %}معلومات الفاتورة / Purchase Invoice Info{% else %}Purchase Invoice Info / معلومات الفاتورة{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+
+              {# ── Row 0: Invoice Period (From Date / To Date / Month / Status) ── #}
+              <div class="f-grid4" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}من تاريخ{% else %}From Date{% endif %}</div>
+                  <input type="date" id="pinv_from_date" class="f-inp" dir="ltr" onchange="onPinvPeriodChange()">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}إلى تاريخ{% else %}To Date{% endif %}</div>
+                  <input type="date" id="pinv_to_date" class="f-inp" dir="ltr" onchange="onPinvPeriodChange()">
+                  <div class="sf-err" id="err_pinv_period" style="display:none;color:#dc2626;font-size:11px;margin-top:4px;">
+                    {% if ar %}يجب أن يكون "من تاريخ" قبل أو يساوي "إلى تاريخ"{% else %}From Date must be on or before To Date{% endif %}
+                  </div>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}الشهر{% else %}Month{% endif %}</div>
+                  <input type="text" id="pinv_month" class="f-inp" readonly
+                         style="background:#f8fafc;color:#374151;"
+                         placeholder="{% if ar %}يُحدد من (إلى تاريخ){% else %}Derived from To Date{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div>
+                  <select id="pinv_status" class="f-inp" onchange="onPinvStatusChange()">
+                    <option value="Open" selected>Open</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Closed">Closed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              {# ── Row 1: Purchase Type / Kind / Goods Receipt Note / No ── #}
+              <div class="f-grid4" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}نوع الشراء{% else %}Purchase Type{% endif %}</div>
+                  <select id="pinv_ptype" class="f-inp">
+                    <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
+                    <option value="Assets">{% if ar %}أصول{% else %}Assets{% endif %}</option>
+                    <option value="Expense">{% if ar %}مصروف{% else %}Expense{% endif %}</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
+                  <select id="pinv_kind" class="f-inp">
+                    <option value="Goods">Goods / بضائع</option>
+                    <option value="Services">Services / خدمات</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">
+                    {% if ar %}إيصال الاستلام{% else %}Goods Receipt Note{% endif %}
+                    <span class="f-req">*</span>
+                    <span id="po_status_badge" style="display:none;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:10px;margin-left:8px;font-weight:700;text-transform:none;letter-spacing:0;">
+                      <i class="fas fa-check-circle me-1"></i><span id="po_status_text"></span>
+                    </span>
+                  </div>
+                  <select id="pinv_grn_id" class="f-inp required-field" onchange="onGRNChange()" required>
+                    <option value="">-- {% if ar %}اختر إيصال استلام معتمد{% else %}Select an Approved GRN{% endif %} --</option>
+                    {% for g in grns %}<option value="{{ g.id }}">{{ g.doc_no }}</option>{% endfor %}
+                  </select>
+                  <div id="po_hint" style="font-size:11px;color:#9ca3af;margin-top:4px;">
+                    {% if ar %}مطلوب — اختر إيصال الاستلام لملء الحقول تلقائياً{% else %}Required — selecting a GRN will auto-fill all fields below{% endif %}
+                  </div>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رقم المستند{% else %}No{% endif %}</div>
+                  <input type="text" id="pinv_doc_no" class="f-inp" readonly
+                         style="background:#f0fdf4;color:#15803d;font-weight:700;font-size:14px;letter-spacing:.5px;"
+                         placeholder="{% if ar %}تلقائي{% else %}Auto{% endif %}">
+                </div>
+              </div>
+
+              {# ── Row 2: Document Date / Posting Date / Delivery Date / Purchase Order No ── #}
+              <div class="f-grid4" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</div>
+                  <input type="date" id="pinv_doc_date" class="f-inp" dir="ltr" readonly
+                         style="background:#f8fafc;color:#374151;"
+                         title="{% if ar %}دائماً تاريخ اليوم{% else %}Always today's date{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</div>
+                  <input type="date" id="pinv_posting_date" class="f-inp" dir="ltr" disabled
+                         title="{% if ar %}يتم تفعيله تلقائياً عند تغيير الحالة عن Open{% else %}Activates automatically once status leaves Open{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ التسليم{% else %}Delivery Date{% endif %}</div>
+                  <input type="date" id="pinv_delivery_date" class="f-inp" dir="ltr">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رقم أمر الشراء{% else %}Purchase Order No{% endif %}</div>
+                  <input type="text" id="pinv_po_no" class="f-inp" readonly
+                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من إيصال الاستلام{% else %}Derived from the Goods Receipt Note{% endif %}">
+                  <input type="hidden" id="pinv_po_id">
+                </div>
+              </div>
+
+              {# ── Auto-fill banner ── #}
+              <div id="po_filled_banner" class="po-selected-banner">
+                <i class="fas fa-magic"></i>
+                <span>{% if ar %}تم ملء الحقول تلقائياً من إيصال الاستلام:{% else %}Fields auto-filled from Goods Receipt Note:{% endif %}
+                  <strong id="po_filled_docno"></strong>
+                </span>
+                <button type="button" onclick="clearGRN()"
+                        style="margin-left:auto;background:none;border:1px solid #86efac;border-radius:6px;padding:2px 10px;font-size:11px;color:#15803d;cursor:pointer;">
+                  <i class="fas fa-times me-1"></i>{% if ar %}مسح{% else %}Clear{% endif %}
+                </button>
+              </div>
+
+              {# ── Row 3: Supplier / Supplier Ref / Supplier Bank / Payment ── #}
+              <div class="f-grid4" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}المورد{% else %}Supplier{% endif %}</div>
+                  <input type="text" id="pinv_supplier_name" class="f-inp" readonly
+                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من أمر الشراء{% else %}Derived from the Purchase Order{% endif %}">
+                  <input type="hidden" id="pinv_supplier">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رقم مرجع المورد{% else %}Supplier Ref No{% endif %}</div>
+                  <input type="text" id="pinv_supplier_ref" class="f-inp">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}حساب بنك المورد{% else %}Supplier Bank Account{% endif %}</div>
+                  <select id="pinv_bank_account" class="f-inp" onchange="onPinvBankAccountChange()">
+                    <option value="">-- {% if ar %}اختر المورد أولاً{% else %}Select supplier first{% endif %} --</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}طريقة الدفع{% else %}Payment{% endif %}<span class="f-req">*</span></div>
+                  <select id="pinv_payment" class="f-inp" onchange="onPinvPaymentChange()">
+                    <option value="Credit">Credit / آجل</option>
+                    <option value="Cash">Cash / نقدي</option>
+                  </select>
+                </div>
+              </div>
+
+              {# ── Row 4: Account Code ── #}
+              <div class="f-grid4" style="margin-bottom:12px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
+                  <select id="pinv_account_code" class="f-inp" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                    <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
+                  </select>
+                  <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+                    {% if ar %}يتم تحديده من أمر الشراء المحدد{% else %}Derived from the selected Purchase Order{% endif %}
+                  </div>
+                </div>
+                <div class="f-item"></div>
+                <div class="f-item"></div>
+                <div class="f-item"></div>
+              </div>
+              <div class="f-item" style="margin-bottom:0;">
+                <div class="f-lbl">{% if ar %}ملاحظات{% else %}Remarks{% endif %}</div>
+                <textarea id="pinv_remarks" class="f-inp" rows="2" style="resize:vertical;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section 2: Line Items ── #}
+          <div class="pur-section" style="margin-top:10px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-list-ul"></i>
+                {% if ar %}بنود الفاتورة / Invoice Items{% else %}Invoice Items / بنود الفاتورة{% endif %}
+                <span id="liCount" style="background:#eff6ff;color:#2563eb;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:8px;">0</span>
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:11px;color:#6b7280;">
+                  <i class="fas fa-lock me-1"></i>
+                  {% if ar %}البنود موروثة من أمر الشراء وغير قابلة للتعديل{% else %}Items are inherited from the Purchase Order and locked{% endif %}
+                </span>
+                <span style="font-size:11px;color:#6b7280;">
+                  <i class="fas fa-info-circle me-1"></i>
+                  {% if ar %}المبلغ الخاضع = (الكمية × السعر − الخصم) + الشحن{% else %}Taxable = (Qty × Rate − Discount) + Freight{% endif %}
+                </span>
+              </div>
+              <div class="li-wrap">
+                <table class="li-table">
+                  <thead><tr>
+                    <th style="width:30px;">#</th>
+                    <th style="min-width:85px;">{% if ar %}الكود{% else %}Item Code{% endif %}</th>
+                    <th style="min-width:150px;">{% if ar %}الاسم{% else %}Name{% endif %}</th>
+                    <th style="min-width:100px;">{% if ar %}المستودع{% else %}Warehouse{% endif %}</th>
+                    <th style="width:95px;">UoM</th>
+                    <th style="width:65px;">{% if ar %}الكمية{% else %}QTY{% endif %}</th>
+                    <th style="width:65px;">{% if ar %}السعر{% else %}Rate{% endif %}</th>
+                    <th style="width:60px;">{% if ar %}الخصم{% else %}Disc.{% endif %}</th>
+                    <th style="width:60px;">{% if ar %}الشحن{% else %}Freight{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}الخاضع{% else %}Taxable{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}كود الضريبة{% else %}Tax Code{% endif %}</th>
+                    <th style="width:65px;">{% if ar %}الضريبة{% else %}Tax Amt{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+                  </tr></thead>
+                  <tbody id="liBody"></tbody>
+                  <tfoot>
+                    <tr style="background:#f1f5f9;">
+                      <td colspan="12" style="text-align:right;padding:7px 10px;font-weight:600;font-size:12px;color:#374151;">
+                        {% if ar %}المجموع الإجمالي{% else %}Grand Total{% endif %}
+                      </td>
+                      <td style="padding:7px 8px;font-weight:700;color:#1e3a5f;font-size:13px;" id="li_grand_total">SAR 0.00</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section 3: Summary ── #}
+          <div class="pur-section" style="margin-top:10px;margin-bottom:16px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-calculator"></i>
+                {% if ar %}ملخص فاتورة الشراء{% else %}Purchase Invoice Summary{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div class="pur-summary">
+                <div class="sum-line"><span>{% if ar %}الإجمالي قبل الخصم{% else %}Total before discount{% endif %}</span><span id="s_total_bd" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}إجمالي الخصم{% else %}Total discount{% endif %}</span><span id="s_total_disc" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}الشحن{% else %}Freight{% endif %}</span><span id="s_total_fr" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}الإجمالي بدون ضريبة{% else %}Total Excl. VAT (SAR){% endif %}</span><span id="s_excl_vat" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-line"><span>{% if ar %}مبلغ ضريبة القيمة المضافة{% else %}VAT Amount (SAR){% endif %}</span><span id="s_vat_amt" style="font-weight:600;">SAR 0.00</span></div>
+                <div class="sum-total-row">
+                  <span style="font-weight:700;font-size:14px;">{% if ar %}الإجمالي شامل الضريبة{% else %}Total Incl. VAT (SAR){% endif %}</span>
+                  <span id="s_incl_vat" style="font-size:18px;font-weight:800;">SAR 0.00</span>
+                </div>
+                <div class="sum-doc-row">
+                  <span style="color:#374151;">{% if ar %}المرفقات{% else %}Documents Attached{% endif %}</span>
+                  <span id="s_doc_count" style="background:#eff6ff;color:#2563eb;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section: General Receipt Ledger (GRL) -- collapsed by default ── #}
+          <div class="pur-section" style="margin:14px 18px 18px;">
+            <button type="button" id="grlSecHdr" onclick="togGrlSec(this)" style="width:100%;border:none;cursor:pointer;text-align:left;background:#1e3a5f;color:#fff;padding:10px 14px;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
+              <span><i class="fas fa-book me-1"></i>{% if ar %}دفتر الاستلام العام (GRL){% else %}General Receipt Ledger (GRL){% endif %}</span>
+              <i class="fas fa-chevron-down" style="color:#fff;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body" style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:14px;background:#fff;">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">
+                <div>
+                  <label class="grl-lbl">{% if ar %}رقم القيد{% else %}Je No{% endif %}</label>
+                  <input type="text" id="grl_je_no" class="grl-inp" readonly style="background:#f0fdf4;color:#15803d;font-weight:700;" placeholder="{% if ar %}يُنشأ عند الترحيل{% else %}Assigned on Post{% endif %}">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}رقم GRL{% else %}GRL No{% endif %}</label>
+                  <input type="text" id="grl_no" class="grl-inp" readonly style="background:#f0fdf4;color:#15803d;font-weight:700;" placeholder="{% if ar %}يُنشأ تلقائياً{% else %}Auto-generated{% endif %}">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}المصدر / Origin{% else %}Origin{% endif %}</label>
+                  <input type="text" id="grl_origion" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</label>
+                  <input type="date" id="grl_posting_date" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}تاريخ الاستحقاق{% else %}Due Date{% endif %}</label>
+                  <input type="date" id="grl_due_date" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</label>
+                  <input type="date" id="grl_document_date" class="grl-inp" readonly style="background:#f8fafc;">
+                </div>
+                <div>
+                  <label class="grl-lbl">{% if ar %}البيان{% else %}Narration{% endif %}</label>
+                  <input type="text" id="grl_narration" name="grl_narration" class="grl-inp" oninput="grlSyncRowNarrations()" placeholder="{% if ar %}بيان اختياري{% else %}Optional narration{% endif %}">
+                </div>
+              </div>
+              <div style="margin-bottom:8px;">
+                <div style="font-weight:700;font-size:12px;color:#334155;">{% if ar %}تفاصيل القيد{% else %}GRL Detail{% endif %}</div>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="grl-table" id="grlDetailTable">
+                  <thead>
+                    <tr>
+                      <th style="min-width:120px;">{% if ar %}الرمز{% else %}Code{% endif %}</th>
+                      <th style="min-width:90px;">{% if ar %}حساب ضبط{% else %}Control Account{% endif %}</th>
+                      <th style="min-width:110px;">{% if ar %}الرمز المرجعي{% else %}Reference Code{% endif %}</th>
+                      <th>{% if ar %}اسم الحساب (EN){% else %}Account Name (EN){% endif %}</th>
+                      <th>{% if ar %}اسم الحساب (AR){% else %}Account Name (AR){% endif %}</th>
+                      <th style="text-align:right;min-width:100px;">{% if ar %}مدين{% else %}Debit{% endif %}</th>
+                      <th style="text-align:right;min-width:100px;">{% if ar %}دائن{% else %}Credit{% endif %}</th>
+                      <th style="min-width:140px;">{% if ar %}البيان{% else %}Narration{% endif %}</th>
+                    </tr>
+                  </thead>
+                  <tbody id="grlDetailBody">
+                    <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:14px;">{% if ar %}اضغط ترحيل{% else %}Click Post{% endif %}</td></tr>
+                  </tbody>
+                  <tfoot>
+                    <tr style="font-weight:700;background:#f8fafc;">
+                      <td colspan="5" style="text-align:right;">{% if ar %}الإجمالي{% else %}Total{% endif %}</td>
+                      <td style="text-align:right;" id="grlTotDebit">0.00</td>
+                      <td style="text-align:right;" id="grlTotCredit">0.00</td>
+                      <td id="grlBalance"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p style="font-size:11px;color:#94a3b8;margin:8px 0 0;">
+                {% if ar %}سجلان ثابتان لكل بند، يتم توليدهما تلقائياً من بنود الفاتورة عند الترحيل ولا يمكن حذفهما. يمكن تعديل حقل البيان.{% else %}Exactly two fixed records per line item, generated automatically from the invoice's line items on Post -- they cannot be added or removed. The narration can still be edited.{% endif %}
+              </p>
+            </div>
+          </div>
+
+        </div>{# end tab_content #}
+
+        {# ══ TAB 2: ATTACHMENTS ══ #}
+        <div class="pur-tab-pane" id="tab_attach">
+          <div style="padding:20px;">
+            <div id="attDrop"
+                 style="border:2px dashed #bfdbfe;border-radius:12px;padding:40px 24px;
+                        text-align:center;background:#f0f9ff;cursor:pointer;
+                        display:flex;flex-direction:column;align-items:center;justify-content:center;
+                        min-height:180px;transition:all 0.15s;"
+                 onclick="document.getElementById('attInput').click()"
+                 ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff';"
+                 ondragleave="this.style.borderColor='#bfdbfe';this.style.background='#f0f9ff';"
+                 ondrop="event.preventDefault();this.style.borderColor='#bfdbfe';this.style.background='#f0f9ff';handleFiles(event.dataTransfer.files);">
+              <i class="fas fa-cloud-upload-alt" style="font-size:36px;color:#60a5fa;margin-bottom:12px;"></i>
+              <div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px;">
+                {% if ar %}اسحب الملفات هنا أو انقر للتصفح{% else %}Drag & drop files here or click to browse{% endif %}
+              </div>
+              <div style="font-size:12px;color:#9ca3af;">PDF, Word, Excel, Images (max 20MB each)</div>
+              <input type="file" id="attInput" multiple
+                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+                     style="display:none;" onchange="handleFiles(this.files)">
+            </div>
+            <div id="attList" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;"></div>
+            <div id="existAttList" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        </form>
+      </div>
+
+      <div class="pur-footer" style="justify-content:flex-end;gap:10px;">
+        <button class="btn-f btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" id="grlPostBtn" class="btn-f" onclick="grlPost()" style="background:#2563eb;color:#fff;"
+                {% if is_basic_mode %}disabled title="{% if ar %}الترحيل مقفل في الخطة الأساسية{% else %}Posting is locked on the Basic plan{% endif %}"{% endif %}>
+          <i class="fas fa-check me-1"></i>{% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}
+        </button>
+        <button class="btn-f btn-save" onclick="savePINV()">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ فاتورة الشراء / Save{% else %}Save Purchase Invoice / حفظ{% endif %}
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# Delete Confirm #}
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog modal-sm"><div class="modal-content" style="border-radius:10px;overflow:hidden;">
+    <div class="modal-header border-0"><h6 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>{% if ar %}تأكيد الحذف{% else %}Confirm Delete{% endif %}</h6>
+    <button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><p id="delTxt" class="fw-semibold mb-0"></p></div>
+    <div class="modal-footer border-0">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+      <button class="btn btn-sm btn-danger" id="delBtn">{% if ar %}حذف{% else %}Delete{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const CSRF  = '{{ csrf_token() }}';
+let _liIdx = 0;
+let _attachments = [];
+let _pinvModal = null;
+let _isFetchingDocNo = false;
+let _pinvPosted = false;   // true once this PINV's posting_status is 'Posted' -- blocks re-Post
+
+/* Same open/close mechanics as togSec(), but keeps the chevron white --
+   this header stays on its dark navy background whether open or closed. */
+function togGrlSec(btn) {
+  const body = btn.nextElementSibling;
+  const ch   = btn.querySelector('.fa-chevron-up, .fa-chevron-down');
+  const open = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  if (ch) ch.className = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+}
+
+/* GRL starts collapsed every time the Add/Edit form opens, regardless of
+   whatever state the user left it in during an earlier visit this session. */
+function grlCollapseSec(){
+  const btn = document.getElementById('grlSecHdr');
+  if(!btn) return;
+  const body = btn.nextElementSibling;
+  if(body) body.classList.remove('open');
+  const ch = btn.querySelector('.fa-chevron-up, .fa-chevron-down');
+  if(ch) ch.className = 'fas fa-chevron-down';
+}
+
+/* Reflects _pinvPosted on the Post & Save button -- disabled + relabeled
+   once this Purchase Invoice has already been posted (duplicate-posting prevention). */
+function grlUpdatePostBtnState(){
+  const btn = document.getElementById('grlPostBtn');
+  if(!btn) return;
+  btn.disabled = _pinvPosted;
+  btn.style.opacity = _pinvPosted ? '0.55' : '1';
+  btn.style.cursor = _pinvPosted ? 'not-allowed' : 'pointer';
+  btn.title = _pinvPosted ? (IS_AR?'تم ترحيل فاتورة الشراء هذه مسبقاً.':'This Purchase Invoice has already been posted.') : '';
+}
+
+/* ══ Document Number Fetch - FIXED: Ensures proper increment ══ */
+async function fetchDocNo() {
+  if (_isFetchingDocNo) return;
+  _isFetchingDocNo = true;
+  try {
+    const url = '/purchase/next-doc-no?type=PINV&force_new=true&_=' + Date.now();
+    const res = await fetch(url);
+    const d = await res.json();
+    if (d.doc_no) {
+      document.getElementById('pinv_doc_no').value = d.doc_no;
+      document.getElementById('pinvDocBadge').textContent = d.doc_no;
+    }
+  } catch(e) {
+    console.error('Error fetching doc no:', e);
+  } finally {
+    _isFetchingDocNo = false;
+  }
+}
+
+/* ══ GRN SELECTION → AUTO-FILL EVERYTHING (Purchase Order is now purely derived) ══ */
+let _poPullInProgress = false;
+
+async function onGRNChange() {
+  const grnId  = document.getElementById('pinv_grn_id').value;
+  const sel    = document.getElementById('pinv_grn_id');
+  const banner = document.getElementById('po_filled_banner');
+  const badge  = document.getElementById('po_status_badge');
+  const hint   = document.getElementById('po_hint');
+
+  sel.classList.toggle('required-field', !grnId);
+
+  if (!grnId) {
+    banner.style.display = 'none';
+    badge.style.display  = 'none';
+    hint.style.display   = 'block';
+    document.getElementById('pinv_po_id').value = '';
+    document.getElementById('pinv_po_no').value = '';
+    if(typeof grlPreviewFromPO==='function') grlPreviewFromPO('');
+    return;
+  }
+
+  // Fetch GRN data
+  let doc;
+  _poPullInProgress = true;
+  try {
+    const res = await fetch('/purchase/grn/' + grnId + '/summary');
+    if (!res.ok) throw new Error('Failed to fetch GRN');
+    doc = await res.json();
+  } catch(e) {
+    console.error('Failed to load GRN:', e);
+    alert(IS_AR ? 'فشل تحميل إيصال الاستلام' : 'Failed to load Goods Receipt Note');
+    _poPullInProgress = false;
+    return;
+  }
+  _poPullInProgress = false;
+
+  // Purchase Order — purely derived, not user-selectable
+  document.getElementById('pinv_po_id').value = doc.purchase_order_id || '';
+  document.getElementById('pinv_po_no').value = doc.po_no || '';
+
+  // Purchase Type / Kind — derived from the GRN
+  document.getElementById('pinv_ptype').value = doc.purchase_type || '';
+  document.getElementById('pinv_kind').value  = doc.kind || 'Goods';
+
+  // ── Auto-fill (supplier derived, not user-selectable) ──
+  document.getElementById('pinv_supplier').value = doc.supplier_id || '';
+  document.getElementById('pinv_supplier_name').value = doc.supplier_name || '';
+  loadPinvSupplierBanks(doc.supplier_id || '');
+
+  const vref = document.getElementById('pinv_supplier_ref');
+  if (vref) vref.value = doc.supplier_ref_no || '';
+
+  const dd = document.getElementById('pinv_delivery_date');
+  if (dd && doc.delivery_date) dd.value = doc.delivery_date;
+
+  // Account Code — derived from the GRN (falls back to the P1 default if none)
+  const accSel = document.getElementById('pinv_account_code');
+  const accVal = doc.account_code || (TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+  accSel.innerHTML = accountCodeOptionsHtml(accVal);
+
+  // Line items — copy from the GRN, locked
+  document.getElementById('liBody').innerHTML = '';
+  _liIdx = 0;
+  if (doc.items && doc.items.length > 0) {
+    doc.items.forEach(li => addLiRow(li));
+  } else {
+    addLiRow();
+  }
+  recalcSummary();
+  updLiCount();
+
+  // Show banner
+  document.getElementById('po_filled_docno').textContent = doc.doc_no || '';
+  document.getElementById('po_status_text').textContent  = doc.status || '';
+  banner.style.display = 'flex';
+  badge.style.display  = 'inline-flex';
+  hint.style.display   = 'none';
+
+  sel.style.borderColor = '#86efac';
+  if(typeof grlPreviewFromPO==='function') grlPreviewFromPO(doc.purchase_order_id || '');
+}
+
+/* ══ Posting Date: empty + disabled while status = Open ══ */
+function onPinvStatusChange() {
+  const statusEl = document.getElementById('pinv_status');
+  const postEl   = document.getElementById('pinv_posting_date');
+  if (!statusEl || !postEl) return;
+  if (statusEl.value !== 'Open') {
+    postEl.disabled = false;
+    if (!postEl.value) postEl.value = new Date().toISOString().split('T')[0];
+  } else {
+    postEl.disabled = true;
+    postEl.value = '';
+  }
+}
+
+/* ══ Section toggle ══ */
+function togSec(btn) {
+  const body = btn.nextElementSibling;
+  const ch   = btn.querySelector('.fa-chevron-up, .fa-chevron-down');
+  const open = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  btn.classList.toggle('open', !open);
+  if (ch) ch.className = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+  if (ch) ch.style.cssText = open ? 'color:#9ca3af;font-size:11px;' : 'color:#2563eb;font-size:11px;';
+}
+
+/* ══ Tab switch ══ */
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.pur-tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.pur-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ══ Supplier bank accounts → populate bank dropdown ══ */
+function loadPinvSupplierBanks(supplierId, selectedId) {
+  const sel = document.getElementById('pinv_bank_account');
+  if (!sel) return;
+  if (!supplierId) {
+    sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'اختر المورد أولاً' : 'Select supplier first') + ' --</option>';
+    return;
+  }
+  fetch('/purchase/suppliers/' + supplierId + '/banks')
+    .then(r => r.json())
+    .then(banks => {
+      let html = '<option value="">-- ' + (IS_AR ? 'اختر حساباً' : 'Select account') + ' --</option>';
+      (banks || []).forEach(b => {
+        const label = (b.bank_name_en || b.bank_name || '') +
+                      (b.account_number ? ' — ' + b.account_number : '');
+        const selAttr = (String(b.id) === String(selectedId)) ? ' selected' : '';
+        html += '<option value="' + b.id + '"' + selAttr + '>' + label + '</option>';
+      });
+      sel.innerHTML = html;
+    })
+    .catch(() => {
+      sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'لا توجد حسابات' : 'No accounts') + ' --</option>';
+    });
+}
+
+/* ══ Picking a Supplier Bank Account implies a Cash payment, and picking
+   Credit implies no specific bank account is used yet -- the two fields
+   stay mutually consistent in both directions. ══ */
+function onPinvBankAccountChange() {
+  if (document.getElementById('pinv_bank_account').value) {
+    document.getElementById('pinv_payment').value = 'Cash';
+  }
+}
+
+function onPinvPaymentChange() {
+  if (document.getElementById('pinv_payment').value === 'Credit') {
+    document.getElementById('pinv_bank_account').value = '';
+  }
+}
+
+function clearGRN() {
+  document.getElementById('pinv_grn_id').value = '';
+  document.getElementById('pinv_po_id').value = '';
+  document.getElementById('pinv_po_no').value = '';
+  document.getElementById('po_filled_banner').style.display = 'none';
+  document.getElementById('po_status_badge').style.display  = 'none';
+  document.getElementById('po_hint').style.display          = 'block';
+  document.getElementById('pinv_grn_id').classList.add('required-field');
+  document.getElementById('pinv_grn_id').style.borderColor = '';
+  // Clear auto-filled fields
+  ['pinv_supplier_name','pinv_supplier_ref'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  document.getElementById('pinv_supplier').value = '';
+  document.getElementById('pinv_ptype').value = '';
+  document.getElementById('pinv_kind').value = 'Goods';
+  document.getElementById('pinv_account_code').innerHTML =
+    accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+  document.getElementById('liBody').innerHTML = '';
+  _liIdx = 0;
+  addLiRow();
+  recalcSummary(); updLiCount();
+  if(typeof grlPreviewFromPO==='function') grlPreviewFromPO('');
+}
+
+/* ══ Account Code (header) — populated from the purchase tax code master.
+   Line items are locked/inherited from the source PO, so there is no
+   cascade into line items here, only the header dropdown. ══ */
+let TAX_CODES = [];
+const TAX_DEFAULT_CODE = 'P1';
+function taxCodeLabel(t) {
+  return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
+}
+function accountCodeOptionsHtml(selected) {
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += TAX_CODES.map(t =>
+    `<option value="${t.account_code}"${t.account_code === selected ? ' selected' : ''}>${taxCodeLabel(t)}</option>`
+  ).join('');
+  return html;
+}
+function loadTaxCodes() {
+  return fetch('/purchase-tax-codes/data')
+    .then(r => r.json())
+    .then(d => {
+      TAX_CODES = (d || []).filter(t => (t.status || 'Active') === 'Active');
+      const accEl = document.getElementById('pinv_account_code');
+      if (accEl) {
+        const cur = accEl.value;
+        accEl.innerHTML = accountCodeOptionsHtml(cur);
+        accEl.value = cur;
+      }
+    })
+    .catch(() => { TAX_CODES = []; });
+}
+document.addEventListener('DOMContentLoaded', loadTaxCodes);
+
+/* ══ Line Items — locked/inherited from PO, read-only ══ */
+function addLiRow(d) {
+  const idx = _liIdx++;
+  d = d || {};
+  const row = `<tr id="plr_${idx}">
+    <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
+    <td><input type="text"   class="li-inp" name="li_item_code[]" value="${d.item_code||''}" readonly style="width:80px;background:#f3f4f6;"></td>
+    <td><input type="text"   class="li-inp" name="li_item_desc[]" value="${d.item_desc||''}" readonly style="min-width:130px;background:#f3f4f6;"></td>
+    <td><input type="text"   class="li-inp" name="li_warehouse[]" value="${d.warehouse||''}" readonly style="min-width:90px;background:#f3f4f6;"></td>
+    <td><input type="text"   class="li-inp" name="li_uom[]" value="${d.uom||'unit'}" readonly style="width:90px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  readonly style="width:62px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||0}"      readonly style="width:62px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  readonly style="width:58px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   readonly style="width:58px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="plt_${idx}"  name="li_taxable_disp[]" value="${d.taxable||0}" readonly
+         style="width:76px;background:#fffbeb;color:#92400e;font-weight:600;"></td>
+    <td><input type="text" class="li-inp" name="li_tax_code[]" id="pltc_${idx}" value="${d.tax_code||'VAT15'}" readonly style="width:78px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${d.tax_amount||0}" readonly style="width:62px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${d.total||0}" readonly style="width:76px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+  </tr>`;
+  document.getElementById('liBody').insertAdjacentHTML('beforeend', row);
+  recalcLi(idx);
+  updLiCount();
+}
+
+// Handles both a real tax code ("VAT15"/"VAT0"/"EXEMPT") and an
+// already-resolved display string (e.g. "15%") -- the latter is what an
+// EXISTING saved line carries once its tax_code has been resolved, so a
+// plain `=== 'VAT15'` check would wrongly show/recompute 0% when editing
+// one instead of reading back the real rate.
+function taxRateOf(code) {
+  if (code === 'VAT15') return 15;
+  if (code === 'VAT0' || code === 'EXEMPT') return 0;
+  const m = String(code || '').match(/(\d+(?:\.\d+)?)\s*%/);
+  return m ? parseFloat(m[1]) : 0;
+}
+
+function recalcLi(idx) {
+  const g = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
+  const qty  = g('plq_'+idx);
+  const rate = g('plrt_'+idx);
+  const disc = g('pld_'+idx);
+  const fr   = g('plf_'+idx);
+  const tcEl = document.getElementById('pltc_'+idx);
+  const taxRate = tcEl ? taxRateOf(tcEl.value) : 0;
+  const taxable = Math.max(0, (qty * rate - disc) + fr);
+  const taxAmt  = Math.round(taxable * taxRate / 100 * 100) / 100;
+  const total   = taxable + taxAmt;
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = v.toFixed(2); };
+  set('plt_'+idx,   taxable);
+  set('plta_'+idx,  taxAmt);
+  set('pltot_'+idx, total);
+  recalcSummary();
+}
+
+function recalcSummary() {
+  let bd=0, disc=0, fr=0, vat=0;
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const g = n => parseFloat(row.querySelector(`[name="${n}[]"]`)?.value || 0) || 0;
+    bd   += g('li_qty') * g('li_rate');
+    disc += g('li_discount');
+    fr   += g('li_freight');
+    vat  += parseFloat(row.querySelector('[name="li_tax_amount_disp[]"]')?.value || 0) || 0;
+  });
+  const excl = (bd - disc) + fr;
+  const incl = excl + vat;
+  const fmt  = n => 'SAR ' + n.toLocaleString('en-SA', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const s    = id => document.getElementById(id);
+  if (s('s_total_bd'))   s('s_total_bd').textContent   = fmt(bd);
+  if (s('s_total_disc')) s('s_total_disc').textContent = fmt(disc);
+  if (s('s_total_fr'))   s('s_total_fr').textContent   = fmt(fr);
+  if (s('s_excl_vat'))   s('s_excl_vat').textContent   = fmt(excl);
+  if (s('s_vat_amt'))    s('s_vat_amt').textContent     = fmt(vat);
+  if (s('s_incl_vat'))   s('s_incl_vat').textContent   = fmt(incl);
+  if (s('li_grand_total')) s('li_grand_total').textContent = fmt(incl);
+}
+
+function updLiCount() {
+  const n = document.querySelectorAll('#liBody tr').length;
+  const el = document.getElementById('liCount');
+  if (el) el.textContent = n;
+}
+
+/* ══ Attachments ══ */
+function handleFiles(files) {
+  for (const f of files) {
+    if (_attachments.find(x => x.name === f.name)) continue;
+    _attachments.push(f);
+    const div = document.createElement('div'); div.className = 'att-item';
+    div.id = 'att_' + f.name.replace(/[^a-z0-9]/gi,'_');
+    div.innerHTML = `<span><i class="fas fa-file me-2" style="color:#60a5fa;"></i><strong>${f.name}</strong>
+      <span style="color:#9ca3af;margin-left:8px;font-size:11px;">${(f.size/1024).toFixed(1)} KB</span></span>
+      <button type="button" class="att-rm" onclick="removeAtt('${f.name}')"><i class="fas fa-times"></i></button>`;
+    document.getElementById('attList').appendChild(div);
+  }
+  updDocCount();
+}
+
+function removeAtt(name) {
+  _attachments = _attachments.filter(f => f.name !== name);
+  const el = document.getElementById('att_' + name.replace(/[^a-z0-9]/gi,'_'));
+  if (el) el.remove();
+  updDocCount();
+}
+
+function updDocCount() {
+  const total = _attachments.length + document.querySelectorAll('#existAttList .att-item').length;
+  const el = document.getElementById('s_doc_count'), badge = document.getElementById('attBadge');
+  if (el) el.textContent = total; if (badge) badge.textContent = total;
+}
+
+/* ══ Open Add ══ */
+async function openAddPINV() {
+  _liIdx = 0; _attachments = [];
+  document.getElementById('pinv_id').value = '';
+  if(typeof grlReset==='function') grlReset();
+  if(typeof grlSyncMaster==='function') grlSyncMaster();
+  grlPreviewNextNos();
+  grlCollapseSec();
+  _pinvPosted = false;
+  grlUpdatePostBtnState();
+  document.getElementById('pinvTitle').innerHTML = '<i class="fas fa-file-invoice me-2"></i>' + (IS_AR ? 'إضافة فاتورة شراء' : 'Add Purchase Invoice');
+  
+  // Reset GRN selector to required state (Purchase Order is now purely derived)
+  const grnSel = document.getElementById('pinv_grn_id');
+  grnSel.value = '';
+  grnSel.style.borderColor = '';
+  grnSel.classList.add('required-field');
+  document.getElementById('pinv_po_id').value = '';
+  document.getElementById('pinv_po_no').value = '';
+  document.getElementById('po_filled_banner').style.display = 'none';
+  document.getElementById('po_status_badge').style.display  = 'none';
+  document.getElementById('po_hint').style.display          = 'block';
+
+  // Clear fields
+  ['pinv_supplier_name','pinv_supplier_ref','pinv_remarks'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  document.getElementById('pinv_supplier').value = '';
+  document.getElementById('pinv_doc_no').value = '';
+  document.getElementById('pinvDocBadge').textContent = '...';
+
+  const accSel = document.getElementById('pinv_account_code');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+
+  // ⭐ Fetch fresh document number
+  await fetchDocNo();
+  // grlSyncMaster() ran before this resolved, so grl_origion still had the
+  // stale placeholder ("...") -- refresh it now that pinv_doc_no is real.
+  if(typeof grlSyncMaster==='function') grlSyncMaster();
+
+  document.getElementById('pinv_status').value = 'Open';
+  document.getElementById('pinv_kind').value = 'Goods';
+  document.getElementById('pinv_ptype').value = '';
+  document.getElementById('pinv_payment').value = 'Credit';
+  loadPinvSupplierBanks('');
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('pinv_posting_date').value = '';
+  document.getElementById('pinv_posting_date').disabled = true;
+  document.getElementById('pinv_delivery_date').value = today;
+  document.getElementById('pinv_doc_date').value = today;
+  document.getElementById('pinv_from_date').value = '';
+  document.getElementById('pinv_to_date').value = '';
+  document.getElementById('pinv_month').value = '';
+  document.getElementById('err_pinv_period').style.display = 'none';
+  document.getElementById('liBody').innerHTML = '';
+  document.getElementById('attList').innerHTML = '';
+  document.getElementById('existAttList').innerHTML = '';
+  recalcSummary(); updLiCount(); updDocCount();
+  
+  switchTab('tab_content', document.querySelector('.pur-tab'));
+  document.querySelectorAll('.pur-section-hdr').forEach(btn => {
+    btn.classList.add('open');
+    btn.nextElementSibling.classList.add('open');
+    const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
+    if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
+  });
+  addLiRow();
+  
+  if (!_pinvModal) {
+    const modalEl = document.getElementById('pinvModal');
+    if (modalEl) {
+      _pinvModal = new bootstrap.Modal(modalEl);
+    }
+  }
+  if (_pinvModal) {
+    _pinvModal.show();
+  }
+}
+
+/* ══ Open Edit ══ */
+function openEditPINV(id) {
+  fetch('/purchase/invoices/' + id + '/json')
+    .then(r => {
+      if (!r.ok) throw new Error('Failed to fetch invoice data');
+      return r.json();
+    })
+    .then(d => {
+      console.log('Edit data:', d);
+      _liIdx = 0; _attachments = [];
+      document.getElementById('pinv_id').value = id;
+      grlLoad(id);   // load the saved GRL for this PINV into the section
+      grlCollapseSec();
+      _pinvPosted = (d.posting_status === 'Posted');
+      grlUpdatePostBtnState();
+      document.getElementById('pinvTitle').innerHTML = '<i class="fas fa-edit me-2"></i>' + (IS_AR ? 'تعديل فاتورة شراء' : 'Edit Purchase Invoice');
+      
+      // GRN - set without re-triggering the auto-fill fetch; PO is purely derived
+      const grnSel = document.getElementById('pinv_grn_id');
+      const grnIdValue = d.goods_receipt_note_id || '';
+      grnSel.value = grnIdValue;
+      grnSel.style.borderColor = grnIdValue ? '#86efac' : '';
+      grnSel.classList.toggle('required-field', !grnIdValue);
+      document.getElementById('pinv_po_id').value = d.purchase_order_id || '';
+      document.getElementById('pinv_po_no').value = d.po_no || '';
+      document.getElementById('po_filled_banner').style.display = grnIdValue ? 'flex' : 'none';
+      document.getElementById('po_filled_docno').textContent = d.grn_no || '';
+      document.getElementById('po_hint').style.display = grnIdValue ? 'none' : 'block';
+      
+      // Other fields
+      document.getElementById('pinv_doc_no').value = d.doc_no || '';
+      document.getElementById('pinvDocBadge').textContent = d.doc_no || '';
+      document.getElementById('pinv_status').value = d.status || 'Open';
+      document.getElementById('pinv_kind').value = d.kind || 'Goods';
+      document.getElementById('pinv_ptype').value = d.purchase_type || '';
+      document.getElementById('pinv_payment').value = d.payment_method || 'Credit';
+      document.getElementById('pinv_supplier').value = d.supplier_id || '';
+      document.getElementById('pinv_supplier_name').value = d.supplier_name || '';
+      loadPinvSupplierBanks(d.supplier_id || '', d.bank_account_id || '');
+      const vr = document.getElementById('pinv_supplier_ref');  if(vr) vr.value = d.supplier_ref_no||'';
+      const rm = document.getElementById('pinv_remarks');     if(rm) rm.value = d.remarks||'';
+      document.getElementById('pinv_posting_date').disabled = (d.status === 'Open');
+      document.getElementById('pinv_posting_date').value  = d.posting_date  || '';
+      document.getElementById('pinv_delivery_date').value = d.delivery_date || '';
+      document.getElementById('pinv_doc_date').value      = new Date().toISOString().split('T')[0];
+      document.getElementById('pinv_from_date').value = d.from_date || '';
+      document.getElementById('pinv_to_date').value   = d.to_date || '';
+      document.getElementById('err_pinv_period').style.display = 'none';
+      updatePinvMonth();
+
+      const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
+      document.getElementById('pinv_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+
+      document.getElementById('liBody').innerHTML = '';
+      if (d.items && d.items.length > 0) {
+        d.items.forEach(li => addLiRow(li));
+      } else {
+        addLiRow();
+      }
+      
+      document.getElementById('attList').innerHTML = '';
+      document.getElementById('existAttList').innerHTML = '';
+      if (d.attachments) {
+        d.attachments.forEach(a => {
+          const div = document.createElement('div'); div.className = 'att-item';
+          div.innerHTML = `<span><i class="fas fa-file me-2" style="color:#60a5fa;"></i><strong>${a.filename}</strong></span><span style="margin-left:auto;display:inline-flex;gap:8px;"><a href="/purchase/attachments/${a.id}/view" target="_blank" title="View" style="color:#2563eb;text-decoration:none;"><i class="fas fa-eye"></i></a><a href="/purchase/attachments/${a.id}/download" title="Download" style="color:#16a34a;text-decoration:none;"><i class="fas fa-download"></i></a><button type="button" onclick="delExistAtt(${a.id}, this)" title="Delete" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:0;"><i class="fas fa-trash"></i></button></span>`;
+          document.getElementById('existAttList').appendChild(div);
+        });
+      }
+      
+      recalcSummary(); updLiCount(); updDocCount();
+      switchTab('tab_content', document.querySelector('.pur-tab'));
+      document.querySelectorAll('.pur-section-hdr').forEach(btn => {
+        btn.classList.add('open'); btn.nextElementSibling.classList.add('open');
+        const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
+        if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
+      });
+      
+      if (!_pinvModal) {
+        const modalEl = document.getElementById('pinvModal');
+        if (modalEl) {
+          _pinvModal = new bootstrap.Modal(modalEl);
+        }
+      }
+      if (_pinvModal) {
+        _pinvModal.show();
+      }
+    })
+    .catch(error => {
+      console.error('Error loading invoice:', error);
+      alert(IS_AR ? 'خطأ في تحميل بيانات الفاتورة' : 'Error loading invoice data');
+    });
+}
+
+/* Invoice Period: Month is always derived display-only from To Date --
+   never entered directly -- and From Date must never be after To Date. */
+function updatePinvMonth() {
+  const toVal = document.getElementById('pinv_to_date').value;
+  const monthEl = document.getElementById('pinv_month');
+  if (!toVal) { monthEl.value = ''; return; }
+  const d = new Date(toVal + 'T00:00:00');
+  monthEl.value = d.toLocaleDateString(IS_AR ? 'ar' : 'en-US', { month: 'long', year: 'numeric' });
+}
+function validatePinvPeriod() {
+  const from = document.getElementById('pinv_from_date').value;
+  const to   = document.getElementById('pinv_to_date').value;
+  const errEl = document.getElementById('err_pinv_period');
+  const bad = from && to && from > to;
+  errEl.style.display = bad ? 'block' : 'none';
+  return !bad;
+}
+function onPinvPeriodChange() {
+  updatePinvMonth();
+  validatePinvPeriod();
+}
+
+/* Validates + builds the FormData shared by plain Save and Post & Save.
+   Returns null (having already alerted) if validation fails. */
+async function _buildPINVFormData() {
+  // ⭐ Ensure we have a document number
+  const docNo = document.getElementById('pinv_doc_no').value;
+  if (!docNo || docNo === '...' || docNo === 'NEW' || docNo === '') {
+    alert(IS_AR ? 'جاري تحميل رقم المستند... يرجى الانتظار' : 'Loading document number... please wait');
+    await fetchDocNo();
+    const newDocNo = document.getElementById('pinv_doc_no').value;
+    if (!newDocNo || newDocNo === '...' || newDocNo === '') {
+      alert(IS_AR ? 'فشل في توليد رقم المستند' : 'Failed to generate document number');
+      return null;
+    }
+  }
+
+  // Validate GRN is required (Purchase Order is now derived from it)
+  const grnId = document.getElementById('pinv_grn_id').value;
+  if (!grnId) {
+    document.getElementById('pinv_grn_id').classList.add('required-field');
+    document.getElementById('pinv_grn_id').focus();
+    document.getElementById('pinv_grn_id').style.borderColor = '#ef4444';
+    alert(IS_AR ? 'الرجاء اختيار إيصال الاستلام أولاً' : 'Please select a Goods Receipt Note first');
+    return null;
+  }
+  if (_poPullInProgress) {
+    alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات إيصال الاستلام' : 'Please wait — still loading data from the Goods Receipt Note');
+    return null;
+  }
+  if (!validatePinvPeriod()) {
+    document.getElementById('pinv_to_date').focus();
+    return null;
+  }
+
+  const fd  = new FormData();
+
+  fd.append('csrf_token', CSRF);
+  fd.append('po_id', document.getElementById('pinv_po_id').value || '');
+  fd.append('grn_id', grnId);
+  fd.append('status', document.getElementById('pinv_status').value);
+  fd.append('kind', document.getElementById('pinv_kind').value);
+  fd.append('purchase_type', document.getElementById('pinv_ptype').value);
+  fd.append('payment_method', document.getElementById('pinv_payment').value);
+  fd.append('bank_account_id', document.getElementById('pinv_bank_account').value || '');
+  fd.append('supplier_id', document.getElementById('pinv_supplier').value || '');
+  fd.append('supplier_ref_no', document.getElementById('pinv_supplier_ref')?.value || '');
+  fd.append('account_code', document.getElementById('pinv_account_code').value || '');
+  fd.append('remarks', document.getElementById('pinv_remarks')?.value || '');
+  fd.append('posting_date', document.getElementById('pinv_posting_date').value || '');
+  fd.append('delivery_date', document.getElementById('pinv_delivery_date').value || '');
+  fd.append('document_date', document.getElementById('pinv_doc_date').value || '');
+  fd.append('from_date', document.getElementById('pinv_from_date').value || '');
+  fd.append('to_date', document.getElementById('pinv_to_date').value || '');
+  fd.append('grl_narration', document.getElementById('grl_narration')?.value || '');
+
+  // Add line items
+  const rows = document.querySelectorAll('#liBody tr');
+
+  rows.forEach((row, index) => {
+    const g = n => {
+      const el = row.querySelector(`[name="${n}[]"]`);
+      return el ? el.value : '';
+    };
+
+    fd.append('li_item_code[]', g('li_item_code'));
+    fd.append('li_item_desc[]', g('li_item_desc'));
+    fd.append('li_warehouse[]', g('li_warehouse'));
+    fd.append('li_uom[]', g('li_uom'));
+    fd.append('li_qty[]', g('li_qty'));
+    fd.append('li_rate[]', g('li_rate'));
+    fd.append('li_discount[]', g('li_discount'));
+    fd.append('li_freight[]', g('li_freight'));
+    fd.append('li_tax_code[]', g('li_tax_code'));
+  });
+
+  // Add attachments
+  _attachments.forEach(f => fd.append('attachments', f));
+  return fd;
+}
+
+/* ══ Save ══ */
+async function savePINV() {
+  const fd = await _buildPINVFormData();
+  if (!fd) return;
+
+  const id  = document.getElementById('pinv_id').value;
+  const url = id ? `/purchase/invoices/${id}/edit` : '/purchase/invoices/add';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: fd
+    });
+    
+    const contentType = res.headers.get('content-type');
+    let data;
+    
+    if (contentType && contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      console.error('Non-JSON response:', text.substring(0, 500));
+      throw new Error('Server returned non-JSON response');
+    }
+    
+    console.log('Server response:', data);
+    
+    if (data.ok) {
+      if (_pinvModal) {
+        _pinvModal.hide();
+      }
+      loadData();
+      alert(IS_AR ? 'تم الحفظ بنجاح' : 'Saved successfully');
+    } else {
+      console.error('Save error:', data);
+      alert(data.error || data.message || (IS_AR ? 'حدث خطأ أثناء الحفظ' : 'Error saving invoice'));
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    alert(IS_AR ? 'خطأ في الاتصال بالخادم: ' + error.message : 'Server error: ' + error.message);
+  }
+}
+
+/* ══ Delete ══ */
+function confDelPINV(id, docNo) {
+  document.getElementById('delTxt').textContent = (IS_AR ? 'حذف: ' : 'Delete: ') + docNo + '?';
+  document.getElementById('delBtn').onclick = () => {
+    fetch('/purchase/invoices/' + id + '/delete', {
+      method:'POST', 
+      headers:{'X-CSRFToken':CSRF}, 
+      body:new URLSearchParams({csrf_token:CSRF})
+    }).then(r => r.json()).then(d => {
+      if (d.ok) { 
+        bootstrap.Modal.getInstance(document.getElementById('delModal'))?.hide(); 
+        loadData(); 
+      }
+    });
+  };
+  new bootstrap.Modal(document.getElementById('delModal')).show();
+}
+
+/* ══ AG-GRID ENTERPRISE (EXACTLY LIKE EMPLOYEES) ══ */
+function rStatus(p) {
+  const v = p.value || 'Open';
+  const labels = {
+    Open: IS_AR ? 'مفتوح' : 'Open',
+    Pending: IS_AR ? 'معلق' : 'Pending',
+    Approved: IS_AR ? 'معتمد' : 'Approved',
+    Closed: IS_AR ? 'مغلق' : 'Closed',
+    Cancelled: IS_AR ? 'ملغي' : 'Cancelled'
+  };
+  const classes = {
+    Open: 'st-open',
+    Pending: 'st-pending',
+    Approved: 'st-approved',
+    Closed: 'st-closed',
+    Cancelled: 'st-cancelled'
+  };
+  return `<span class="st-pill ${classes[v] || classes.Open}">
+      <i class="fas fa-circle" style="font-size:6px;"></i>
+      ${labels[v] || labels.Open}
+  </span>`;
+}
+
+function rSAR(p) {
+  return p.value != null
+    ? `<span style="font-weight:600;font-variant-numeric:tabular-nums;">${parseFloat(p.value).toLocaleString('en-SA',{minimumFractionDigits:2})}</span>` 
+    : '';
+}
+
+class ActR {
+  init(p) {
+    this.g = document.createElement('div');
+    this.g.style.cssText = 'display:flex;align-items:center;gap:4px;height:100%;';
+    const d = p.data;
+    const docNo = (d.doc_no || '').replace(/'/g, "\\'");
+    this.g.innerHTML = `
+      <button class="ag-ab ag-ab-view" onclick="window.location='/purchase/invoices/${d.id}/view'" title="${IS_AR?'عرض':'View'}"><i class="fas fa-eye"></i></button>
+      <button class="ag-ab ag-ab-edit" onclick="openEditPINV(${d.id})" title="${IS_AR?'تعديل':'Edit'}"><i class="fas fa-pencil-alt"></i></button>
+      <button class="ag-ab ag-ab-print" onclick="window.open('/purchase/invoices/${d.id}/print','_blank')" title="${IS_AR?'طباعة':'Print'}"><i class="fas fa-print"></i></button>
+      <button class="ag-ab ag-ab-del"  onclick="confDelPINV(${d.id},'${docNo}')" title="${IS_AR?'حذف':'Delete'}"><i class="fas fa-trash"></i></button>`;
+  }
+  getGui() { return this.g; }
+}
+
+const AG_LOCALE = IS_AR ? {
+  filterOoo: 'تصفية...',
+  equals: 'يساوي',
+  notEqual: 'لا يساوي',
+  contains: 'يحتوي على',
+  notContains: 'لا يحتوي على',
+  startsWith: 'يبدأ بـ',
+  endsWith: 'ينتهي بـ',
+  blank: 'فارغ',
+  notBlank: 'غير فارغ',
+  lessThan: 'أقل من',
+  greaterThan: 'أكبر من',
+  applyFilter: 'تطبيق',
+  clearFilter: 'مسح',
+  resetFilter: 'إعادة تعيين',
+  addFilterCondition: '+ إضافة قاعدة',
+  matchAll: 'يطابق الكل',
+  matchAny: 'يطابق أي',
+  andCondition: 'و',
+  orCondition: 'أو',
+  noRowsToShow: 'لا توجد بيانات',
+  loadingOoo: 'جاري التحميل...',
+  searchOoo: 'بحث...',
+  sortAscending: 'تصاعدي',
+  sortDescending: 'تنازلي',
+} : {
+  filterOoo: 'Filter...',
+  applyFilter: 'Apply',
+  clearFilter: 'Clear',
+  resetFilter: 'Reset',
+  addFilterCondition: '+ Add Rule',
+  matchAll: 'Match All',
+  matchAny: 'Match Any',
+  noRowsToShow: 'No records found',
+  searchOoo: 'Search...',
+};
+
+const defCol = {
+  sortable: true,
+  unSortIcon: true,
+  resizable: true,
+  filter: true,
+  floatingFilter: true,
+  suppressMenu: false,
+  enableRowGroup: true,
+  enablePivot: true,
+  enableValue: true,
+  menuTabs: ['filterMenuTab', 'columnsMenuTab', 'generalMenuTab'],
+  filterParams: {
+    buttons: ['apply', 'reset', 'clear'],
+    closeOnApply: true,
+    maxNumConditions: 10
+  }
+};
+
+const cols = [
+  {headerName:'#',field:'id',width:65,floatingFilter:false,suppressMenu:true,checkboxSelection:true,headerCheckboxSelection:true,pinned:IS_AR?'right':'left',sortable:false,resizable:false},
+  {headerName:IS_AR?'رقم المستند':'Doc No',field:'doc_no',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'نوع الشراء':'Purchase Type',field:'purchase_type',width:120,filter:'agSetColumnFilter',filterParams:{values:['Assets','Expense'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'النوع':'Kind',field:'kind',width:100,filter:'agSetColumnFilter',filterParams:{values:['Goods','Services'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'طريقة الدفع':'Payment Method',field:'payment_method',width:130,filter:'agSetColumnFilter',filterParams:{values:['Credit','Cash'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'أمر الشراء':'PO No',field:'po_no',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'إيصال الاستلام':'GRN No',field:'grn_no',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'المورد':'Supplier',field:'supplier_name',minWidth:170,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'رقم المرجع':'Supplier Ref No',field:'supplier_ref_no',width:140,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الشحن':'Freight',field:'total_freight',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الإجمالي بدون ضريبة':'Total Excl. VAT',field:'total_excl_vat',width:140,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'ضريبة القيمة المضافة':'VAT',field:'vat_amount',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الإجمالي':'Total Incl. VAT',field:'total_incl_vat',width:140,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'تاريخ الإنشاء':'Created At',field:'created_at',width:150,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'أنشئ بواسطة':'Created By',field:'created_by_name',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'إجراءات':'Actions',field:'_a',width:156,pinned:IS_AR?'left':'right',
+   sortable:false,suppressMenu:true,floatingFilter:false,resizable:false,
+   cellRenderer:ActR,cellStyle:{overflow:'visible',padding:'0 6px'}},
+];
+
+let gridApi;
+
+document.addEventListener('DOMContentLoaded', function() {
+  const el = document.getElementById('pinvGrid');
+  if (!el) return;
+  
+  agGrid.createGrid(el, {
+    columnDefs: cols,
+    multiSortKey: 'ctrl',
+    rowData: [],
+    pagination: true,
+    paginationPageSize: 20, paginationPageSizeSelector:[20,50,100],
+    animateRows: true,
+    enableRtl: IS_AR,
+    defaultColDef: defCol,
+    localeText: AG_LOCALE,
+    
+    // ── ENTERPRISE FEATURES (EXACTLY LIKE EMPLOYEES) ──
+    sideBar: {
+      toolPanels: [
+        {
+          id: 'columns',
+          labelDefault: IS_AR ? 'الأعمدة' : 'Columns',
+          labelKey: 'columns',
+          iconKey: 'columns',
+          toolPanel: 'agColumnsToolPanel'
+        },
+        {
+          id: 'filters',
+          labelDefault: IS_AR ? 'الفلاتر' : 'Filters',
+          labelKey: 'filters',
+          iconKey: 'filter',
+          toolPanel: 'agFiltersToolPanel'
+        }
+      ],
+      defaultToolPanel: ''
+    },
+    rowGroupPanelShow: 'always',
+    pivotPanelShow: 'always',
+    groupDisplayType: 'groupRows',
+    
+    rowSelection: 'multiple',
+    suppressRowClickSelection: true,
+    
+    onGridReady(p) {
+      gridApi = p.api;
+      if (window.GridKit) { GridKit.enhance(p, 'pinvGrid', { storageKey: 'purchase_pinv', exportName: 'Purchase Invoices' }); }
+      loadData();
+    },
+    onFilterChanged() { upd(); },
+    onPaginationChanged() { upd(); },
+    onSelectionChanged() { upd(); },
+    getRowStyle(p) { return p.node.rowIndex % 2 === 0 ? { background: '#fff' } : { background: '#fafbfc' }; }
+  });
+  
+  // Check for edit param in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const editId = urlParams.get('edit');
+  if (editId) {
+    setTimeout(() => {
+      openEditPINV(parseInt(editId));
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }, 500);
+  }
+});
+
+function loadData() {
+  var savedFilters = gridApi ? gridApi.getFilterModel() : null;
+  
+  fetch('/purchase/invoices/data')
+    .then(r => r.json())
+    .then(d => {
+      if (gridApi) {
+        gridApi.setGridOption('rowData', d);
+        if (savedFilters && Object.keys(savedFilters).length) {
+          gridApi.setFilterModel(savedFilters);
+        }
+        upd();
+      }
+    })
+    .catch(console.error);
+}
+
+function upd() {
+  if (!gridApi) return;
+  const total = gridApi.getDisplayedRowCount();
+  const selected = gridApi.getSelectedRows().length;
+  const text = selected > 0 
+    ? `${selected} ${IS_AR ? 'محدد' : 'selected'}`
+    : `${total} ${IS_AR ? 'فاتورة' : 'invoices'}`;
+  document.getElementById('selText').textContent = text;
+  document.getElementById('pageInfo').textContent = `${total} ${IS_AR ? 'فواتير' : 'invoices'}`;
+}
+
+function delExistAtt(attId, btn){
+  if(!confirm("Delete this attachment?")) return;
+  fetch("/purchase/attachments/" + attId + "/delete", {
+    method: "POST",
+    headers: {"X-CSRFToken": CSRF},
+    body: new URLSearchParams({csrf_token: CSRF})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) { btn.closest(".att-item")?.remove(); if (typeof updDocCount === "function") updDocCount(); }
+    else alert(d.error || "Error");
+  })
+  .catch(() => alert("Network error"));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   GRL (General Receipt Ledger) tab -- same mechanism as the GRN's,
+   just keyed off the Purchase Invoice's own routes/ids. See
+   templates/purchase/grn_list.html for the original.
+   ══════════════════════════════════════════════════════════════ */
+/* ══ GRL section (auto-generated preview) ══ */
+const _grlToday = () => new Date().toISOString().split('T')[0];
+
+function _grlEmptyDetailHtml(){
+  return '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:14px;">'+
+    (IS_AR?'تُنشأ السطور تلقائياً عند الحفظ':'Rows are generated automatically on save')+'</td></tr>';
+}
+
+function grlReset(){
+  ['grl_je_no','grl_no','grl_origion','grl_posting_date','grl_due_date','grl_document_date','grl_narration'].forEach(id=>{
+    const e=document.getElementById(id); if(e) e.value='';
+  });
+  const body=document.getElementById('grlDetailBody');
+  if(body) body.innerHTML=_grlEmptyDetailHtml();
+}
+
+/* Add mode, before anything is saved: show what GRL No / Je No would be
+   assigned, matching how the doc number itself already previews via
+   fetchDocNo(). Overwritten with the real values once Post actually runs. */
+function grlPreviewNextNos(){
+  fetch('/purchase/invoices/next-grl-je-no').then(r=>r.json()).then(d=>{
+    if(!d.ok) return;
+    const g=id=>document.getElementById(id);
+    if(g('grl_no')) g('grl_no').value = d.grl_no || '';
+    if(g('grl_je_no')) g('grl_je_no').value = d.je_no || '';
+  }).catch(e=>console.error('GRL/Je No preview failed:', e));
+}
+
+/* Fill the read-only master fields from the current PINV form values. */
+function grlSyncMaster(){
+  const g=id=>document.getElementById(id);
+  const origin = g('pinv_doc_no')?.value || g('pinvDocBadge')?.textContent || '';
+  if(g('grl_origion')) g('grl_origion').value = origin;
+  if(g('grl_posting_date')) g('grl_posting_date').value = _grlToday();
+  if(g('grl_due_date')) g('grl_due_date').value = g('pinv_delivery_date')?.value || '';
+  if(g('grl_document_date')) g('grl_document_date').value = _grlToday();
+}
+
+/* ══ Editable GRL detail grid (2 records PER invoice line item) ══ */
+/* Allowed accounts come from each line's Chart-of-Account mapping (item's
+   own levelfive_code for record 1, the Auto Code Selection account for
+   record 2) -- NOT the main COA. One [record1Options, record2Options] pair
+   per source invoice line item, so a 3-item PINV has 3 pairs = 6 rows. */
+let _grlAllowedPairs = [];
+
+/* Build <option>s from a specific allowed-account list for one record. */
+function grlAccountOptions(list, sel){
+  const opts = ['<option value="">'+(IS_AR?'اختر...':'Select...')+'</option>'];
+  (list||[]).forEach(a=>{
+    if(!a.code) return;
+    opts.push('<option value="'+a.code+'"'+(a.code===sel?' selected':'')+'>'+a.code+'</option>');
+  });
+  return opts.join('');
+}
+
+function grlRowCount(){
+  return document.querySelectorAll('#grlDetailBody tr[data-grl-row]').length;
+}
+
+/* Usually just a 'Yes'/'No' flag, but for the invoice's record 1 it can
+   also hold the supplier's own subsidiary code (see
+   _apply_supplier_control_account in purchase.py) -- anything other than
+   a literal Yes/No must be shown as-is, not collapsed to 'No'. */
+function _grlControlLabel(v){
+  v = (v||'').trim();
+  if (v === 'Yes') return IS_AR?'نعم':'Yes';
+  if (v === '' || v === 'No') return IS_AR?'لا':'No';
+  return v;
+}
+
+/* r = row data; pairIndex = which source line item this row belongs to;
+   recIndex = 0 for record 1 (item account), 1 for record 2 (Auto Code
+   Selection account) -- together they pick the allowed-account list. */
+function grlMakeRow(r, pairIndex, recIndex){
+  r = r || {};
+  const pair = _grlAllowedPairs[pairIndex] || [[], []];
+  const allowed = pair[recIndex] || [];
+  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
+  const tr=document.createElement('tr');
+  tr.setAttribute('data-grl-row','1');
+  tr.setAttribute('data-grl-pair', pairIndex);
+  tr.setAttribute('data-grl-rec', recIndex);
+  tr.innerHTML =
+    '<td><select class="grl-code f-inp" onchange="grlOnCodeChange(this)" style="min-width:110px;padding:5px 7px;font-size:12px;">'+grlAccountOptions(allowed, r.code||'')+'</select></td>'+
+    '<td><input type="text" class="grl-control" readonly disabled value="'+esc(_grlControlLabel(r.control_account))+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;text-align:center;">'+
+      '<input type="hidden" class="grl-control-val" value="'+esc(r.control_account||'No')+'"></td>'+
+    '<td><input type="text" class="grl-ref" readonly value="'+esc(r.reference_code||'')+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;" title="'+(IS_AR?'رقم مرجع المورد':'Vendor reference number')+'"></td>'+
+    '<td><input type="text" class="grl-en" readonly value="'+esc(r.account_name||'')+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;"></td>'+
+    '<td><input type="text" class="grl-ar" readonly dir="rtl" value="'+esc(r.account_name_ar||'')+'" style="width:100%;border:1px solid #eef2f7;background:#f8fafc;border-radius:5px;padding:5px 7px;font-size:12px;"></td>'+
+    '<td><input type="number" step="0.01" class="grl-debit" value="'+(Number(r.debit||0)).toFixed(2)+'" oninput="grlRecalc()" style="width:100px;border:1px solid #cbd5e1;border-radius:5px;padding:5px 7px;font-size:12px;text-align:right;"></td>'+
+    '<td><input type="number" step="0.01" class="grl-credit" value="'+(Number(r.credit||0)).toFixed(2)+'" oninput="grlRecalc()" style="width:100px;border:1px solid #cbd5e1;border-radius:5px;padding:5px 7px;font-size:12px;text-align:right;"></td>'+
+    '<td><input type="text" class="grl-narr" value="'+esc(r.narration||'')+'" style="width:100%;border:1px solid #e2e8f0;border-radius:5px;padding:5px 7px;font-size:12px;" placeholder="'+(IS_AR?'بيان':'Narration')+'"></td>';
+  return tr;
+}
+
+/* pairIndex/recIndex select which allowed-account list this row is
+   constrained to (see _grlAllowedPairs) -- must already be populated by
+   the caller (grlRenderAllRecords / grlLoad) before this runs. */
+function grlAddRow(data, pairIndex, recIndex){
+  const body=document.getElementById('grlDetailBody');
+  const ph=body.querySelector('td[colspan]'); if(ph) body.innerHTML='';
+  const tr=grlMakeRow(data, pairIndex, recIndex);
+  body.appendChild(tr);
+  // if the row has a preselected code but no names, fill them from its allowed list
+  const selCode = tr.querySelector('.grl-code');
+  if(selCode && selCode.value && !(data&&data.account_name)) grlOnCodeChange(selCode);
+  grlSyncRowNarrations();
+  grlRecalc();
+}
+
+/* Mirror the master Narration into both detail rows as it's typed, locking
+   them read-only while it has a value; once the master is cleared, each
+   row's narration goes back to being independently editable. */
+function grlSyncRowNarrations(){
+  const master = document.getElementById('grl_narration')?.value || '';
+  document.querySelectorAll('#grlDetailBody .grl-narr').forEach(inp=>{
+    if(master){
+      inp.value = master;
+      inp.readOnly = true;
+      inp.style.background = '#f3f4f6';
+    } else {
+      inp.readOnly = false;
+      inp.style.background = '';
+    }
+  });
+}
+
+function grlOnCodeChange(sel){
+  const tr=sel.closest('tr');
+  const pairIndex = parseInt(tr.getAttribute('data-grl-pair')||'0',10);
+  const recIndex = parseInt(tr.getAttribute('data-grl-rec')||'0',10);
+  const pair = _grlAllowedPairs[pairIndex] || [[], []];
+  const a=(pair[recIndex]||[]).find(x=>x.code===sel.value);
+  tr.querySelector('.grl-en').value = a ? (a.drawer_en||'') : '';
+  tr.querySelector('.grl-ar').value = a ? (a.drawer_ar||'') : '';
+}
+
+function grlRecalc(){
+  let td=0, tc=0;
+  document.querySelectorAll('#grlDetailBody tr[data-grl-row]').forEach(tr=>{
+    td += parseFloat(tr.querySelector('.grl-debit')?.value)||0;
+    tc += parseFloat(tr.querySelector('.grl-credit')?.value)||0;
+  });
+  const g=id=>document.getElementById(id);
+  if(g('grlTotDebit')) g('grlTotDebit').textContent = td.toFixed(2);
+  if(g('grlTotCredit')) g('grlTotCredit').textContent = tc.toFixed(2);
+  const bal=g('grlBalance');
+  if(bal){
+    if(grlRowCount()===0){ bal.textContent=''; }
+    else if(Math.abs(td-tc)<0.005){
+      bal.innerHTML='<span style="color:#16a34a;font-weight:700;"><i class="fas fa-check-circle me-1"></i>'+(IS_AR?'متوازن':'Balanced')+'</span>';
+    } else {
+      bal.innerHTML='<span style="color:#dc2626;font-weight:700;"><i class="fas fa-exclamation-circle me-1"></i>'+(IS_AR?'غير متوازن':'Not balanced')+'</span>';
+    }
+  }
+  return Math.abs(td-tc)<0.005;
+}
+
+/* Validate before save/post: exactly balanced, codes chosen. */
+function grlValidate(){
+  const rows=[...document.querySelectorAll('#grlDetailBody tr[data-grl-row]')];
+  if(rows.length===0) return true;   // nothing entered yet
+  for(const tr of rows){
+    if(!tr.querySelector('.grl-code').value){
+      alert(IS_AR?'اختر رمز الحساب لكل سجل.':'Select an account code for each record.');
+      return false;
+    }
+  }
+  if(!grlRecalc()){
+    alert(IS_AR?'يجب أن يتساوى إجمالي المدين مع إجمالي الدائن.':'Total Debit must equal Total Credit.');
+    return false;
+  }
+  return true;
+}
+
+/* Render TWO GRL records for EVERY source line item (same {code,
+   account_name, account_name_ar, code1, account_name1, account_name_ar1,
+   nature1, control_account, control_account1, debit} shape returned by
+   both /grl-build and /grl-preview) -- a 3-item PINV produces 3 pairs = 6
+   rows. silent=true suppresses the "mapping missing" alerts, for the
+   passive Add-mode preview -- grlPost() (an explicit user action) still
+   surfaces them. Returns true only if every line rendered successfully. */
+async function grlRenderAllRecords(lines, silent){
+  lines = lines || [];
+  for (const ln of lines) {
+    if(!ln.code){
+      if(!silent) alert(IS_AR?'تعيين حساب المستوى الخامس مفقود للصنف المحدد.':'Level 5 account mapping is missing for the selected item.');
+      return false;
+    }
+    if(!ln.code1){
+      if(!silent) alert(IS_AR?'لا يوجد رمز اختيار تلقائي معرّف لنموذج فاتورة الشراء. اذهب إلى دليل الحسابات > اختيار الكود التلقائي.':'No Auto Code Selection is configured for the Purchase Invoice form. Go to Chart of Accounts > Auto Code Selection.');
+      return false;
+    }
+  }
+  // Build one allowed-account pair per source line, THEN render -- pairs
+  // must exist before grlAddRow/grlOnCodeChange reference them by index.
+  _grlAllowedPairs = lines.map(ln => [
+    [{code:ln.code,  drawer_en:ln.account_name,  drawer_ar:ln.account_name_ar}],
+    [{code:ln.code1, drawer_en:ln.account_name1, drawer_ar:ln.account_name_ar1}],
+  ]);
+  const body=document.getElementById('grlDetailBody'); body.innerHTML='';
+  lines.forEach((ln, pairIndex) => {
+    const r1Debit=Number(ln.debit||0), r1Credit=Number(ln.credit||0);
+    const total = r1Debit + r1Credit;   // PINV line Total Incl. VAT (SAR)
+    const nature2Debit = (ln.nature1 || 'Credit') === 'Debit';
+    // Record 1 (normally the item's own Level Five account, Debit = Total).
+    // When the invoice's supplier has a control account configured, the
+    // backend (_apply_supplier_control_account in purchase.py) replaces
+    // this with the supplier's own account instead, posted as a Credit --
+    // so respect whichever side the backend actually computed here.
+    grlAddRow({code:ln.code,  account_name:ln.account_name,  account_name_ar:ln.account_name_ar,
+      control_account: ln.control_account, reference_code: ln.reference_code, debit: r1Debit, credit: r1Credit}, pairIndex, 0);
+    // Record 2 (Auto Code Selection account for this form): follows its own
+    // configured nature — Debit = Total if nature is Debit, else Credit = Total.
+    grlAddRow({code:ln.code1, account_name:ln.account_name1, account_name_ar:ln.account_name_ar1,
+      control_account: ln.control_account1,
+      debit: nature2Debit ? total : 0, credit: nature2Debit ? 0 : total}, pairIndex, 1);
+  });
+  grlRecalc();
+  return true;
+}
+
+/* Add mode, before anything is saved: preview the GRL records computed
+   from the selected PO's own line items (which the PINV's line items get
+   pulled from 1:1) -- matching how GRL No / Je No already preview. Every
+   PO line gets its own pair of records, not just the first. */
+function grlPreviewFromPO(poId){
+  if(!poId){
+    const body=document.getElementById('grlDetailBody');
+    if(body) body.innerHTML=_grlEmptyDetailHtml();
+    grlRecalc();
+    return;
+  }
+  fetch('/purchase/orders/'+poId+'/grl-preview?form=purchase_invoice').then(r=>r.json()).then(async d=>{
+    if(!d.ok || !d.lines || !d.lines.length) return;
+    await grlRenderAllRecords(d.lines, true);
+  }).catch(e=>console.error('GRL preview failed:', e));
+}
+
+/* Post & Save: validate + save the Purchase Invoice, then create/refresh its
+   GRL and linked Journal Entry -- ALL as one atomic server-side transaction
+   (see pinv_post_and_save() in purchase.py). Works for a brand-new PINV or
+   an existing one, in a single request either way. Refuses to run twice on
+   an already-posted PINV (duplicate-posting prevention). */
+async function grlPost(){
+  if(_pinvPosted){
+    alert(IS_AR?'تم ترحيل فاتورة الشراء هذه مسبقاً.':'This Purchase Invoice has already been posted.');
+    return;
+  }
+  if(grlRowCount()===0){
+    alert(IS_AR?'لا توجد سجلات GRL لترحيلها. اختر أمر شراء معتمد أولاً.':'No GRL detail records to post. Select an approved Purchase Order first.');
+    return;
+  }
+  if(!grlValidate()) return;
+
+  const fd = await _buildPINVFormData();
+  if(!fd) return;
+
+  const id = document.getElementById('pinv_id').value;
+  if(id) fd.set('id', id);
+  fd.set('grl_origion', document.getElementById('grl_origion')?.value || '');
+  fd.set('grl_posting_date', document.getElementById('grl_posting_date')?.value || '');
+  fd.set('grl_due_date', document.getElementById('grl_due_date')?.value || '');
+  document.querySelectorAll('#grlDetailBody tr[data-grl-row]').forEach(tr=>{
+    fd.append('d_code[]', tr.querySelector('.grl-code')?.value || '');
+    fd.append('d_control_account[]', tr.querySelector('.grl-control-val')?.value || 'No');
+    fd.append('d_reference_code[]', tr.querySelector('.grl-ref')?.value || '');
+    fd.append('d_account_name[]', tr.querySelector('.grl-en')?.value || '');
+    fd.append('d_account_name_ar[]', tr.querySelector('.grl-ar')?.value || '');
+    fd.append('d_debit[]', tr.querySelector('.grl-debit')?.value || '0');
+    fd.append('d_credit[]', tr.querySelector('.grl-credit')?.value || '0');
+    fd.append('d_narration[]', tr.querySelector('.grl-narr')?.value || '');
+  });
+
+  try {
+    const res = await fetch('/purchase/invoices/post-and-save', { method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd });
+    const data = await res.json();
+    if(data.ok){
+      document.getElementById('pinv_id').value = data.id;
+      document.getElementById('pinv_doc_no').value = data.doc_no || '';
+      document.getElementById('pinvDocBadge').textContent = data.doc_no || '';
+      if(data.grl && data.grl.grl_no){ const g=document.getElementById('grl_no'); if(g) g.value=data.grl.grl_no; }
+      if(data.grl && data.grl.je_no){ const g=document.getElementById('grl_je_no'); if(g) g.value=data.grl.je_no; }
+      _pinvPosted = true;
+      grlUpdatePostBtnState();
+      if(_pinvModal) _pinvModal.hide();
+      loadData();
+      alert(IS_AR?'تم الترحيل والحفظ بنجاح':'Posted & saved successfully');
+    } else {
+      alert(data.error || (IS_AR?'فشل الترحيل':'Post failed'));
+    }
+  } catch(e){
+    console.error('Post & Save failed:', e);
+    alert(IS_AR?'خطأ في الشبكة':'Network error');
+  }
+}
+
+/* Not-yet-posted PINV (opened in Edit mode): preview the GRL records from
+   its own already-saved line items -- mirrors grlPreviewFromPO(), used
+   when adding, so Post & Save has something to submit either way. Every
+   PINV line gets its own pair of records, not just the first. */
+async function grlPreviewFromPINV(pinvId){
+  try{
+    const bd = await fetch('/purchase/invoices/'+pinvId+'/grl-build').then(r=>r.json());
+    if(!bd.ok || !bd.lines || !bd.lines.length) return;
+    await grlRenderAllRecords(bd.lines, true);
+  }catch(e){ console.error('GRL preview (edit) failed:', e); }
+}
+
+/* Load the saved GRL master (+ detail if already posted) for an existing PINV. */
+function grlLoad(pinvId){
+  if(!pinvId){ grlReset(); grlSyncMaster(); return; }
+  fetch('/purchase/invoices/'+pinvId+'/grl').then(r=>r.json()).then(async d=>{
+    if(!d.ok || !d.grl){ grlReset(); grlSyncMaster(); return; }
+    const m=d.grl, g=id=>document.getElementById(id);
+    if(g('grl_no')) g('grl_no').value = m.grl_no || '';
+    if(g('grl_je_no')) g('grl_je_no').value = m.je_no || '';
+    if(g('grl_origion')) g('grl_origion').value = m.origion || '';
+    if(g('grl_posting_date')) g('grl_posting_date').value = m.posting_date || '';
+    if(g('grl_due_date')) g('grl_due_date').value = m.due_date || '';
+    if(g('grl_document_date')) g('grl_document_date').value = m.document_date || '';
+    if(g('grl_narration')) g('grl_narration').value = m.narration || '';
+    // details render into the editable grid (via grlAddRow) -- saved rows
+    // come in pairs (record 1 = item account, record 2 = Auto Code
+    // Selection account), one pair per invoice line item.
+    const rows=m.details||[];
+    if(rows.length){
+      // Fetch each line's current mapped accounts so every row's dropdown
+      // is constrained (falls back to the row's own saved code/names if the
+      // line count no longer lines up, e.g. lines changed after posting).
+      fetch('/purchase/invoices/'+pinvId+'/grl-build').then(r=>r.json()).then(bd=>{
+        const lines = (bd.ok && bd.lines) ? bd.lines : [];
+        const pairCount = Math.ceil(rows.length / 2);
+        _grlAllowedPairs = [];
+        for (let p = 0; p < pairCount; p++) {
+          const first  = rows[p*2];
+          const second = rows[p*2+1];
+          const ln = lines[p] || {};
+          _grlAllowedPairs.push([
+            [{code:(first?first.code:ln.code),   drawer_en:(first?first.account_name:ln.account_name),   drawer_ar:(first?first.account_name_ar:ln.account_name_ar)}],
+            [{code:(second?second.code:ln.code1), drawer_en:(second?second.account_name:ln.account_name1), drawer_ar:(second?second.account_name_ar:ln.account_name_ar1)}],
+          ]);
+        }
+        const body=g('grlDetailBody'); if(body) body.innerHTML='';
+        rows.forEach((r, i) => {
+          grlAddRow({code:r.code, reference_code:r.reference_code, account_name:r.account_name, account_name_ar:r.account_name_ar,
+                     control_account:r.control_account, debit:r.debit, credit:r.credit, narration:r.narration},
+                     Math.floor(i/2), i % 2);
+        });
+        grlRecalc();
+      }).catch(e=>console.error('GRL allowed-accounts load failed:', e));
+    } else {
+      // Not posted yet (empty shell, m.id is null): reset, then preview
+      // the next GRL No / Je No and the two records this PINV would post,
+      // same as Add mode does before anything is saved.
+      grlReset(); grlSyncMaster();
+      if(g('grl_narration')) g('grl_narration').value = m.narration || '';
+      grlPreviewNextNos();
+      await grlPreviewFromPINV(pinvId);
+    }
+  }).catch(e=>console.error('GRL load failed:', e));
+}
+</script>
+{% endblock %}

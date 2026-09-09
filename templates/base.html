@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="{{ current_locale }}" {% if is_rtl %}dir="rtl"{% endif %}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% if current_locale=='ar' %}نظام إدارة البائعين{% else %}Seller Master System{% endif %}{% endblock %}</title>
+
+    {% if is_rtl %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
+    {% else %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    {% endif %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% if current_user.is_authenticated and (current_user.theme_sidebar_bg or current_user.theme_sidebar_text or current_user.theme_sidebar_active_bg or current_user.theme_sidebar_active_text or current_user.theme_primary or current_user.theme_topbar_bg or current_user.theme_heading_text) %}
+    <style>
+      /* ── Saved per-user theme override ── */
+      :root {
+        {% if current_user.theme_sidebar_bg %}--sidebar-bg: {{ current_user.theme_sidebar_bg }};{% endif %}
+        {% if current_user.theme_sidebar_text %}--sidebar-text: {{ current_user.theme_sidebar_text }};{% endif %}
+        {% if current_user.theme_sidebar_active_bg %}--sidebar-active-bg: {{ current_user.theme_sidebar_active_bg }};{% endif %}
+        {% if current_user.theme_sidebar_active_text %}--sidebar-active-text: {{ current_user.theme_sidebar_active_text }};{% endif %}
+        {% if current_user.theme_primary %}--primary: {{ current_user.theme_primary }};{% endif %}
+        {% if current_user.theme_topbar_bg %}--topbar-bg: {{ current_user.theme_topbar_bg }};{% endif %}
+        {% if current_user.theme_heading_text %}--page-heading-text: {{ current_user.theme_heading_text }};{% endif %}
+      }
+    </style>
+    {% endif %}
+    <style>
+      /* ── Collapsible sidebar submenus ── */
+      .nav-parent {
+        display:flex; align-items:center; width:100%; cursor:pointer;
+        border:none; background:transparent; text-align:inherit;
+      }
+      .nav-parent .nav-caret {
+        margin-inline-start:auto; font-size:11px; transition:transform .22s ease;
+      }
+      .nav-parent[aria-expanded="true"] .nav-caret { transform:rotate(90deg); }
+      .nav-parent.has-active { color:#fff; font-weight:600; }
+      .nav-sub { list-style:none; padding:0; margin:0; }
+      .nav-sub .nav-link {
+        padding-inline-start:42px; font-size:.92em;
+      }
+      html[dir="rtl"] .nav-sub .nav-link { padding-inline-start:0; padding-inline-end:42px; }
+      html[dir="rtl"] .nav-parent .nav-caret { transform:scaleX(-1); }
+      html[dir="rtl"] .nav-parent[aria-expanded="true"] .nav-caret { transform:rotate(90deg); }
+
+      /* ── Chart of Accounts: Level 1-5 colorful icon chips ── */
+      .nav-coa-level i {
+        width:26px; height:26px; border-radius:7px; font-size:12px !important;
+        display:inline-flex; align-items:center; justify-content:center;
+        transition:filter .2s;
+      }
+      .nav-coa-level:hover i { filter:brightness(1.2); }
+      .nav-coa-l1 i { background:rgba(37,99,235,.20);  color:#60a5fa; }
+      .nav-coa-l2 i { background:rgba(22,163,74,.20);  color:#4ade80; }
+      .nav-coa-l3 i { background:rgba(217,119,6,.20);  color:#fbbf24; }
+      .nav-coa-l4 i { background:rgba(147,51,234,.20); color:#c084fc; }
+      .nav-coa-l5 i { background:rgba(220,38,38,.20);  color:#f87171; }
+
+      /* ── Coming Soon Badge ── */
+      .nav-soon {
+        font-size: 0.6rem;
+        padding: 2px 8px;
+        margin-inline-start: auto;
+        background: #ffc107;
+        color: #000;
+        border-radius: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+      .nav-item-coming .nav-link-disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .nav-item-coming .nav-link-disabled:hover {
+        background: transparent;
+      }
+
+      /* ── Payroll Status Badges ── */
+      .status-draft { background: #e9ecef; color: #495057; }
+      .status-processing { background: #fff3cd; color: #856404; }
+      .status-approved { background: #d4edda; color: #155724; }
+      .status-paid { background: #cce5ff; color: #004085; }
+      .status-posted { background: #cce5ff; color: #004085; }
+      .status-cancelled { background: #f8d7da; color: #721c24; }
+
+      /* ── Theme Picker off-canvas panel ── */
+      .theme-panel { width: 320px; }
+      .theme-panel-sub { font-size: 12.5px; color: #6b7280; margin-bottom: 14px; }
+      .theme-preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .theme-preset-card {
+        border: 2px solid #e5e7eb; border-radius: 10px; padding: 10px;
+        cursor: pointer; transition: all .15s; text-align: center;
+      }
+      .theme-preset-card:hover { border-color: #cbd5e1; background: #f8fafc; }
+      .theme-preset-card.active { border-color: var(--primary); background: #f0f7ff; }
+      .theme-preset-swatch {
+        height: 34px; border-radius: 7px; margin-bottom: 6px;
+        display: flex; overflow: hidden; border: 1px solid rgba(0,0,0,.06);
+      }
+      .theme-preset-swatch span { flex: 1; }
+      .theme-preset-name { font-size: 11.5px; font-weight: 600; color: #374151; }
+      .theme-color-row {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 10px; gap: 10px;
+      }
+      .theme-color-row label { font-size: 12.5px; color: #374151; }
+      .theme-color-input {
+        width: 42px; height: 30px; border: 1px solid #d1d5db; border-radius: 6px;
+        padding: 2px; cursor: pointer; background: none;
+      }
+      .theme-save-status { font-size: 11.5px; color: #16a34a; margin-top: 8px; min-height: 16px; }
+      /* Quick-pick swatches under a color field -- click one instead of
+         using the native color wheel. Sits directly below its own
+         .theme-color-row, so it stays visually tied to that one field. */
+      .theme-swatch-row { display: flex; flex-wrap: wrap; gap: 5px; margin: -4px 0 12px; }
+      .theme-swatch-opt {
+        width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0,0,0,.18);
+        cursor: pointer; padding: 0;
+      }
+      .theme-swatch-opt:hover { transform: scale(1.12); }
+    </style>
+    <!-- Desktop-style modal windows (drag / minimize / maximize / resize) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/window-modal.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/grid-kit.css') }}">
+    {% block extra_css %}{% endblock %}
+    <style>
+    /* Global colored toolbar buttons (tool-btn-* and ubtn-*) */
+    .tool-btn-green,.ubtn-green{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;}
+    .tool-btn-blue,.ubtn-blue{background:#2563eb!important;color:#fff!important;border-color:#2563eb!important;}
+    .tool-btn-teal,.ubtn-teal{background:#0d9488!important;color:#fff!important;border-color:#0d9488!important;}
+    .tool-btn-purple,.ubtn-purple{background:#7c3aed!important;color:#fff!important;border-color:#7c3aed!important;}
+    .tool-btn-orange,.ubtn-orange{background:#ea580c!important;color:#fff!important;border-color:#ea580c!important;}
+    .tool-btn-gray,.ubtn-gray{background:#64748b!important;color:#fff!important;border-color:#64748b!important;}
+    .tool-btn-green:hover,.tool-btn-blue:hover,.tool-btn-teal:hover,.tool-btn-purple:hover,.tool-btn-orange:hover,.tool-btn-gray:hover,
+    .ubtn-green:hover,.ubtn-blue:hover,.ubtn-teal:hover,.ubtn-purple:hover,.ubtn-orange:hover,.ubtn-gray:hover{filter:brightness(1.1);}
+    /* Inline-editable table cells */
+    .tbl-edit{display:inline-block;min-width:40px;border-bottom:1px dashed transparent;cursor:text;padding:1px 3px;border-radius:3px;transition:background .2s;}
+    .tbl-edit:hover{border-bottom-color:#94a3b8;background:#f8fafc;}
+    .tbl-edit:focus{outline:none;border-bottom-color:#2563eb;background:#eff6ff;}
+    /* Page panels (see the openPagePanel script near the end of this file) */
+    .panel-modal-content{height:82vh;}
+    </style>
+</head>
+<body>
+
+{% block body %}
+<div class="wrapper d-flex">
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="brand-logo">
+                <i class="fas fa-store-alt"></i>
+                <span class="brand-name">{% if current_locale=='ar' %}نظام البائعين{% else %}SellerMS{% endif %}</span>
+            </div>
+            <button class="btn btn-sm sidebar-toggle" id="sidebarToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <div class="sidebar-user">
+            <div class="user-avatar"><i class="fas fa-user-circle fa-2x"></i></div>
+            <div class="user-info">
+                <div class="user-name">{{ current_user.username }}</div>
+                <div class="user-role badge bg-primary">{% if current_locale=='ar' %}{% if current_user.role=='admin' %}مدير{% else %}موظف{% endif %}{% else %}{{ current_user.role|title }}{% endif %}</div>
+            </div>
+        </div>
+
+        <ul class="sidebar-nav">
+
+            {# ── Dashboard ─────────────────────────────────── #}
+            <li class="nav-item">
+                <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint=='dashboard.index' %}active{% endif %}">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>{{ t('dashboard') }}</span>
+                </a>
+            </li>
+
+            {# ══ OWNER ═══════════════════════════════════════ #}
+            {% set owner_active = request.endpoint in ['sellers.list_owners','sellers.view_owner','sellers.list_owner_documents_page'] or (request.endpoint == 'lookups.items_list') or (request.endpoint and request.endpoint.startswith('uom.')) %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if owner_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuOwner" role="button" aria-expanded="{{ 'true' if owner_active else 'false' }}" aria-controls="menuOwner">
+                    <i class="fas fa-users"></i>
+                    <span>{{ t('org_structure') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if owner_active %}show{% endif %}" id="menuOwner">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('sellers.list_owners') }}" class="nav-link {% if request.endpoint in ['sellers.list_owners','sellers.view_owner'] %}active{% endif %}">
+                                <i class="fas fa-users"></i>
+                                <span>{{ t('owner') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('sellers.list_owner_documents_page') }}"
+                               class="nav-link {% if request.endpoint == 'sellers.list_owner_documents_page' %}active{% endif %}">
+                                <i class="fas fa-paperclip"></i>
+                                <span>{{ t('owner_documents') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('lookups.items_list') }}" class="nav-link {% if request.endpoint == 'lookups.items_list' %}active{% endif %}">
+                                <i class="fas fa-boxes"></i>
+                                <span>{{ t('item_master') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('uom.uom_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('uom.') %}active{% endif %}">
+                                <i class="fas fa-ruler-combined"></i>
+                                <span>{{ t('unit_of_measurement') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ CASH & BANK ═══════════════════════════════════ #}
+            {% set cash_bank_active = request.endpoint and request.endpoint.startswith('cash_bank.') %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if cash_bank_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuCashBank" role="button" aria-expanded="{{ 'true' if cash_bank_active else 'false' }}" aria-controls="menuCashBank">
+                    <i class="fas fa-cash-register"></i>
+                    <span>{{ t('cash_bank') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if cash_bank_active %}show{% endif %}" id="menuCashBank">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('cash_bank.outgoing_payment_list') }}" class="nav-link {% if request.endpoint == 'cash_bank.outgoing_payment_list' %}active{% endif %}">
+                                <i class="fas fa-money-bill-wave"></i>
+                                <span>{{ t('outgoing_payment') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('cash_bank.incoming_payment_list') }}" class="nav-link {% if request.endpoint == 'cash_bank.incoming_payment_list' %}active{% endif %}">
+                                <i class="fas fa-hand-holding-usd"></i>
+                                <span>{{ t('incoming_payment') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ STORE ═══════════════════════════════════════ #}
+            {% set store_active = request.endpoint and (request.endpoint == 'purchase.stores_master_list' or request.endpoint == 'purchase.store_tracking_list') %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if store_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuStore" role="button" aria-expanded="{{ 'true' if store_active else 'false' }}" aria-controls="menuStore">
+                    <i class="fas fa-warehouse"></i>
+                    <span>{{ t('store') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if store_active %}show{% endif %}" id="menuStore">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.stores_master_list') }}" class="nav-link {% if request.endpoint == 'purchase.stores_master_list' %}active{% endif %}">
+                                <i class="fas fa-store"></i>
+                                <span>{{ t('stores') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.store_tracking_list') }}" class="nav-link {% if request.endpoint == 'purchase.store_tracking_list' %}active{% endif %}">
+                                <i class="fas fa-boxes-stacked"></i>
+                                <span>{{ t('store_item_tracking') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ PURCHASE ════════════════════════════════════ #}
+            {% set purchase_active = request.endpoint and (('supplier' in request.endpoint) or ('pr_list' in request.endpoint) or ('pq_list' in request.endpoint) or ('po_list' in request.endpoint) or ('grn' in request.endpoint) or ('pinv' in request.endpoint) or ('grr' in request.endpoint) or (request.endpoint.startswith('purchase.prn_')) or ('pdm' in request.endpoint) or (request.endpoint == 'purchase_tax.purchase_tax_page') or (request.endpoint == 'purchase.po_tracking_list')) %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if purchase_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuPurchase" role="button" aria-expanded="{{ 'true' if purchase_active else 'false' }}" aria-controls="menuPurchase">
+                    <i class="fas fa-shopping-bag"></i>
+                    <span>{{ t('purchase') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if purchase_active %}show{% endif %}" id="menuPurchase">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.supplier_list') }}" class="nav-link {% if request.endpoint and 'supplier' in request.endpoint and request.endpoint != 'purchase.supplier_account_list' %}active{% endif %}">
+                                <i class="fas fa-store"></i>
+                                <span>{{ t('supplier_reg') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.supplier_account_list') }}" class="nav-link {% if request.endpoint == 'purchase.supplier_account_list' %}active{% endif %}">
+                                <i class="fas fa-book"></i>
+                                <span>{{ t('supplier_account') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('supplier_doc.list_supplier_documents_page') }}"
+                               class="nav-link {% if request.endpoint == 'supplier_doc.list_supplier_documents_page' %}active{% endif %}">
+                                <i class="fas fa-paperclip"></i>
+                                <span>{{ t('supplier_documents') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.pr_list') }}" class="nav-link {% if request.endpoint and 'pr_list' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-file-alt"></i>
+                                <span>{{ t('purchase_request') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.pq_list') }}" class="nav-link {% if request.endpoint and 'pq_list' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-file-invoice"></i>
+                                <span>{{ t('purchase_quotation') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.po_list') }}" class="nav-link {% if request.endpoint and 'po_list' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-shopping-bag"></i>
+                                <span>{{ t('purchase_order') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.grn_list') }}" class="nav-link {% if request.endpoint and 'grn' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-truck"></i>
+                                <span>{{ t('goods_receipt_note') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.po_tracking_list') }}" class="nav-link {% if request.endpoint == 'purchase.po_tracking_list' %}active{% endif %}">
+                                <i class="fas fa-clipboard-list"></i>
+                                <span>{{ t('po_quantity_tracking') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.pinv_list') }}" class="nav-link {% if request.endpoint and 'pinv' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-receipt"></i>
+                                <span>{{ t('purchase_invoice') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.grr_list') }}" class="nav-link {% if request.endpoint and 'grr' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-undo"></i>
+                                <span>{{ t('goods_return_request') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.prn_list') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('purchase.prn_') %}active{% endif %}">
+                                <i class="fas fa-file-invoice"></i>
+                                <span>{{ t('purchase_return_note') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase.pdm_list') }}" class="nav-link {% if request.endpoint and 'pdm' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                                <span>{{ t('purchase_debit_memo') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('purchase_tax.purchase_tax_page') }}" class="nav-link {% if request.endpoint == 'purchase_tax.purchase_tax_page' %}active{% endif %}">
+                                <i class="fas fa-percent"></i>
+                                <span>{{ t('purchase_tax_codes') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ SALE ════════════════════════════════════════ #}
+            {% set sale_active = request.endpoint and ((request.endpoint == 'lookups.list_buyers') or (request.endpoint == 'buyer_doc.list_buyer_documents_page') or (request.endpoint.startswith('sales.')) or (request.endpoint == 'sales_tax.sales_tax_page')) %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if sale_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuSale" role="button" aria-expanded="{{ 'true' if sale_active else 'false' }}" aria-controls="menuSale">
+                    <i class="fas fa-tags"></i>
+                    <span>{{ t('sale') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if sale_active %}show{% endif %}" id="menuSale">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('lookups.list_buyers') }}" class="nav-link {% if request.endpoint == 'lookups.list_buyers' %}active{% endif %}">
+                                <i class="fas fa-user-tag"></i>
+                                <span>{{ t('buyer_reg') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('buyer_doc.list_buyer_documents_page') }}"
+                               class="nav-link {% if request.endpoint == 'buyer_doc.list_buyer_documents_page' %}active{% endif %}">
+                                <i class="fas fa-file-alt"></i>
+                                <span>{{ t('buyer_documents') }}</span>
+                            </a>
+                        </li>
+                        {% for endpoint, icon, caption_key in [
+                            ('sales.sr_list','file-signature','sales_request'),
+                            ('sales.sq_list','file-invoice','sales_quotation'),
+                            ('sales.so_list','shopping-cart','sales_order'),
+                            ('sales.dn_list','boxes','delivery_note'),
+                            ('sales.so_tracking_list','clipboard-list','so_quantity_tracking'),
+                            ('sales.sinv_list','receipt','sales_invoice'),
+                            ('sales.srr_list','undo','sales_return_request'),
+                            ('sales.srn_list','file-export','sales_return_note'),
+                            ('sales.scm_list','credit-card','sales_credit_memo'),
+                        ] %}
+                        <li class="nav-item">
+                            <a href="{{ url_for(endpoint) }}" class="nav-link {% if request.endpoint == endpoint %}active{% endif %}">
+                                <i class="fas fa-{{ icon }}"></i>
+                                <span>{{ t(caption_key) }}</span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('sales_tax.sales_tax_page') }}" class="nav-link {% if request.endpoint == 'sales_tax.sales_tax_page' %}active{% endif %}">
+                                <i class="fas fa-percent"></i>
+                                <span>{{ t('sales_tax_codes') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ EMPLOYEE ════════════════════════════════════ #}
+            {% set employee_active = request.endpoint and (('employees.' in request.endpoint) or ('work_allocations.' in request.endpoint) or ('payroll.' in request.endpoint)) %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if employee_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuEmployee" role="button" aria-expanded="{{ 'true' if employee_active else 'false' }}" aria-controls="menuEmployee">
+                    <i class="fas fa-user-tie"></i>
+                    <span>{{ t('employee') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if employee_active %}show{% endif %}" id="menuEmployee">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('employees.list_employees') }}" class="nav-link {% if request.endpoint and 'employees.list' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-user-tie"></i>
+                                <span>{{ t('employees') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('lookups.list_professions') }}" class="nav-link {% if request.endpoint == 'lookups.list_professions' %}active{% endif %}">
+                                <i class="fas fa-hard-hat"></i>
+                                <span>{{ t('profession_master') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('employees.employee_professions_page') }}" class="nav-link {% if request.endpoint == 'employees.employee_professions_page' %}active{% endif %}">
+                                <i class="fas fa-user-tag"></i>
+                                <span>{{ t('employee_profession') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('employees.employee_documents_page') }}" class="nav-link {% if request.endpoint == 'employees.employee_documents_page' %}active{% endif %}">
+                                <i class="fas fa-folder-open"></i>
+                                <span>{{ t('employee_documents') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('lookups.list_allowance_types') }}" class="nav-link {% if request.endpoint == 'lookups.list_allowance_types' %}active{% endif %}">
+                                <i class="fas fa-money-bill-wave"></i>
+                                <span>{{ t('allowance_type') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('employees.employee_allowances_page') }}" class="nav-link {% if request.endpoint == 'employees.employee_allowances_page' %}active{% endif %}">
+                                <i class="fas fa-hand-holding-usd"></i>
+                                <span>{{ t('employee_allowances') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('work_allocations.list_wa') }}" class="nav-link {% if request.endpoint and 'work_allocations.' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-tasks"></i>
+                                <span>{{ t('work_allocation') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('payroll.payroll_list') }}" class="nav-link {% if request.endpoint == 'payroll.payroll_list' %}active{% endif %}">
+                                <i class="fas fa-money-check-alt"></i>
+                                <span>{{ t('payroll') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('payroll.payroll_summary') }}" class="nav-link {% if request.endpoint == 'payroll.payroll_summary' %}active{% endif %}">
+                                <i class="fas fa-table-list"></i>
+                                <span>{{ t('payroll_summary') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('payroll.payroll_reports') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('payroll.payroll_report') %}active{% endif %}">
+                                <i class="fas fa-chart-bar"></i>
+                                <span>{{ t('payroll_reports') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ CHART OF ACCOUNTS ═══════════════════════════════ #}
+            {% set coa_active = request.endpoint and (request.endpoint.startswith('coa.') or request.endpoint.startswith('financial.') or request.endpoint.startswith('journal.') or request.endpoint.startswith('grl.')) %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if coa_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuCOA" role="button" aria-expanded="{{ 'true' if coa_active else 'false' }}" aria-controls="menuCOA">
+                    <i class="fas fa-book"></i>
+                    <span>{{ t('finance') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if coa_active %}show{% endif %}" id="menuCOA">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('financial.fy_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('financial.') %}active{% endif %}">
+                                <i class="fas fa-calendar-alt"></i>
+                                <span>{{ t('financial_year') }}</span>
+                            </a>
+                        </li>
+                        {% if not is_basic_mode %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('coa.level_one_list') }}" class="nav-link nav-coa-level nav-coa-l1 {% if request.endpoint == 'coa.level_one_list' %}active{% endif %}">
+                                <i class="fas fa-sitemap"></i>
+                                <span>{{ t('level_1') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('coa.level_two_list') }}" class="nav-link nav-coa-level nav-coa-l2 {% if request.endpoint == 'coa.level_two_list' %}active{% endif %}">
+                                <i class="fas fa-layer-group"></i>
+                                <span>{{ t('level_2') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('coa.level_three_list') }}" class="nav-link nav-coa-level nav-coa-l3 {% if request.endpoint == 'coa.level_three_list' %}active{% endif %}">
+                                <i class="fas fa-stream"></i>
+                                <span>{{ t('level_3') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('coa.level_four_list') }}" class="nav-link nav-coa-level nav-coa-l4 {% if request.endpoint == 'coa.level_four_list' %}active{% endif %}">
+                                <i class="fas fa-list-ul"></i>
+                                <span>{{ t('level_4') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('coa.level_five_list') }}" class="nav-link nav-coa-level nav-coa-l5 {% if request.endpoint == 'coa.level_five_list' %}active{% endif %}">
+                                <i class="fas fa-receipt"></i>
+                                <span>{{ t('level_5') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('coa.coa_views') }}"
+                               class="nav-link js-open-panel {% if request.endpoint == 'coa.coa_views' %}active{% endif %}"
+                               data-panel-key="coa-views"
+                               data-panel-url="{{ url_for('coa.coa_views', panel=1) }}"
+                               data-panel-title="{{ t('views_flat_tree') }}">
+                                <i class="fas fa-sitemap"></i>
+                                <span>{{ t('views_flat_tree') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('coa.coa_balance') }}" class="nav-link {% if request.endpoint == 'coa.coa_balance' %}active{% endif %}">
+                                <i class="fas fa-balance-scale"></i>
+                                <span>{{ t('coa_balance') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('opening_balance.ob_list') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('opening_balance.') %}active{% endif %}">
+                                <i class="fas fa-scale-balanced"></i>
+                                <span>{{ t('opening_balance') }}</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('grl.grl_list') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('grl.') %}active{% endif %}">
+                                <i class="fas fa-clipboard-list"></i>
+                                <span>{{ t('grl_account') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('journal.journal_list') }}" class="nav-link {% if request.endpoint in ('journal.journal_list',) %}active{% endif %}">
+                                <i class="fas fa-book"></i>
+                                <span>{{ t('journal_entries') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('journal.ledger_list') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('journal.ledger') %}active{% endif %}">
+                                <i class="fas fa-book-open"></i>
+                                <span>{{ t('ledger') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ SUPPORT (Customer Support ticket + FAQ) ══ #}
+            {% set support_active = request.endpoint in ('support.customer_support', 'support.faq') %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if support_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuSupport" role="button" aria-expanded="{{ 'true' if support_active else 'false' }}" aria-controls="menuSupport">
+                    <i class="fas fa-headset"></i>
+                    <span>{{ t('support') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if support_active %}show{% endif %}" id="menuSupport">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('support.customer_support') }}" class="nav-link {% if request.endpoint == 'support.customer_support' %}active{% endif %}">
+                                <i class="fas fa-headset"></i>
+                                <span>{{ t('customer_support') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('support.faq') }}" class="nav-link {% if request.endpoint == 'support.faq' %}active{% endif %}">
+                                <i class="fas fa-question-circle"></i>
+                                <span>{{ t('faq') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            {# ══ ADMINISTRATION (Users, Roles & Permissions, Recycle Bin, Audit Log) ══ #}
+            {% set can_admin_users = can('administration', 'users', 'view') %}
+            {% set can_admin_roles = can('administration', 'roles_permissions', 'view') %}
+            {% set can_admin_recycle = can('administration', 'recycle_bin', 'view') %}
+            {% set can_admin_audit = can('administration', 'audit_log', 'view') %}
+            {% if can_admin_users or can_admin_roles or can_admin_recycle or can_admin_audit or (current_user.is_authenticated and (current_user.is_admin() or current_user.is_super_admin)) %}
+            {% set admin_active = request.endpoint and (request.endpoint.startswith('user_mgmt.') or request.endpoint.startswith('rbac_ui.') or request.endpoint.startswith('recycle_bin.') or request.endpoint.startswith('audit_ui.') or request.endpoint.startswith('db_backup.')) %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if admin_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuAdmin" role="button" aria-expanded="{{ 'true' if admin_active else 'false' }}" aria-controls="menuAdmin">
+                    <i class="fas fa-user-shield"></i>
+                    <span>{{ t('administration') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if admin_active %}show{% endif %}" id="menuAdmin">
+                    <ul class="nav-sub">
+                        {% if can_admin_users %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('user_mgmt.list_users') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('user_mgmt.') %}active{% endif %}">
+                                <i class="fas fa-users-cog"></i>
+                                <span>{{ t('users') }}</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if can_admin_roles %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('rbac_ui.roles_list') }}" class="nav-link {% if request.endpoint == 'rbac_ui.roles_list' %}active{% endif %}">
+                                <i class="fas fa-id-badge"></i>
+                                <span>{{ t('roles') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('rbac_ui.permission_matrix') }}" class="nav-link {% if request.endpoint == 'rbac_ui.permission_matrix' %}active{% endif %}">
+                                <i class="fas fa-th-large"></i>
+                                <span>{{ t('permission_matrix') }}</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if can_admin_recycle %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('recycle_bin.recycle_bin_list') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('recycle_bin.') %}active{% endif %}">
+                                <i class="fas fa-trash-restore"></i>
+                                <span>{{ t('recycle_bin') }}</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if can_admin_audit %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('audit_ui.audit_log_list') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('audit_ui.') %}active{% endif %}">
+                                <i class="fas fa-history"></i>
+                                <span>{{ t('audit_log') }}</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if current_user.is_admin() %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('db_backup.db_backup_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('db_backup.') %}active{% endif %}">
+                                <i class="fas fa-database"></i>
+                                <span>{{ t('backup_restore') }}</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </li>
+            {% endif %}
+
+            {# ══ SUPERADMIN (SaaS Customers, SaaS Module Catalog, Auto Code Selection) ══ #}
+            {% if current_user.is_authenticated and current_user.is_super_admin %}
+            {% set superadmin_active = request.endpoint and (request.endpoint.startswith('saas_customers.') or request.endpoint.startswith('saas_admin.') or request.endpoint.startswith('auto_code.') or request.endpoint.startswith('support.support_tickets_queue')) %}
+            <li class="nav-item">
+                <a class="nav-link nav-parent {% if superadmin_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuSuperAdmin" role="button" aria-expanded="{{ 'true' if superadmin_active else 'false' }}" aria-controls="menuSuperAdmin">
+                    <i class="fas fa-user-cog"></i>
+                    <span>{{ t('super_admin') }}</span>
+                    <i class="fas fa-chevron-right nav-caret"></i>
+                </a>
+                <div class="collapse {% if superadmin_active %}show{% endif %}" id="menuSuperAdmin">
+                    <ul class="nav-sub">
+                        <li class="nav-item">
+                            <a href="{{ url_for('saas_customers.list_saas_customers') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('saas_customers.') %}active{% endif %}">
+                                <i class="fas fa-building"></i>
+                                <span>{{ t('saas_customers') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('saas_admin.list_saas_modules') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('saas_admin.') %}active{% endif %}">
+                                <i class="fas fa-cubes"></i>
+                                <span>{{ t('saas_module_catalog') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('auto_code.auto_code_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('auto_code.') %}active{% endif %}">
+                                <i class="fas fa-magic"></i>
+                                <span>{{ t('auto_code_selection') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('support.support_tickets_queue') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('support.support_tickets_queue') %}active{% endif %}">
+                                <i class="fas fa-headset"></i>
+                                <span>{{ t('support_tickets') }}</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+            {% endif %}
+
+        </ul>
+
+        <div class="sidebar-footer">
+            <a href="{{ url_for('account.security') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('account.') %}active{% endif %}">
+                <i class="fas fa-user-shield"></i>
+                <span>{{ t('my_account') }}</span>
+            </a>
+            <a href="{{ url_for('auth.logout') }}" class="nav-link text-danger">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>{{ t('logout') }}</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content flex-grow-1">
+        <!-- Top Navbar -->
+        <nav class="top-navbar navbar">
+            <div class="container-fluid">
+                <button class="btn btn-link sidebar-toggle-mobile" id="sidebarToggleMobile">
+                    <i class="fas fa-bars"></i>
+                </button>
+
+                <nav aria-label="breadcrumb" class="ms-3 d-none d-md-block">
+                    <ol class="breadcrumb mb-0">
+                        {% block breadcrumb %}
+                        <li class="breadcrumb-item active">{{ t('home') }}</li>
+                        {% endblock %}
+                    </ol>
+                </nav>
+
+                <div class="navbar-right ms-auto d-flex align-items-center gap-3">
+                    <!-- Theme Picker -->
+                    <button class="btn btn-outline-secondary btn-sm" type="button" id="themeToggleBtn"
+                            data-bs-toggle="offcanvas" data-bs-target="#themePanel" aria-controls="themePanel"
+                            title="{{ t('appearance') }}">
+                        <i class="fas fa-palette"></i>
+                    </button>
+
+                    <!-- Language Switcher: English is always first/fixed; every other
+                         entry is one of the app's supported languages (config.LANGUAGES).
+                         Not restricted to the Owner's configured Second Language -- see
+                         app.py inject_globals(). -->
+                    <div class="dropdown lang-switcher">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-globe me-1"></i>
+                            {{ languages.get(selected_locale, languages.get('en', 'English')) }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {% for code, native_name in languages.items() %}
+                            <li><a class="dropdown-item {% if selected_locale==code %}active{% endif %}"
+                                   href="{{ url_for('auth.set_language', lang=code) }}">{{ native_name }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="dropdown">
+                        <button class="btn btn-link dropdown-toggle user-dropdown" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle fa-lg"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li class="dropdown-header">{{ current_user.username }}</li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i>{{ t('logout') }}
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Page Content -->
+        <div class="page-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="alert-container">
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <i class="fas {% if category=='success' %}fa-check-circle{% elif category=='danger' %}fa-exclamation-circle{% elif category=='warning' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %} me-2"></i>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+{# ══ Theme Picker (sidebar + main-page color/theme) ══════════════ #}
+<div class="offcanvas offcanvas-end theme-panel" tabindex="-1" id="themePanel" aria-labelledby="themePanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="themePanelLabel">
+            <i class="fas fa-palette me-2"></i>{{ t('appearance') }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <p class="theme-panel-sub">{{ t('theme_pick_subtitle') }}</p>
+
+        <div class="theme-preset-grid" id="themePresetGrid"></div>
+
+        <button type="button" class="btn btn-link btn-sm p-0 mt-3" id="themeAdvancedToggle" data-bs-toggle="collapse" data-bs-target="#themeAdvanced">
+            <i class="fas fa-sliders-h me-1"></i>{{ t('advanced') }}
+            <i class="fas fa-chevron-down ms-1" style="font-size:10px;"></i>
+        </button>
+
+        <div class="collapse mt-3" id="themeAdvanced">
+            <div class="theme-color-row">
+                <label for="themeColorSidebarBg">{{ t('sidebar_bg') }}</label>
+                <input type="color" id="themeColorSidebarBg" class="theme-color-input">
+            </div>
+            <div class="theme-swatch-row" id="themeSwatchSidebarBg"></div>
+            <div class="theme-color-row">
+                <label for="themeColorSidebarText">{{ t('sidebar_text_color') }}</label>
+                <input type="color" id="themeColorSidebarText" class="theme-color-input">
+            </div>
+            <div class="theme-swatch-row" id="themeSwatchSidebarText"></div>
+            <div class="theme-color-row">
+                <label for="themeColorSidebarActiveBg">{{ t('sidebar_active_item') }}</label>
+                <input type="color" id="themeColorSidebarActiveBg" class="theme-color-input">
+            </div>
+            <div class="theme-color-row">
+                <label for="themeColorSidebarActiveText">{{ t('sidebar_active_text') }}</label>
+                <input type="color" id="themeColorSidebarActiveText" class="theme-color-input">
+            </div>
+            <div class="theme-color-row">
+                <label for="themeColorPrimary">{{ t('main_page_accent') }}</label>
+                <input type="color" id="themeColorPrimary" class="theme-color-input">
+            </div>
+            <div class="theme-color-row">
+                <label for="themeColorTopbarBg">{{ t('topbar_bg') }}</label>
+                <input type="color" id="themeColorTopbarBg" class="theme-color-input">
+            </div>
+            <div class="theme-color-row">
+                <label for="themeColorHeadingText">{{ t('heading_text') }}</label>
+                <input type="color" id="themeColorHeadingText" class="theme-color-input">
+            </div>
+        </div>
+
+        <hr class="my-3">
+        <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="themeResetBtn">
+            <i class="fas fa-undo me-1"></i>{{ t('reset_to_default') }}
+        </button>
+        <div id="themeSaveStatus" class="theme-save-status"></div>
+    </div>
+</div>
+{% endblock %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Must load after Bootstrap so its modal hooks register before page scripts. -->
+<script src="{{ url_for('static', filename='js/window-modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/grid-kit.js') }}"></script>
+<script src="{{ url_for('static', filename='js/control-account-picker.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+/* ── Page panels ──────────────────────────────────────────────────
+   Opens a full page (e.g. a report screen) inside a desktop-style window
+   instead of navigating away, by loading it (bare, no sidebar -- see
+   panel_base.html / the ?panel=1 route convention) in an iframe wrapped by
+   a Bootstrap modal. window-modal.js then auto-upgrades that modal with
+   minimize/maximize/close and a taskbar entry, same as every other modal
+   in the app. Re-clicking a link for a panel that's already open just
+   restores/focuses it instead of opening a duplicate. */
+(function () {
+  var openPanels = {};   // key -> modal element
+
+  window.openPagePanel = function (evOrKey, maybeUrl, maybeTitle) {
+    var key, url, title;
+    if (typeof evOrKey === 'object' && evOrKey && evOrKey.currentTarget) {
+      var el = evOrKey.currentTarget;
+      key = el.dataset.panelKey;
+      url = el.dataset.panelUrl;
+      title = el.dataset.panelTitle;
+      evOrKey.preventDefault();
+    } else {
+      key = evOrKey; url = maybeUrl; title = maybeTitle;
+    }
+
+    var existing = openPanels[key];
+    if (existing && document.body.contains(existing)) {
+      if (existing.classList.contains('wm-minimized') && window.WindowModal) {
+        window.WindowModal.restore(existing);
+      }
+      var inst = bootstrap.Modal.getOrCreateInstance(existing);
+      inst.show();
+      return false;
+    }
+
+    var modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.tabIndex = -1;
+    modal.innerHTML =
+      '<div class="modal-dialog modal-xl" style="max-width:min(1200px,92vw);">' +
+        '<div class="modal-content panel-modal-content">' +
+          '<div class="modal-header py-2">' +
+            '<h6 class="modal-title mb-0"><i class="fas fa-window-maximize me-2"></i>' + title + '</h6>' +
+            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
+          '</div>' +
+          '<div class="modal-body p-0" style="overflow:hidden;">' +
+            '<iframe src="' + url + '" style="width:100%;height:100%;border:0;"></iframe>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    openPanels[key] = modal;
+
+    modal.addEventListener('hidden.bs.modal', function () {
+      delete openPanels[key];
+      modal.remove();
+    });
+
+    new bootstrap.Modal(modal).show();
+    return false;
+  };
+
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('.js-open-panel');
+    if (!link) return;
+    window.openPagePanel(e);
+  });
+})();
+</script>
+<script>
+/* Shared generic import helper for master pages (io_tools blueprint).
+   Reads the response as text first and only parses it as JSON if it looks
+   like JSON -- an unhandled server error returns an HTML page, and calling
+   r.json() straight on that throws, which used to surface as a generic,
+   undiagnosable "Network error" no matter what actually went wrong. */
+window.ioImport = function(input, key){
+  const f = input.files[0];
+  if(!f) return;
+  const fd = new FormData();
+  fd.set('file', f);
+  fd.set('csrf_token', '{{ csrf_token() }}');
+  fetch('/io/' + key + '/import', {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token() }}'}, body:fd})
+    .then(r => r.text().then(text => ({status: r.status, text})))
+    .then(({status, text}) => {
+      let d;
+      try { d = JSON.parse(text); }
+      catch(e) { alert('Server error (' + status + '). Please check the server log.'); return; }
+      if(d.ok){
+        let msg = 'Added: ' + d.added + ', skipped: ' + d.skipped;
+        if(d.errors && d.errors.length) msg += '\n' + d.errors.slice(0,10).join('\n');
+        alert(msg);
+        location.reload();
+      } else {
+        alert(d.error || 'Import failed');
+      }
+    })
+    .catch(() => alert('Network error'))
+    .finally(() => { input.value = ''; });
+};
+
+/* Multi-sheet bundle import (parent + child sheets). Same defensive
+   text-then-JSON parse as ioImport() above -- see its comment. */
+window.ioBundleImport = function(input, key){
+  const f = input.files[0];
+  if(!f) return;
+  const fd = new FormData();
+  fd.set('file', f);
+  fd.set('csrf_token', '{{ csrf_token() }}');
+  fetch('/io/bundle/' + key + '/import', {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token() }}'}, body:fd})
+    .then(r => r.text().then(text => ({status: r.status, text})))
+    .then(({status, text}) => {
+      let d;
+      try { d = JSON.parse(text); }
+      catch(e) { alert('Server error (' + status + '). Please check the server log.'); return; }
+      if(d.ok){
+        let msg = 'Parent — added: ' + d.parent_added + ', skipped: ' + d.parent_skipped;
+        if(d.children){
+          for(const sheet in d.children){
+            msg += '\n' + sheet + ' — added: ' + d.children[sheet].added + ', skipped: ' + d.children[sheet].skipped;
+          }
+        }
+        if(d.errors && d.errors.length) msg += '\n\n' + d.errors.slice(0,10).join('\n');
+        alert(msg);
+        location.reload();
+      } else {
+        alert(d.error || 'Import failed');
+      }
+    })
+    .catch(() => alert('Network error'))
+    .finally(() => { input.value = ''; });
+};
+
+/* Inline cell edit -> save one field to the DB (AG-Grid onCellValueChanged). */
+/* Inline editing for plain HTML tables (contenteditable cells). */
+window.tblCellKey = function(ev, el){
+  if(ev.key === 'Enter'){ ev.preventDefault(); el.blur(); }
+  else if(ev.key === 'Escape'){ el.textContent = el.dataset.orig != null ? el.dataset.orig : el.textContent; el.blur(); }
+};
+window.tblCellSave = function(el){
+  var key = el.dataset.key, id = el.dataset.id, field = el.dataset.field;
+  var value = el.textContent.trim();
+  if(el.dataset.orig === undefined) el.dataset.orig = value;
+  if(value === el.dataset.orig) return;               // no change
+  fetch('/io/' + key + '/update-cell', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token() }}'},
+    body: JSON.stringify({ id: id, field: field, value: value })
+  }).then(r=>r.json()).then(d=>{
+    if(d.ok){
+      el.dataset.orig = (d.value != null ? String(d.value) : value);
+      el.style.background = '#dcfce7';
+      setTimeout(function(){ el.style.background = ''; }, 600);
+    } else {
+      alert(d.error || 'Could not save');
+      el.textContent = el.dataset.orig || '';
+    }
+  }).catch(function(){
+    alert('Network error');
+    el.textContent = el.dataset.orig || '';
+  });
+};
+
+/* Fields never editable inline (match backend _NEVER_EDITABLE + display-only cols). */
+window.IO_PROTECTED_FIELDS = ['id','_a','_idx','_chk','_parent','actions',
+  'owner_code','buyer_code','supplier_code','employee_code','item_code',
+  'created_at','updated_at','created_by','je_no','sheet_no','year',
+  'payroll_id','age','category_name','supplier_name','label','months_count'];
+window.ioFieldEditable = function(field){
+  if(!field) return false;
+  return window.IO_PROTECTED_FIELDS.indexOf(field) === -1;
+};
+window.ioSaveCell = function(key, e){
+  if(!e || !e.colDef || e.newValue === e.oldValue) return;
+  var body = { id: e.data.id, field: e.colDef.field, value: e.newValue };
+  fetch('/io/' + key + '/update-cell', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token() }}'},
+    body: JSON.stringify(body)
+  }).then(r=>r.json()).then(d=>{
+    if(!d.ok){
+      alert(d.error || 'Could not save');
+      e.data[e.colDef.field] = e.oldValue;
+      if(e.api) e.api.refreshCells({rowNodes:[e.node], columns:[e.colDef.field], force:true});
+    } else if(e.api){
+      if(d.value !== undefined && d.value !== null) e.data[e.colDef.field] = d.value;
+      e.node.setData(e.data);
+      e.api.flashCells({rowNodes:[e.node], columns:[e.colDef.field]});
+    }
+  }).catch(()=>{
+    alert('Network error');
+    e.data[e.colDef.field] = e.oldValue;
+    if(e.api) e.api.refreshCells({rowNodes:[e.node], columns:[e.colDef.field], force:true});
+  });
+};
+</script>
+
+<script>
+/* ── Theme Picker: sidebar + main-page color/theme ────────────────── */
+(function () {
+  const THEME_CSRF = '{{ csrf_token() }}';
+  const IS_AR = {{ 'true' if current_locale=='ar' else 'false' }};
+  const SAVE_URL  = '{{ url_for("account.theme_save") }}';
+  const RESET_URL = '{{ url_for("account.theme_reset") }}';
+
+  // Excel/Office color-picker scheme, split into two curated lists rather
+  // than one shared palette: every Theme Color (6 accents + their Lighter
+  // 80% tints) works fine as a background, but several of those same
+  // colors (the pale tints, and Gray/Gold) are too low-contrast to read
+  // as text -- so the text list only keeps the accents/standards that stay
+  // legible on a light background.
+  const BG_SWATCHES = ['#4472C4','#ED7D31','#A5A5A5','#FFC000','#5B9BD5','#70AD47',
+                        '#DAE3F3','#FCE4D6','#EDEDED','#FFF2CC','#DDEBF7','#E2EFDA'];
+  const TEXT_SWATCHES = ['#4472C4','#0070C0','#002060','#70AD47','#00B050','#C00000','#7030A0'];
+
+  // topbar_bg/heading_text: added alongside the sidebar/accent fields --
+  // every existing preset keeps a plain white top bar (safest default,
+  // stays readable against any accent) and uses its own `primary` as the
+  // page-heading text color, so nothing needs a separate hand-picked value.
+  const PRESETS = [
+    { id:'default', name_en:'Midnight',  name_ar:'منتصف الليل', sidebar_bg:'#0f172a', sidebar_text:'#94a3b8', sidebar_active_bg:'rgba(37,99,235,.18)',  sidebar_active_text:'#60a5fa', primary:'#2563eb', topbar_bg:'#ffffff', heading_text:'#2563eb' },
+    { id:'ocean',   name_en:'Ocean',     name_ar:'المحيط',      sidebar_bg:'#0c4a6e', sidebar_text:'#93c5e8', sidebar_active_bg:'rgba(14,165,233,.20)', sidebar_active_text:'#7dd3fc', primary:'#0ea5e9', topbar_bg:'#ffffff', heading_text:'#0ea5e9' },
+    { id:'forest',  name_en:'Forest',    name_ar:'الغابة',      sidebar_bg:'#14532d', sidebar_text:'#9dc7ab', sidebar_active_bg:'rgba(34,197,94,.20)',  sidebar_active_text:'#86efac', primary:'#16a34a', topbar_bg:'#ffffff', heading_text:'#16a34a' },
+    { id:'sunset',  name_en:'Sunset',    name_ar:'الغروب',      sidebar_bg:'#7c2d12', sidebar_text:'#e0a487', sidebar_active_bg:'rgba(249,115,22,.20)', sidebar_active_text:'#fdba74', primary:'#ea580c', topbar_bg:'#ffffff', heading_text:'#ea580c' },
+    { id:'slate',   name_en:'Slate',     name_ar:'الأردواز',    sidebar_bg:'#1e293b', sidebar_text:'#94a3b8', sidebar_active_bg:'rgba(100,116,139,.25)',sidebar_active_text:'#cbd5e1', primary:'#475569', topbar_bg:'#ffffff', heading_text:'#475569' },
+    { id:'violet',  name_en:'Violet',    name_ar:'بنفسجي',      sidebar_bg:'#2e1065', sidebar_text:'#c4b5da', sidebar_active_bg:'rgba(168,85,247,.20)', sidebar_active_text:'#d8b4fe', primary:'#9333ea', topbar_bg:'#ffffff', heading_text:'#9333ea' },
+    { id:'aura',    name_en:'Aura',      name_ar:'أورا',        sidebar_bg:'#022c22', sidebar_text:'#6ee7b7', sidebar_active_bg:'rgba(16,185,129,.20)', sidebar_active_text:'#34d399', primary:'#10b981', topbar_bg:'#ffffff', heading_text:'#10b981' },
+    // Office palette (Excel/Word's default theme accent colors), added on
+    // request -- named "Office ..." so they're recognizable as this
+    // specific scheme rather than the hand-picked themes above.
+    { id:'office-blue',   name_en:'Office Blue',   name_ar:'أوفيس أزرق',   sidebar_bg:'#1b2a4a', sidebar_text:'#a9b8d6', sidebar_active_bg:'rgba(68,114,196,.20)', sidebar_active_text:'#9fc2f5', primary:'#4472C4', topbar_bg:'#ffffff', heading_text:'#4472C4' },
+    { id:'office-orange', name_en:'Office Orange', name_ar:'أوفيس برتقالي', sidebar_bg:'#4a2a14', sidebar_text:'#e0b89a', sidebar_active_bg:'rgba(237,125,49,.20)', sidebar_active_text:'#f5b98a', primary:'#ED7D31', topbar_bg:'#ffffff', heading_text:'#ED7D31' },
+    { id:'office-green',  name_en:'Office Green',  name_ar:'أوفيس أخضر',   sidebar_bg:'#1e3a1a', sidebar_text:'#b8d6a8', sidebar_active_bg:'rgba(112,173,71,.20)', sidebar_active_text:'#a8d68a', primary:'#70AD47', topbar_bg:'#ffffff', heading_text:'#70AD47' },
+  ];
+
+  const root = document.documentElement;
+  const $ = id => document.getElementById(id);
+
+  function currentVars() {
+    const cs = getComputedStyle(root);
+    return {
+      sidebar_bg: cs.getPropertyValue('--sidebar-bg').trim() || '#0f172a',
+      sidebar_text: cs.getPropertyValue('--sidebar-text').trim() || '#94a3b8',
+      sidebar_active_bg: cs.getPropertyValue('--sidebar-active-bg').trim() || 'rgba(37,99,235,.18)',
+      sidebar_active_text: cs.getPropertyValue('--sidebar-active-text').trim() || '#60a5fa',
+      primary: cs.getPropertyValue('--primary').trim() || '#2563eb',
+      topbar_bg: cs.getPropertyValue('--topbar-bg').trim() || '#ffffff',
+      heading_text: cs.getPropertyValue('--page-heading-text').trim() || '#1e293b',
+    };
+  }
+
+  /* <input type="color"> only accepts #rrggbb — approximate rgba() down to hex for the picker's own display. */
+  function toHex(c) {
+    if (!c) return '#000000';
+    c = c.trim();
+    if (c[0] === '#') return c.length === 4 ? '#' + [...c.slice(1)].map(x => x + x).join('') : c.slice(0, 7);
+    const m = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (!m) return '#000000';
+    return '#' + [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
+  }
+
+  function applyVars(vars) {
+    root.style.setProperty('--sidebar-bg', vars.sidebar_bg);
+    root.style.setProperty('--sidebar-text', vars.sidebar_text);
+    root.style.setProperty('--sidebar-active-bg', vars.sidebar_active_bg);
+    root.style.setProperty('--sidebar-active-text', vars.sidebar_active_text);
+    root.style.setProperty('--primary', vars.primary);
+    if (vars.topbar_bg) root.style.setProperty('--topbar-bg', vars.topbar_bg);
+    if (vars.heading_text) root.style.setProperty('--page-heading-text', vars.heading_text);
+  }
+
+  function markActivePreset(vars) {
+    document.querySelectorAll('.theme-preset-card').forEach(card => {
+      card.classList.toggle('active', card.dataset.sidebarBg === vars.sidebar_bg && card.dataset.primary === vars.primary);
+    });
+  }
+
+  function syncAdvancedInputs(vars) {
+    $('themeColorSidebarBg').value = toHex(vars.sidebar_bg);
+    $('themeColorSidebarText').value = toHex(vars.sidebar_text);
+    $('themeColorSidebarActiveBg').value = toHex(vars.sidebar_active_bg);
+    $('themeColorSidebarActiveText').value = toHex(vars.sidebar_active_text);
+    $('themeColorPrimary').value = toHex(vars.primary);
+    if (vars.topbar_bg) $('themeColorTopbarBg').value = toHex(vars.topbar_bg);
+    if (vars.heading_text) $('themeColorHeadingText').value = toHex(vars.heading_text);
+  }
+
+  function showStatus(msg) {
+    const el = $('themeSaveStatus');
+    if (!el) return;
+    el.textContent = msg;
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 2000);
+  }
+
+  function saveVars(vars) {
+    fetch(SAVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': THEME_CSRF },
+      body: JSON.stringify(vars),
+    }).then(r => r.json()).then(d => {
+      showStatus(d.ok ? (IS_AR ? 'تم الحفظ' : 'Saved') : (d.error || (IS_AR ? 'فشل الحفظ' : 'Save failed')));
+    }).catch(() => showStatus(IS_AR ? 'فشل الاتصال بالخادم' : 'Server connection failed'));
+  }
+
+  function renderPresets() {
+    const grid = $('themePresetGrid');
+    if (!grid) return;
+    const cur = currentVars();
+    grid.innerHTML = PRESETS.map(p => `
+      <div class="theme-preset-card" data-id="${p.id}" data-sidebar-bg="${p.sidebar_bg}" data-primary="${p.primary}">
+        <div class="theme-preset-swatch">
+          <span style="background:${p.sidebar_bg}"></span>
+          <span style="background:${p.primary}"></span>
+        </div>
+        <div class="theme-preset-name">${IS_AR ? p.name_ar : p.name_en}</div>
+      </div>`).join('');
+    grid.querySelectorAll('.theme-preset-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const preset = PRESETS.find(p => p.id === card.dataset.id);
+        if (!preset) return;
+        applyVars(preset);
+        markActivePreset(preset);
+        syncAdvancedInputs(preset);
+        saveVars(preset);
+      });
+    });
+    markActivePreset(cur);
+  }
+
+  function renderSwatchRow(containerId, colors, inputId) {
+    const el = $(containerId);
+    if (!el) return;
+    el.innerHTML = colors.map(c =>
+      `<button type="button" class="theme-swatch-opt" style="background:${c}" data-color="${c}" title="${c}"></button>`
+    ).join('');
+    el.querySelectorAll('.theme-swatch-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $(inputId).value = btn.dataset.color;
+        saveVars(applyFromAdvanced());
+      });
+    });
+  }
+
+  function applyFromAdvanced() {
+    const vars = {
+      sidebar_bg: $('themeColorSidebarBg').value,
+      sidebar_text: $('themeColorSidebarText').value,
+      sidebar_active_bg: $('themeColorSidebarActiveBg').value,
+      sidebar_active_text: $('themeColorSidebarActiveText').value,
+      primary: $('themeColorPrimary').value,
+      topbar_bg: $('themeColorTopbarBg').value,
+      heading_text: $('themeColorHeadingText').value,
+    };
+    applyVars(vars);
+    markActivePreset(vars);
+    return vars;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    renderPresets();
+    syncAdvancedInputs(currentVars());
+    renderSwatchRow('themeSwatchSidebarBg', BG_SWATCHES, 'themeColorSidebarBg');
+    renderSwatchRow('themeSwatchSidebarText', TEXT_SWATCHES, 'themeColorSidebarText');
+
+    ['themeColorSidebarBg', 'themeColorSidebarText', 'themeColorSidebarActiveBg', 'themeColorSidebarActiveText', 'themeColorPrimary', 'themeColorTopbarBg', 'themeColorHeadingText'].forEach(id => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('input', applyFromAdvanced);
+      el.addEventListener('change', () => saveVars(applyFromAdvanced()));
+    });
+
+    const resetBtn = $('themeResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        applyVars(PRESETS[0]);
+        markActivePreset(PRESETS[0]);
+        syncAdvancedInputs(PRESETS[0]);
+        fetch(RESET_URL, { method: 'POST', headers: { 'X-CSRFToken': THEME_CSRF } })
+          .then(r => r.json())
+          .then(d => showStatus(d.ok ? (IS_AR ? 'تمت الإعادة للافتراضي' : 'Reset to default') : (d.error || 'Error')))
+          .catch(() => showStatus(IS_AR ? 'فشل الاتصال بالخادم' : 'Server connection failed'));
+      });
+    }
+  });
+})();
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

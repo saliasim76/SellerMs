@@ -1,0 +1,153 @@
+{% set ar = current_locale == 'ar' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if ar %}دفتر الأستاذ{% else %}Ledger Report{% endif %} · {{ account.code }}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+@page { size: A4; margin: 0; }
+html { font-size:13.5px; }
+html, body { background:#e6e9ef; }
+body { display:flex; justify-content:center; font-family:'Segoe UI','Arial',sans-serif; padding:20px 0; }
+.wrap { width:210mm; min-height:297mm; background:white; box-shadow:0 12px 30px rgba(0,0,0,.15); border:1px solid #d0d5de; padding:12mm 14mm; }
+.toolbar { width:210mm; margin:0 auto 10px; display:flex; justify-content:flex-end; gap:10px; }
+.toolbar button { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; border:none; }
+.header-arabic { font-size:1.1rem; font-weight:600; color:#1e2a41; }
+.company-name { font-size:1.5rem; font-weight:700; color:#0b1a33; line-height:1.3; }
+.company-addr { font-size:.78rem; color:#4a5975; margin-top:.15rem; }
+.doc-badge { background:#f0f3f8; padding:.35rem 1.2rem; border-radius:8px; font-size:1rem; font-weight:700; color:#1f3a5f; border:1px solid #bcc3d0; text-align:center; }
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:.3rem 1.8rem; margin-top:1rem; border-top:2px solid #222; padding-top:.8rem; }
+.field-group { display:flex; flex-wrap:wrap; align-items:baseline; border-bottom:1px dashed #dce1ea; padding:.3rem 0; gap:.4rem; }
+.field-group .label { font-weight:600; font-size:.78rem; color:#3d4d66; min-width:110px; text-transform:uppercase; }
+.field-group .value { font-weight:700; color:#111c2e; font-size:.9rem; }
+.summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; margin-top:1rem; }
+.summary-card { border:1px solid #ccd3df; border-radius:8px; padding:.55rem .7rem; background:#fafcff; }
+.summary-card .lbl { font-size:.68rem; font-weight:700; text-transform:uppercase; color:#5b6b85; }
+.summary-card .val { font-size:1rem; font-weight:800; color:#0b1a33; margin-top:.15rem; }
+.warn-box { margin-top:.8rem; background:#fef2f2; border:1.5px solid #fecaca; color:#991b1b; padding:.5rem .8rem; border-radius:7px; font-size:.78rem; font-weight:600; }
+.ledger-table { width:100%; border-collapse:collapse; margin-top:1rem; font-size:.78rem; border:1px solid #bcc4d2; }
+.ledger-table th { background:#e9edf5; color:#1b2b44; font-weight:700; padding:.4rem .35rem; border:1px solid #b0bacb; text-align:left; }
+.ledger-table td { padding:.38rem .35rem; border:1px solid #bdc6d6; background:white; }
+.ledger-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.ledger-table tr.opening td { background:#eef2ff; font-weight:700; color:#3730a3; }
+.ledger-table tfoot td { background:#f1f5f9; font-weight:800; }
+.sign-row { display:flex; justify-content:space-between; margin-top:1.6rem; }
+.sign-box { width:30%; text-align:center; border-top:1px solid #667; padding-top:.35rem; font-size:.75rem; color:#3d4d66; }
+.print-footer { margin-top:.6rem; font-size:.7rem; color:#6b7280; text-align:center; }
+@media print {
+  html { font-size:13.5px; }
+  body { background:white; padding:0; display:block; }
+  .toolbar { display:none; }
+  .wrap { width:210mm; min-height:297mm; box-shadow:none; border:none; margin:0; }
+  .ledger-table { page-break-inside:auto; }
+  .ledger-table tr { page-break-inside:avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button onclick="window.close()" style="background:white;color:#374151;border:1.5px solid #d1d5db;"><i class="fas fa-arrow-left"></i> {% if ar %}رجوع{% else %}Back{% endif %}</button>
+  <button onclick="window.print()" style="background:#2563eb;color:white;"><i class="fas fa-print"></i> {% if ar %}طباعة{% else %}Print{% endif %}</button>
+</div>
+
+<div class="wrap">
+
+  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a2b42;padding-bottom:.4rem;">
+    <div>
+      <div class="header-arabic">{{ owner.name_ar if owner and owner.name_ar else '—' }}</div>
+      <div class="company-name">{{ owner.name if owner else '—' }}</div>
+      <div class="company-addr">
+        {% if owner %}{{ [owner.street_name, owner.district, owner.city, owner.country] | select | join(', ') }}{% else %}—{% endif %}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;margin-top:.2rem;font-size:.8rem;">
+        <span><span style="font-weight:600;">C.R :</span> {{ owner.crn if owner and owner.crn else '—' }}</span>
+        <span><span style="font-weight:600;">VAT :</span> {{ owner.vat_number if owner and owner.vat_number else '—' }}</span>
+      </div>
+    </div>
+    <div class="doc-badge">
+      {% if ar %}تقرير دفتر الأستاذ{% else %}LEDGER REPORT{% endif %}
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="field-group"><span class="label">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</span><span class="value">{{ account.code }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}اسم الحساب{% else %}Account Name{% endif %}</span><span class="value">{{ account.drawers_ar if ar and account.drawers_ar else account.drawers }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}من تاريخ{% else %}From Date{% endif %}</span><span class="value">{{ from_date.isoformat() if from_date else '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}إلى تاريخ{% else %}To Date{% endif %}</span><span class="value">{{ to_date.isoformat() if to_date else '—' }}</span></div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card"><div class="lbl">{% if ar %}الرصيد الافتتاحي{% else %}Opening Balance{% endif %}</div><div class="val">{{ opening_balance_display }}</div></div>
+    <div class="summary-card"><div class="lbl">{% if ar %}إجمالي المدين{% else %}Total Debit{% endif %}</div><div class="val">{{ total_debit_display }}</div></div>
+    <div class="summary-card"><div class="lbl">{% if ar %}إجمالي الدائن{% else %}Total Credit{% endif %}</div><div class="val">{{ total_credit_display }}</div></div>
+    <div class="summary-card"><div class="lbl">{% if ar %}الرصيد الختامي{% else %}Closing Balance{% endif %}</div><div class="val">{{ closing_balance_display }}</div></div>
+  </div>
+
+  {% if not integrity_ok %}
+  <div class="warn-box">
+    <i class="fas fa-triangle-exclamation"></i>
+    {% if ar %}تحذير: عدم تطابق في تكامل البيانات المحاسبية — الرصيد الختامي لا يساوي آخر رصيد جاري محسوب.{% else %}Accounting data-integrity warning: Closing Balance does not match the last computed running balance.{% endif %}
+  </div>
+  {% endif %}
+
+  <table class="ledger-table">
+    <thead>
+      <tr>
+        <th>{% if ar %}التاريخ{% else %}Date{% endif %}</th>
+        <th>{% if ar %}نوع المستند{% else %}Document Type{% endif %}</th>
+        <th>{% if ar %}رقم المستند{% else %}Document No.{% endif %}</th>
+        <th>{% if ar %}البيان{% else %}Description{% endif %}</th>
+        <th class="num">{% if ar %}مدين{% else %}Debit{% endif %}</th>
+        <th class="num">{% if ar %}دائن{% else %}Credit{% endif %}</th>
+        <th class="num">{% if ar %}الرصيد{% else %}Balance{% endif %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="opening">
+        <td>{{ from_date.isoformat() if from_date else '—' }}</td>
+        <td>—</td><td>—</td>
+        <td>{% if ar %}الرصيد الافتتاحي{% else %}Opening Balance{% endif %}</td>
+        <td class="num"></td><td class="num"></td>
+        <td class="num">{{ opening_balance_display }}</td>
+      </tr>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.posting_date }}</td>
+        <td>{{ r.document_type }}</td>
+        <td>{{ r.document_no }}</td>
+        <td>{{ r.description }}</td>
+        <td class="num">{{ r.debit_display }}</td>
+        <td class="num">{{ r.credit_display }}</td>
+        <td class="num">{{ r.balance_display }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="text-align:center;color:#9ca3af;">{% if ar %}لا توجد معاملات ضمن الفترة المحددة.{% else %}No transactions in the selected period.{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="4">{% if ar %}الإجمالي / الرصيد الختامي{% else %}Total / Closing Balance{% endif %}</td>
+        <td class="num">{{ total_debit_display }}</td>
+        <td class="num">{{ total_credit_display }}</td>
+        <td class="num">{{ closing_balance_display }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="sign-row">
+    <div class="sign-box">{% if ar %}أعده{% else %}Prepared By{% endif %}<br>{{ current_user_name }}</div>
+    <div class="sign-box">{% if ar %}تاريخ الطباعة{% else %}Printed Date/Time{% endif %}<br>{{ printed_at.strftime('%Y-%m-%d %H:%M') }}</div>
+  </div>
+  <div class="print-footer">{% if ar %}الصفحة{% else %}Page{% endif %} 1</div>
+
+</div>
+
+{% if request.args.get('autoprint') == '1' %}
+<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
+{% endif %}
+</body>
+</html>

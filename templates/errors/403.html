@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}403{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+  <h1 class="display-1 text-danger">403</h1>
+  <h3>{% if ar %}الوصول مرفوض{% else %}Access Denied{% endif %}</h3>
+  <p class="text-muted">{% if ar %}ليس لديك صلاحية للوصول إلى هذه الصفحة{% else %}You do not have permission to access this page{% endif %}</p>
+  <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary mt-3">
+    <i class="fas fa-home me-2"></i>{% if ar %}الرئيسية{% else %}Go Home{% endif %}
+  </a>
+</div>
+{% endblock %}

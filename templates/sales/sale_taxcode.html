@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}{{ title_ar }}{% else %}{{ title_en }}{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}{{ title_ar }}{% else %}{{ title_en }}{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.ag-theme-alpine{--ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#eff6ff;--ag-selected-row-background-color:#dbeafe;--ag-header-height:44px;--ag-row-height:42px;--ag-cell-horizontal-padding:12px;}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;overflow:visible;}
+.ag-theme-alpine .ag-header-cell-text{overflow:visible;text-overflow:clip;white-space:nowrap;}
+.ag-theme-alpine .ag-header-cell:hover{background:rgba(255,255,255,.08) !important;}
+.ag-theme-alpine .ag-sort-ascending-icon,.ag-theme-alpine .ag-sort-descending-icon,.ag-theme-alpine .ag-sort-none-icon{color:#94a3b8;}
+.ag-theme-alpine .ag-header-icon{color:#94a3b8;}
+.ag-theme-alpine .ag-filter{border-radius:10px !important;box-shadow:0 8px 30px rgba(0,0,0,.15) !important;border:1px solid #e2e8f0 !important;overflow:hidden;min-width:260px;background:white;}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input{border:1.5px solid #d1d5db !important;border-radius:7px !important;padding:6px 10px !important;font-size:12px !important;}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input:focus{outline:none !important;border-color:#2563eb !important;box-shadow:0 0 0 2px rgba(37,99,235,.12) !important;}
+.ag-theme-alpine .ag-filter-apply-panel{padding:8px 10px !important;background:#f8fafc !important;border-top:1px solid #e2e8f0 !important;display:flex !important;gap:6px !important;justify-content:space-between !important;}
+.ag-theme-alpine .ag-filter-apply-panel-button{padding:5px 14px !important;border-radius:7px !important;font-size:12px !important;font-weight:600 !important;border:none !important;cursor:pointer !important;}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="applyFilterButton"]{background:linear-gradient(135deg,#16a34a,#15803d) !important;color:white !important;}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="clearFilterButton"],.ag-theme-alpine .ag-filter-apply-panel-button[ref="resetFilterButton"]{background:white !important;color:#374151 !important;border:1.5px solid #d1d5db !important;}
+.ag-theme-alpine .ag-floating-filter-input input{border:1px solid #e2e8f0 !important;border-radius:5px !important;padding:3px 7px !important;font-size:11px !important;}
+.ag-theme-alpine .ag-floating-filter-input input:focus{outline:none !important;border-color:#2563eb !important;}
+.ag-theme-alpine .ag-row-even{background:white;}
+.ag-theme-alpine .ag-row-odd{background:#fafbfc;}
+.ag-theme-alpine .ag-row-hover{background:#eff6ff !important;}
+.ag-theme-alpine .ag-cell{border-right:1px solid #f1f5f9 !important;}
+.tx-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.tool-btn{width:34px;height:34px;border-radius:7px;border:1.5px solid #d1d5db;background:white;color:#6b7280;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;transition:all .12s;}
+.tool-btn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+.tool-btn-green{background:#16a34a;color:white;border:none;}
+.tool-btn-green:hover{background:#15803d;}
+.tool-btn-blue{background:#2563eb;color:white;border:none;}
+.tool-btn-blue:hover{background:#1d4ed8;}
+.search-form{position:relative;margin-inline-start:auto;}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:12px;z-index:2;}
+.search-input{padding:7px 12px 7px 32px;border:1.5px solid #d1d5db;border-radius:7px;font-size:12px;outline:none;}
+.search-input:focus{border-color:#2563eb;}
+.tx-badge-active{background:#dcfce7;color:#15803d;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px;}
+.tx-badge-inactive{background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px;}
+.pur-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.pur-hdr h5{margin:0;color:white;font-weight:700;font-size:15px;}
+.pur-badge{background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;margin-left:8px;}
+.modal-header .btn-close{filter:brightness(0) invert(1);}
+.modal-content{border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.form-label{font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;}
+.form-control:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.form-text{font-size:11px;color:#6b7280;}
+.pur-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#f8fafc;border-top:2px solid #e2e8f0;}
+.btn-f{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+.btn-save{background:linear-gradient(135deg,#16a34a,#15803d);color:white;box-shadow:0 2px 8px rgba(22,163,74,.3);}
+.btn-save:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(22,163,74,.4);}
+.btn-cancel{background:white;color:#374151;border:1.5px solid #d1d5db;}
+.btn-cancel:hover{background:#f9fafb;}
+.proledg-pagination{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;}
+.page-count{font-size:12px;color:#6b7280;font-weight:600;}
+.account-input-wrapper{position:relative;display:flex;align-items:center;}
+.account-input-wrapper .form-control{padding-right:40px;}
+.account-input-wrapper .percent-suffix{position:absolute;right:12px;color:#6b7280;font-weight:600;pointer-events:none;font-size:14px;background:#f8fafc;padding:0 4px;}
+input:invalid{border-color:#dc3545 !important;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}{{ title_ar }}{% else %}{{ title_en }}{% endif %}</h2>
+
+  <div class="tx-toolbar">
+    <button class="tool-btn tool-btn-green" onclick="openAdd()" title="{% if ar %}جديد{% else %}New{% endif %}"><i class="fas fa-plus"></i></button>
+    <button class="tool-btn" onclick="openEdit()" title="{% if ar %}تعديل{% else %}Edit{% endif %}"><i class="fas fa-pencil-alt"></i></button>
+    <button class="tool-btn" onclick="del()" title="{% if ar %}حذف{% else %}Delete{% endif %}"><i class="fas fa-trash"></i></button>
+    <button class="tool-btn" onclick="loadData()" title="{% if ar %}تحديث{% else %}Refresh{% endif %}"><i class="fas fa-sync-alt"></i></button>
+    <button class="tool-btn" onclick="gridApi&&gridApi.exportDataAsCsv({fileName:'{{ kind }}_tax_codes.csv'})" title="Excel/CSV"><i class="fas fa-file-export"></i></button>
+    <button class="tool-btn" onclick="gridApi&&gridApi.setFilterModel(null);document.querySelector('.search-input').value='';gridApi.setGridOption('quickFilterText','')" title="Clear Filters"><i class="fas fa-times-circle"></i></button>
+    <div class="search-form">
+      <i class="fas fa-search search-icon"></i>
+      <input type="text" class="search-input" style="width:220px" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">
+    <div id="txGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:520px;"></div>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count" id="pageInfo">–</span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-muted">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="gridApi&&gridApi.setGridOption('paginationPageSize',+this.value)">
+        <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ══ #}
+<div class="modal fade" id="txModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content">
+      <div class="pur-hdr">
+        <h5 id="txModalTitle"><i class="fas fa-plus-circle me-2"></i>{% if ar %}رمز ضريبي جديد{% else %}New Tax Code{% endif %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <form id="txForm" onsubmit="event.preventDefault(); save(false);" novalidate>
+        <input type="hidden" id="tx_id">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{% if ar %}الرمز الضريبي{% else %}Tax Code{% endif %}<span class="text-danger">*</span></label>
+          <div class="account-input-wrapper">
+            <input type="text" id="tx_account" class="form-control" placeholder="{% if ar %}مثال: 4.5{% else %}e.g., 4.5{% endif %}"
+                   onkeypress="return (event.charCode >= 48 && event.charCode <= 57) || event.charCode === 46"
+                   oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1');"
+                   required>
+            <span class="percent-suffix">%</span>
+          </div>
+          <div class="form-text text-muted">{% if ar %}أدخل النسبة المئوية كرقم فقط (مثال: 4.5) - ستضاف علامة % تلقائياً{% else %}Enter the percentage as a number only (e.g., 4.5) - % will be added automatically{% endif %}</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}<span class="text-danger">*</span></label>
+          <input type="text" id="tx_code" class="form-control"
+                 placeholder="{% if ar %}حروف وأرقام (مثال: P1){% else %}Alphanumeric (e.g., P1){% endif %}"
+                 required>
+          <div class="form-text text-muted">{% if ar %}يمكن أن يحتوي على حروف وأرقام فقط (مثال: P1, VAT15, S1){% else %}Can contain only letters and numbers (e.g., P1, VAT15, S1){% endif %}</div>
+          <div class="form-text text-warning" id="tx_code_hint" style="display:none;">
+            <i class="fas fa-info-circle me-1"></i>
+            {% if ar %}لا يمكن تعديل الرمز بعد الإنشاء{% else %}Tax Code cannot be changed after creation{% endif %}
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{% if ar %}الوصف{% else %}Section{% endif %}<span class="text-danger">*</span></label>
+          <textarea id="tx_section" class="form-control" rows="2" placeholder="{% if ar %}وصف القسم الضريبي{% else %}Description of the tax section{% endif %}" required></textarea>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label fw-semibold">{% if ar %}الحالة{% else %}Status{% endif %}</label>
+          <select id="tx_status" class="form-select">
+            <option value="Active">{% if ar %}نشط{% else %}Active{% endif %}</option>
+            <option value="Inactive">{% if ar %}غير نشط{% else %}Inactive{% endif %}</option>
+          </select>
+        </div>
+        </form>
+      </div>
+      <div class="pur-footer">
+        <button type="button" class="btn-f btn-cancel" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <div>
+          <button type="button" class="btn-f btn-save" onclick="save(true)" style="background:linear-gradient(135deg,#6366f1,#4f46e5);">{% if ar %}حفظ وجديد{% else %}Save &amp; New{% endif %}</button>
+          <button type="button" class="btn-f btn-save" onclick="save(false)">{% if ar %}حفظ{% else %}Save{% endif %}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Delete Confirm #}
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog modal-sm"><div class="modal-content" style="border-radius:10px;overflow:hidden;">
+    <div class="modal-header border-0"><h6 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>{% if ar %}تأكيد الحذف{% else %}Confirm Delete{% endif %}</h6>
+    <button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><p id="delTxt" class="fw-semibold mb-0"></p></div>
+    <div class="modal-footer border-0">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+      <button class="btn btn-sm btn-danger" id="delBtn">{% if ar %}حذف{% else %}Delete{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+(function() {
+    if (window.validateTaxCode) {
+        window.validateTaxCode = function(code) { return /^[A-Za-z0-9]+$/.test(code); };
+    }
+    if (window.jQuery && jQuery.validator) {
+        jQuery.validator.addMethod('taxcode', function(value, element) {
+            return /^[A-Za-z0-9]+$/.test(value);
+        }, 'Can contain only letters and numbers');
+    }
+})();
+
+const CSRF  = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if ar else 'false' }};
+const KIND  = '{{ kind }}';
+const DATA_URL = '/' + KIND + '-tax-codes/data';
+let gridApi;
+let _txModal = null;
+let _delModal = null;
+
+function badge(v) {
+  if (v === 'Active') {
+    return '<span class="tx-badge-active"><i class="fas fa-circle" style="font-size:6px;"></i> ' + (IS_AR ? 'نشط' : 'Active') + '</span>';
+  }
+  return '<span class="tx-badge-inactive"><i class="fas fa-circle" style="font-size:6px;"></i> ' + (IS_AR ? 'غير نشط' : 'Inactive') + '</span>';
+}
+
+const _locale = IS_AR ? {
+  filterOoo:'تصفية...',equals:'يساوي',notEqual:'لا يساوي',contains:'يحتوي على',notContains:'لا يحتوي على',startsWith:'يبدأ بـ',endsWith:'ينتهي بـ',blank:'فارغ',notBlank:'غير فارغ',lessThan:'أقل من',greaterThan:'أكبر من',applyFilter:'تطبيق',clearFilter:'مسح',resetFilter:'إعادة تعيين',addFilterCondition:'+ إضافة قاعدة',matchAll:'يطابق الكل',matchAny:'يطابق أي',andCondition:'و',orCondition:'أو',noRowsToShow:'لا توجد بيانات',loadingOoo:'جاري التحميل...',searchOoo:'بحث...',sortAscending:'تصاعدي',sortDescending:'تنازلي',
+} : {
+  filterOoo:'Filter...',applyFilter:'Apply',clearFilter:'Clear',resetFilter:'Reset',addFilterCondition:'+ Add Rule',matchAll:'Match All',matchAny:'Match Any',noRowsToShow:'No records found',searchOoo:'Search...',
+};
+
+const cols = [
+  {headerName:'#',field:'id',width:65,filter:false,floatingFilter:false,suppressMenu:true,checkboxSelection:true,headerCheckboxSelection:true,pinned:IS_AR?'right':'left',sortable:false,resizable:false},
+  {headerName:IS_AR?'الرمز الضريبي':'Tax Code',field:'account_code',minWidth:140,pinned:IS_AR?'right':'left',filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'رمز الحساب':'Account Code',field:'tax_code',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الوصف':'Section',field:'section',minWidth:320,flex:2,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الحالة':'Status',field:'status',width:130,cellRenderer:function(p){return badge(p.value);},filter:'agSetColumnFilter',floatingFilter:false,filterParams:{values:['Active','Inactive'],buttons:['apply','reset','clear']}}
+];
+
+const defaultColDef = {
+  sortable:true,resizable:true,filter:true,floatingFilter:true,suppressMenu:false,unSortIcon:true,enableRowGroup:true,enablePivot:true,enableValue:true,
+  menuTabs:['filterMenuTab','columnsMenuTab','generalMenuTab'],
+  filterParams:{buttons:['apply','reset','clear'],closeOnApply:true,maxNumConditions:10}
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  const el = document.getElementById('txGrid');
+  if (!el) return;
+  agGrid.createGrid(el, {
+    columnDefs:cols,rowData:[],pagination:true,paginationPageSize:20, paginationPageSizeSelector:[20,50,100],animateRows:true,enableRtl:IS_AR,localeText:_locale,multiSortKey:'ctrl',defaultColDef:defaultColDef,rowSelection:'multiple',suppressRowClickSelection:true,
+    sideBar:{toolPanels:[{id:'columns',labelDefault:IS_AR?'الأعمدة':'Columns',labelKey:'columns',iconKey:'columns',toolPanel:'agColumnsToolPanel'},{id:'filters',labelDefault:IS_AR?'الفلاتر':'Filters',labelKey:'filters',iconKey:'filter',toolPanel:'agFiltersToolPanel'}],defaultToolPanel:''},
+    rowGroupPanelShow:'always',pivotPanelShow:'always',groupDisplayType:'groupRows',
+    onGridReady:function(p){gridApi=p.api;if(window.GridKit){GridKit.enhance(p,'txGrid',{storageKey:'sales_taxcode',exportName:'Sales Tax Codes'});}loadData();},
+    onFilterChanged:updateStatus,onPaginationChanged:updateStatus,onSelectionChanged:updateStatus,
+    onGridSizeChanged:function(p){p.api.sizeColumnsToFit();},
+    onRowDoubleClicked:function(){openEdit();},
+    getRowStyle:function(p){return p.node.rowIndex%2===0?{background:'#fff'}:{background:'#fafbfc'};}
+  });
+  const modalEl = document.getElementById('txModal');
+  if (modalEl) { _txModal = new bootstrap.Modal(modalEl); }
+  const delModalEl = document.getElementById('delModal');
+  if (delModalEl) { _delModal = new bootstrap.Modal(delModalEl); }
+});
+
+function updateStatus() {
+  if (!gridApi) return;
+  const total = gridApi.getDisplayedRowCount();
+  const selected = gridApi.getSelectedRows().length;
+  const pageInfo = document.getElementById('pageInfo');
+  if (pageInfo) {
+    pageInfo.textContent = selected > 0 ? `${selected} ${IS_AR?'محدد':'selected'}` : `${total} ${IS_AR?'سجل':'records'}`;
+  }
+}
+
+function loadData() {
+  var savedFilters = gridApi ? gridApi.getFilterModel() : null;
+  fetch(DATA_URL).then(r=>r.json()).then(d=>{
+    gridApi.setGridOption('rowData', d);
+    if (savedFilters && Object.keys(savedFilters).length) { gridApi.setFilterModel(savedFilters); }
+    updateStatus();
+  }).catch(err=>console.error('Failed to load data:', err));
+}
+
+function openAdd() {
+  document.getElementById('txModalTitle').innerHTML = '<i class="fas fa-plus-circle me-2"></i>' + (IS_AR?'رمز ضريبي جديد':'New Tax Code');
+  document.getElementById('tx_id').value = '';
+  document.getElementById('tx_account').value = '';
+  document.getElementById('tx_code').value = '';
+  document.getElementById('tx_code').readOnly = false;
+  document.getElementById('tx_code_hint').style.display = 'none';
+  document.getElementById('tx_section').value = '';
+  document.getElementById('tx_status').value = 'Active';
+  document.getElementById('tx_code').setCustomValidity('');
+  if (_txModal) { _txModal.show(); }
+}
+
+function openEdit() {
+  const r = gridApi.getSelectedRows()[0];
+  if (!r) { alert(IS_AR?'اختر سجلاً':'Select a record'); return; }
+  document.getElementById('txModalTitle').innerHTML = '<i class="fas fa-edit me-2"></i>' + (IS_AR?'تعديل رمز ضريبي':'Edit Tax Code');
+  document.getElementById('tx_id').value = r.id;
+  let accountVal = r.account_code || '';
+  if (accountVal.endsWith('%')) { accountVal = accountVal.slice(0, -1); }
+  document.getElementById('tx_account').value = accountVal;
+  document.getElementById('tx_code').value = r.tax_code || '';
+  document.getElementById('tx_code').readOnly = true;
+  document.getElementById('tx_code_hint').style.display = 'block';
+  document.getElementById('tx_section').value = r.section || '';
+  document.getElementById('tx_status').value = r.status || 'Active';
+  document.getElementById('tx_code').setCustomValidity('');
+  if (_txModal) { _txModal.show(); }
+}
+
+function save(again) {
+  const id = document.getElementById('tx_id').value;
+  const accInput = document.getElementById('tx_account').value.trim();
+  const code = document.getElementById('tx_code').value.trim();
+  const section = document.getElementById('tx_section').value.trim();
+  if (!accInput || !/^\d+(\.\d+)?$/.test(accInput)) {
+    alert(IS_AR?'الرمز الضريبي يجب أن يكون رقمًا (مثال: 4.5)':'Tax Code must be a number (e.g., 4.5)');
+    document.getElementById('tx_account').focus(); return;
+  }
+  if (!code || !/^[A-Za-z0-9]+$/.test(code)) {
+    alert(IS_AR?'رمز الحساب يجب أن يحتوي على حروف وأرقام فقط (مثال: P1, VAT15)':'Account Code must contain only letters and numbers (e.g., P1, VAT15)');
+    document.getElementById('tx_code').focus(); return;
+  }
+  if (!section) {
+    alert(IS_AR?'الوصف مطلوب':'Section is required');
+    document.getElementById('tx_section').focus(); return;
+  }
+  const accVal = accInput + '%';
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF);
+  fd.set('account_code', accVal);
+  fd.set('tax_code', code);
+  fd.set('section', section);
+  fd.set('status', document.getElementById('tx_status').value);
+  const url = id ? '/' + KIND + '-tax-codes/' + id + '/edit' : '/' + KIND + '-tax-codes/add';
+  fetch(url, {method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+  .then(r=>r.json()).then(d=>{
+    if (!d.ok) { alert(d.error || 'Error'); return; }
+    loadData();
+    if (again && !id) {
+      document.getElementById('tx_account').value = '';
+      document.getElementById('tx_code').value = '';
+      document.getElementById('tx_code').readOnly = false;
+      document.getElementById('tx_code_hint').style.display = 'none';
+      document.getElementById('tx_section').value = '';
+      document.getElementById('tx_status').value = 'Active';
+      document.getElementById('tx_id').value = '';
+      document.getElementById('txModalTitle').innerHTML = '<i class="fas fa-plus-circle me-2"></i>' + (IS_AR?'رمز ضريبي جديد':'New Tax Code');
+      document.getElementById('tx_code').focus();
+    } else {
+      if (_txModal) { _txModal.hide(); }
+    }
+  }).catch(()=>alert(IS_AR?'خطأ في الحفظ':'Save failed'));
+}
+
+function del() {
+  const r = gridApi.getSelectedRows()[0];
+  if (!r) { alert(IS_AR?'اختر سجلاً':'Select a record'); return; }
+  document.getElementById('delTxt').textContent = (IS_AR?'حذف: ':'Delete: ') + r.account_code + ' (' + r.tax_code + ')?';
+  document.getElementById('delBtn').onclick = function() {
+    const fd = new FormData();
+    fd.set('csrf_token', CSRF);
+    fetch('/' + KIND + '-tax-codes/' + r.id + '/delete', {method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+    .then(r=>r.json()).then(d=>{
+      if (!d.ok) { alert(d.error || 'Error'); return; }
+      if (_delModal) _delModal.hide();
+      loadData();
+    }).catch(()=>alert(IS_AR?'خطأ في الحذف':'Delete failed'));
+  };
+  if (_delModal) { _delModal.show(); }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.key === 'n') { e.preventDefault(); openAdd(); }
+  if (e.ctrlKey && e.key === 'e') { e.preventDefault(); openEdit(); }
+  if (e.key === 'Delete') { del(); }
+  if (e.ctrlKey && e.key === 's') {
+    e.preventDefault();
+    if (_txModal && _txModal._element && _txModal._element.classList.contains('show')) { save(false); }
+  }
+});
+
+document.addEventListener('invalid', function(e) {
+  if (e.target && e.target.id === 'tx_code') {
+    e.preventDefault();
+    e.target.setCustomValidity('');
+  }
+}, true);
+
+const txCodeInput = document.getElementById('tx_code');
+if (txCodeInput) {
+  txCodeInput.checkValidity = function() { return true; };
+}
+</script>
+{% endblock %}

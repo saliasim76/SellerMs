@@ -1,0 +1,197 @@
+{# ── Shared CSS for all purchase document forms ── #}
+{% macro pur_css() %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+/* Grid */
+.ag-theme-alpine{--ag-font-family:'Segoe UI',Tahoma,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#f0f7ff;--ag-header-height:44px;--ag-row-height:44px;}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:12px;text-transform:uppercase;}
+.ag-theme-alpine .ag-filter{border-radius:10px!important;box-shadow:0 6px 24px rgba(0,0,0,.14)!important;border:1px solid #e2e8f0!important;overflow:hidden;min-width:255px;}
+.ag-theme-alpine .ag-filter-apply-panel{padding:8px 10px!important;background:#f8fafc!important;border-top:1px solid #e2e8f0!important;display:flex!important;gap:6px!important;justify-content:space-between!important;}
+.ag-theme-alpine .ag-filter-apply-panel-button{padding:5px 14px!important;border-radius:7px!important;font-size:12px!important;font-weight:600!important;border:none!important;cursor:pointer!important;}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="applyFilterButton"]{background:linear-gradient(135deg,#16a34a,#15803d)!important;color:white!important;}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="clearFilterButton"]{background:white!important;color:#374151!important;border:1.5px solid #d1d5db!important;}
+.ag-theme-alpine .ag-add-filter-condition .ag-button{color:#2563eb!important;font-size:12px!important;font-weight:600!important;background:none!important;border:none!important;cursor:pointer!important;}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input{border:1.5px solid #d1d5db!important;border-radius:7px!important;padding:6px 10px!important;font-size:12px!important;width:100%!important;}
+/* Action btns */
+.ag-ab{width:28px;height:28px;border-radius:7px;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;}
+.ag-ab-edit{background:#f59e0b;color:white;} .ag-ab-del{background:#ef4444;color:white;}
+/* Modal */
+.pur-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.pur-hdr h5{margin:0;color:white;font-weight:700;font-size:15px;}
+.pur-badge{background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;margin-left:8px;}
+/* Tabs */
+.pur-tabs{display:flex;gap:0;border-bottom:2px solid #e2e8f0;padding:0 18px;background:white;}
+.pur-tab{padding:10px 18px;border:none;background:none;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
+.pur-tab.active{color:#2563eb;border-bottom-color:#2563eb;}
+.pur-tab-pane{display:none;padding:16px 18px;}
+.pur-tab-pane.active{display:block;}
+/* Accordion */
+.acc-panel{border:1.5px solid #e2e8f0;border-radius:10px;margin-bottom:10px;overflow:hidden;}
+.acc-btn{width:100%;background:white;border:none;padding:11px 16px;text-align:left;font-weight:600;font-size:13px;color:#1e3a5f;cursor:pointer;display:flex;align-items:center;justify-content:space-between;}
+.acc-btn.open{background:#f0f7ff;border-bottom:1.5px solid #e2e8f0;}
+.acc-icon{width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;margin-right:8px;font-size:11px;background:#e0f2fe;color:#0284c7;}
+.acc-btn.open .acc-icon{background:#2563eb;color:white;}
+.acc-body{padding:16px 18px;display:none;}
+.acc-body.show{display:block;}
+/* Fields */
+.f-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-item{display:flex;flex-direction:column;}
+.f-lbl{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+.f-req{color:#ef4444;margin-left:1px;}
+.f-inp{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;transition:border-color .15s;}
+.f-inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.f-inp[readonly]{background:#f8fafc;color:#374151;}
+select.f-inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
+/* Line items */
+.pur-li-wrap{margin-top:4px;}
+.pur-li-table{width:100%;border-collapse:collapse;font-size:11.5px;min-width:1200px;}
+.pur-li-table thead tr{background:#1e3a5f;}
+.pur-li-table th{padding:9px 8px;font-weight:600;color:white;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;}
+.pur-li-table td{padding:5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+.pur-li-table tbody tr:hover td{background:#f0f7ff;}
+.pur-li-table tbody tr:nth-child(even) td{background:#fafbfc;}
+.li-inp{border:1.5px solid #e5e7eb;border-radius:6px;padding:5px 7px;font-size:11.5px;width:100%;font-family:inherit;}
+.li-inp:focus{outline:none;border-color:#2563eb;}
+.li-inp[readonly]{background:#f3f4f6;color:#374151;}
+select.li-inp{appearance:none;padding-right:18px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;}
+/* Summary */
+.pur-summary{background:linear-gradient(135deg,#f8fafc,#f0f7ff);border:1.5px solid #bfdbfe;border-radius:10px;padding:16px 18px;}
+.sum-line{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #e2e8f0;font-size:13px;}
+.sum-line:last-child{border-bottom:none;}
+.sum-line.total-line{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:10px 14px;border-radius:8px;margin-top:6px;}
+.sum-line.total-line span{color:white!important;}
+/* Attachment upload */
+.att-drop{border:2px dashed #bfdbfe;border-radius:10px;padding:24px;text-align:center;background:#f0f9ff;cursor:pointer;transition:all .15s;}
+.att-drop:hover{border-color:#2563eb;background:#eff6ff;}
+.att-drop i{font-size:28px;color:#60a5fa;margin-bottom:8px;}
+.att-list{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.att-item{display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid #e2e8f0;border-radius:7px;padding:7px 12px;font-size:12px;}
+.att-item .att-name{font-weight:600;color:#374151;}
+.att-item .att-rm{cursor:pointer;color:#ef4444;background:none;border:none;padding:0;}
+/* Footer */
+.pur-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#f8fafc;border-top:2px solid #e2e8f0;}
+.btn-f{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+.btn-save{background:linear-gradient(135deg,#16a34a,#15803d);color:white;box-shadow:0 2px 8px rgba(22,163,74,.3);}
+.btn-cancel{background:white;color:#374151;border:1.5px solid #d1d5db;}
+</style>
+{% endmacro %}
+
+{# ── Shared Line Items JS ── #}
+{% macro pur_li_js(ar=False) %}
+<script>
+let _liIdx = 0;
+const TAX_CODES = {'VAT15':'15%','VAT0':'0%','EXEMPT':'Exempt'};
+
+function addLiRow(d){
+  const idx = _liIdx++;
+  const dv = d || {};
+  const row = `<tr id="plr_${idx}">
+    <td style="text-align:center;color:#9ca3af;font-size:11px;">${_liIdx}</td>
+    <td><input type="text" class="li-inp" name="li_item_code[]" value="${dv.item_code||''}" placeholder="CODE" style="width:90px;"></td>
+    <td><input type="text" class="li-inp" name="li_item_desc[]" value="${dv.item_desc||''}" placeholder="${'وصف الصنف' || 'Description'}" style="min-width:150px;"></td>
+    <td><input type="date" class="li-inp" name="li_required_date[]" value="${dv.required_date||''}" dir="ltr" style="width:110px;"></td>
+    <td><input type="text" class="li-inp" name="li_warehouse[]" value="${dv.warehouse||''}" style="min-width:100px;"></td>
+    <td><select class="li-inp" name="li_uom[]" style="width:90px;">
+      ${['Unit/وحدة','Hour/ساعة','Day/يوم','Month/شهر','KG/كجم','Meter/متر','Box/صندوق','Piece/قطعة'].map(u=>{
+        const [v,l]=u.split('/'); return `<option value="${v.toLowerCase()}" ${dv.uom===v.toLowerCase()?'selected':''}>${u}</option>`;
+      }).join('')}
+    </select></td>
+    <td><input type="number" class="li-inp" name="li_qty[]" id="plq_${idx}" value="${dv.quantity||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:65px;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]" id="plr2_${idx}" value="${dv.rate||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:65px;"></td>
+    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}" value="${dv.discount||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:60px;"></td>
+    <td><input type="number" class="li-inp" name="li_freight[]" id="plf_${idx}" value="${dv.freight||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:60px;"></td>
+    <td><input type="number" class="li-inp" id="plt_${idx}" name="li_taxable[]" value="${dv.taxable||0}" readonly style="width:75px;background:#fffbeb;color:#92400e;font-weight:600;"></td>
+    <td><select class="li-inp" name="li_tax_code[]" id="pltc_${idx}" onchange="recalcLi(${idx})" style="width:85px;">
+      <option value="VAT15" ${(dv.tax_code||'VAT15')==='VAT15'?'selected':''}>VAT 15%</option>
+      <option value="VAT0" ${dv.tax_code==='VAT0'?'selected':''}>VAT 0%</option>
+      <option value="EXEMPT" ${dv.tax_code==='EXEMPT'?'selected':''}>Exempt</option>
+    </select></td>
+    <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${dv.tax_amount||0}" readonly style="width:70px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${dv.total||0}" readonly style="width:80px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+    <td><button type="button" onclick="removeLi(${idx})" style="width:24px;height:24px;border-radius:5px;border:none;background:#fee2e2;color:#b91c1c;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;"><i class="fas fa-times" style="font-size:9px;"></i></button></td>
+  </tr>`;
+  document.getElementById('liBody').insertAdjacentHTML('beforeend',row);
+  recalcLi(idx);
+}
+
+function removeLi(idx){const r=document.getElementById('plr_'+idx);if(r)r.remove();recalcSummary();}
+
+function recalcLi(idx){
+  const g=id=>parseFloat(document.getElementById(id)?.value||0)||0;
+  const qty=g('plq_'+idx), rate=g('plr2_'+idx), disc=g('pld_'+idx), fr=g('plf_'+idx);
+  const tcEl=document.getElementById('pltc_'+idx);
+  const taxRate=tcEl&&tcEl.value==='VAT15'?15:0;
+  const taxable=qty*rate;
+  const subtotal=taxable-disc;
+  const taxAmt=Math.round(subtotal*taxRate/100*100)/100;
+  const total=subtotal+fr+taxAmt;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v.toFixed(2);};
+  set('plt_'+idx,taxable); set('plta_'+idx,taxAmt); set('pltot_'+idx,total);
+  recalcSummary();
+}
+
+function recalcSummary(){
+  let bd=0,disc=0,fr=0,vat=0;
+  document.querySelectorAll('#liBody tr').forEach(row=>{
+    const g=n=>parseFloat(row.querySelector('[name="'+n+'[]"]')?.value||0)||0;
+    bd+=g('li_qty')*g('li_rate'); disc+=g('li_discount'); fr+=g('li_freight');
+    vat+=parseFloat(row.querySelector('[name="li_tax_amount_disp[]"]')?.value||0)||0;
+  });
+  const excl=bd-disc, incl=excl+fr+vat;
+  const fmt=n=>'SAR '+n.toLocaleString('en-SA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const s=id=>document.getElementById(id);
+  if(s('s_total_bd')) s('s_total_bd').textContent=fmt(bd);
+  if(s('s_total_disc')) s('s_total_disc').textContent=fmt(disc);
+  if(s('s_total_fr')) s('s_total_fr').textContent=fmt(fr);
+  if(s('s_excl_vat')) s('s_excl_vat').textContent=fmt(excl);
+  if(s('s_vat_amt')) s('s_vat_amt').textContent=fmt(vat);
+  if(s('s_incl_vat')) s('s_incl_vat').textContent=fmt(incl);
+  if(s('li_grand_total')) s('li_grand_total').textContent=fmt(incl);
+}
+
+// Attachment handling
+let _attachments = [];
+function initAttachDrop(dropId,inputId,listId){
+  const drop=document.getElementById(dropId);
+  const inp=document.getElementById(inputId);
+  if(!drop||!inp) return;
+  drop.onclick=()=>inp.click();
+  drop.ondragover=e=>{e.preventDefault();drop.style.borderColor='#2563eb';};
+  drop.ondragleave=()=>{drop.style.borderColor='#bfdbfe';};
+  drop.ondrop=e=>{e.preventDefault();drop.style.borderColor='#bfdbfe';addFiles(e.dataTransfer.files,listId);};
+  inp.onchange=()=>addFiles(inp.files,listId);
+}
+function addFiles(files,listId){
+  for(const f of files){
+    _attachments.push(f);
+    const li=document.createElement('div'); li.className='att-item';
+    li.innerHTML=`<span class="att-name"><i class="fas fa-file me-2" style="color:#60a5fa;"></i>${f.name}</span><button type="button" class="att-rm" onclick="removeAtt('${f.name}','${listId}',this)"><i class="fas fa-times"></i></button>`;
+    document.getElementById(listId)?.appendChild(li);
+  }
+  updateDocCount();
+}
+function removeAtt(name,listId,btn){
+  _attachments=_attachments.filter(f=>f.name!==name);
+  btn.closest('.att-item')?.remove();
+  updateDocCount();
+}
+function updateDocCount(){
+  const el=document.getElementById('s_doc_count');
+  if(el) el.textContent=_attachments.length;
+}
+
+// Submit with attachments via FormData
+async function submitPurForm(formId,url){
+  const form=document.getElementById(formId);
+  if(!form) return;
+  const fd=new FormData(form);
+  _attachments.forEach(f=>fd.append('attachments',f));
+  fd.set('csrf_token','{{ csrf_token() }}');
+  const res=await fetch(url,{method:'POST',headers:{'X-CSRFToken':'{{ csrf_token() }}'},body:fd});
+  return res.json();
+}
+</script>
+{% endmacro %}

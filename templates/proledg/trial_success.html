@@ -1,0 +1,41 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+{% from "proledg/_components.html" import checklist %}
+
+{% block title %}You're in! — Proledge{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-center">
+      <h1>Your trial account is ready</h1>
+      <p class="hero-sub">Save these login details — you'll need them to sign in to your ERP.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="form-card trial-success-card">
+      <div class="field">
+        <label for="trial_username">Username</label>
+        <input type="text" id="trial_username" value="{{ username }}" readonly>
+      </div>
+      <div class="field">
+        <label for="trial_password">Temporary password</label>
+        <input type="text" id="trial_password" value="{{ temp_password }}" readonly>
+      </div>
+      {% if modules %}
+      <div class="field">
+        <label>Modules on your trial</label>
+        {{ checklist(modules|map(attribute='module_name_en')|list) }}
+      </div>
+      {% endif %}
+      <a href="{{ login_url }}" class="btn btn-primary btn-block">Log in to your ERP</a>
+      <p class="form-note">Your trial runs for 14 days &middot; no credit card was charged</p>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

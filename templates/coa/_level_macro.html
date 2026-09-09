@@ -1,0 +1,716 @@
+{# ══════════════════════════════════════════════════════════════════════
+   Chart of Accounts — shared CRUD page for Levels 2, 3, 4 and 5.
+
+   Renders: toolbar (add / search / parent filter / status filter / sort),
+            table, pagination, and an Add/Edit modal whose parent selects
+            CASCADE:  Level 1 -> Level 2 -> Level 3 -> Level 4.
+
+   A child dropdown stays disabled until its parent is chosen, is reloaded
+   from the server whenever the parent changes, and clears every dropdown
+   below it. The record's own `code` is auto-generated and read-only, and
+   `code_length` / `description` are fixed server-side.
+
+   Caller supplies:
+     level_no     2 | 3 | 4 | 5
+     titles       page heading (en / ar)
+     endpoints    {list, add, delete, next_code}
+     fixed_len    2 | 5 | 8 | 12
+     fixed_desc   'Heading Account' | 'Transactional Account'
+     level_ones   all Level 1 rows (root of the cascade)
+     rows/pg/q/parent/sort/status  from the list route
+   ══════════════════════════════════════════════════════════════════════ #}
+
+{% macro coa_level_page(level_no, title_en, title_ar, endpoints,
+                        fixed_len, fixed_desc,
+                        rows, pg, parents, level_ones,
+                        q, parent, sort, status, ar, current_user) %}
+
+{# The immediate-parent field name this level posts back to the server. #}
+{% set parent_field = {2:'level_one_id', 3:'level_two_id',
+                       4:'level_three_id', 5:'level_four_id'}[level_no] %}
+{# Each level gets its own accent color, matching the sidebar's Level 1-5 icons. #}
+{% set level_color = {2:'green', 3:'amber', 4:'purple', 5:'red'}[level_no] %}
+
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}{{ title_ar }}{% else %}{{ title_en }}{% endif %}</h2>
+
+  {# ── Toolbar ───────────────────────────────────────────────── #}
+  <div class="toolbar" style="gap:8px;flex-wrap:wrap;">
+    <div class="toolbar-left" style="gap:6px;">
+      {% if current_user.is_admin() %}
+      <button type="button" class="tool-btn tool-btn-{{ level_color }} js-coa-add">
+        <i class="fas fa-plus"></i>
+      </button>
+      {% endif %}
+      <a href="{{ url_for('coa.coa_export') }}?fmt=csv&level={{ level_no }}"
+         class="tool-btn" style="text-decoration:none;" title="{% if ar %}تصدير{% else %}Export{% endif %}">
+        <i class="fas fa-file-export"></i>
+      </a>
+      {% if current_user.is_admin() %}
+      <button type="button" class="tool-btn" title="{% if ar %}استيراد{% else %}Import{% endif %}"
+              onclick="document.getElementById('coaImp{{ level_no }}').click()">
+        <i class="fas fa-file-import"></i>
+      </button>
+      <input type="file" id="coaImp{{ level_no }}" accept=".csv,.xlsx,.xlsm" style="display:none;"
+             onchange="coaLevelImport(this, {{ level_no }})">
+      {% endif %}
+    </div>
+
+    <form method="GET" class="toolbar-right"
+          style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+      {% if parents %}
+      <select name="parent" class="form-select form-select-sm"
+              style="width:auto;min-width:180px;" onchange="this.form.submit()">
+        <option value="">{% if ar %}كل الحسابات الأب{% else %}All parents{% endif %}</option>
+        {% for p in parents %}
+        <option value="{{ p.code }}" {% if parent == p.code %}selected{% endif %}>
+          {{ p.code }} - {{ p.drawers[:32] }}
+        </option>
+        {% endfor %}
+      </select>
+      {% endif %}
+
+      <select name="status" class="form-select form-select-sm" style="width:auto;"
+              onchange="this.form.submit()">
+        <option value="">{% if ar %}كل الحالات{% else %}All statuses{% endif %}</option>
+        <option value="active"   {% if status=='active' %}selected{% endif %}>{% if ar %}نشط{% else %}Active{% endif %}</option>
+        <option value="inactive" {% if status=='inactive' %}selected{% endif %}>{% if ar %}غير نشط{% else %}Inactive{% endif %}</option>
+      </select>
+
+      <select name="sort" class="form-select form-select-sm" style="width:auto;"
+              onchange="this.form.submit()">
+        <option value="code"        {% if sort=='code' %}selected{% endif %}>{% if ar %}الكود ↑{% else %}Code ↑{% endif %}</option>
+        <option value="-code"       {% if sort=='-code' %}selected{% endif %}>{% if ar %}الكود ↓{% else %}Code ↓{% endif %}</option>
+        <option value="drawers"     {% if sort=='drawers' %}selected{% endif %}>{% if ar %}الاسم ↑{% else %}Drawers ↑{% endif %}</option>
+        <option value="-created_at" {% if sort=='-created_at' %}selected{% endif %}>{% if ar %}الأحدث{% else %}Newest{% endif %}</option>
+      </select>
+
+      <div class="search-form" style="margin:0;">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" name="q" value="{{ q }}" class="search-input"
+               placeholder="{% if ar %}بحث بالكود أو الاسم...{% else %}Search code or drawers...{% endif %}">
+      </div>
+      <button type="submit" class="tool-btn"><i class="fas fa-filter"></i></button>
+      {% if q or parent or status %}
+      <a href="{{ url_for(endpoints.list) }}" class="tool-btn"
+         title="{% if ar %}مسح{% else %}Clear{% endif %}"><i class="fas fa-times"></i></a>
+      {% endif %}
+    </form>
+  </div>
+
+  {# ── Table (AG-Grid) ───────────────────────────────────────── #}
+  <div class="proledg-table-wrap">
+    <div id="coaGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:560px;"></div>
+  </div>
+
+  {# ── Pagination ────────────────────────────────────────────── #}
+  <div class="proledg-pagination" style="display:flex;justify-content:flex-start;align-items:center;">
+    <span class="page-count" id="coaCount"></span>
+  </div>
+</div>
+
+{# ── Add / Edit modal with CASCADING parent selects ──────────── #}
+<div class="modal fade" id="lvlModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="lvlModalTitle"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form id="lvlForm" method="POST" action="{{ url_for(endpoints.add) }}"
+            onsubmit="return validateLvl();">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+
+          <div id="cascadeWrap">
+            {# Level 1 is always the root of the cascade. #}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">
+                {% if ar %}المستوى الأول{% else %}Level 1{% endif %} <span style="color:#ef4444">*</span>
+              </label>
+              <select id="selL1" class="form-select" onchange="onL1Change()"
+                      {% if level_no == 2 %}name="level_one_id"{% endif %}>
+                <option value="">-- {% if ar %}اختر{% else %}Select{% endif %} --</option>
+                {% for l1 in level_ones %}
+                <option value="{{ l1.id }}">{{ l1.code }} - {{ l1.drawers }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            {% if level_no >= 3 %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">
+                {% if ar %}المستوى الثاني{% else %}Level 2{% endif %} <span style="color:#ef4444">*</span>
+              </label>
+              <select id="selL2" class="form-select" onchange="onL2Change()" disabled
+                      {% if level_no == 3 %}name="level_two_id"{% endif %}>
+                <option value="">-- {% if ar %}اختر المستوى الأول أولاً{% else %}Select Level 1 first{% endif %} --</option>
+              </select>
+            </div>
+            {% endif %}
+
+            {% if level_no >= 4 %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">
+                {% if ar %}المستوى الثالث{% else %}Level 3{% endif %} <span style="color:#ef4444">*</span>
+              </label>
+              <select id="selL3" class="form-select" onchange="onL3Change()" disabled
+                      {% if level_no == 4 %}name="level_three_id"{% endif %}>
+                <option value="">-- {% if ar %}اختر المستوى الثاني أولاً{% else %}Select Level 2 first{% endif %} --</option>
+              </select>
+            </div>
+            {% endif %}
+
+            {% if level_no >= 5 %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">
+                {% if ar %}المستوى الرابع{% else %}Level 4{% endif %} <span style="color:#ef4444">*</span>
+              </label>
+              <select id="selL4" class="form-select" onchange="onL4Change()" disabled
+                      name="level_four_id">
+                <option value="">-- {% if ar %}اختر المستوى الثالث أولاً{% else %}Select Level 3 first{% endif %} --</option>
+              </select>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="row">
+            <div class="col-4 mb-3">
+              <label class="form-label fw-semibold">{% if ar %}طول الكود{% else %}Code Length{% endif %}</label>
+              <input type="text" class="form-control" value="{{ fixed_len }}" readonly style="background:#f1f5f9;">
+              <small class="text-muted">{% if ar %}ثابت{% else %}Fixed{% endif %}</small>
+            </div>
+            <div class="col-8 mb-3">
+              <label class="form-label fw-semibold">{% if ar %}الكود (تلقائي){% else %}Code (auto){% endif %}</label>
+              <input type="text" id="codePreview" class="form-control" readonly
+                     style="background:#f0fdf4;color:#15803d;font-weight:700;"
+                     placeholder="{% if ar %}يُولّد تلقائياً{% else %}Auto-generated{% endif %}">
+              <small class="text-muted">{% if ar %}للقراءة فقط{% else %}Read-only{% endif %}</small>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{% if ar %}المجموعة{% else %}Drawers{% endif %} <span style="color:#ef4444">*</span></label>
+            <div style="position:relative;">
+              <input type="text" name="drawers" id="drawersInp" class="form-control"
+                     maxlength="250" autocomplete="off" style="padding-right:36px;"
+                     oninput="onDrawersInput()">
+              <span id="drawersIcon"
+                    style="position:absolute;top:50%;right:12px;transform:translateY(-50%);font-size:15px;display:none;"></span>
+            </div>
+            <small id="drawersMsg" style="display:none;font-size:11.5px;margin-top:3px;"></small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{% if ar %}المجموعة (عربي){% else %}Drawers (AR){% endif %}</label>
+            <div style="position:relative;">
+              <input type="text" name="drawers_ar" id="drawersArInp" class="form-control" maxlength="250"
+                     dir="rtl" autocomplete="off" style="padding-right:40px;"
+                     placeholder="{% if ar %}أدخل أو ترجمة تلقائية{% else %}auto-translated{% endif %}">
+              <button type="button" onclick="coaRetrans('drawersInp','drawersArInp')" title="{% if ar %}إعادة الترجمة{% else %}Re-translate{% endif %}"
+                      style="position:absolute;top:50%;right:6px;transform:translateY(-50%);border:none;background:#eff6ff;color:#2563eb;border-radius:6px;width:28px;height:28px;cursor:pointer;">
+                <i class="fas fa-sync-alt"></i></button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{% if ar %}الوصف{% else %}Description{% endif %}</label>
+            <input type="text" class="form-control" value="{{ fixed_desc }}" readonly style="background:#f1f5f9;">
+            <small class="text-muted">{% if ar %}ثابت{% else %}Fixed{% endif %}</small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{% if ar %}الوصف (عربي){% else %}Description (AR){% endif %}</label>
+            <div style="position:relative;">
+              <input type="text" name="description_ar" id="descArInp" class="form-control" maxlength="255"
+                     dir="rtl" autocomplete="off" style="padding-right:40px;"
+                     placeholder="{% if ar %}أدخل أو ترجمة تلقائية{% else %}auto-translated{% endif %}">
+              <button type="button" onclick="coaRetransText('{{ fixed_desc }}','descArInp')" title="{% if ar %}إعادة الترجمة{% else %}Re-translate{% endif %}"
+                      style="position:absolute;top:50%;right:6px;transform:translateY(-50%);border:none;background:#eff6ff;color:#2563eb;border-radius:6px;width:28px;height:28px;cursor:pointer;">
+                <i class="fas fa-sync-alt"></i></button>
+            </div>
+          </div>
+
+          <div class="mb-1">
+            <label class="form-label fw-semibold">{% if ar %}الحالة{% else %}Status{% endif %}</label>
+            <div style="display:flex;gap:16px;">
+              <label style="cursor:pointer;"><input type="radio" name="status" value="active" id="stActive" checked>
+                {% if ar %}نشط{% else %}Active{% endif %}</label>
+              <label style="cursor:pointer;"><input type="radio" name="status" value="inactive" id="stInactive">
+                {% if ar %}غير نشط{% else %}Inactive{% endif %}</label>
+            </div>
+          </div>
+
+          {% if level_no == 5 %}
+          <div class="mb-1 mt-3">
+            <label class="form-label fw-semibold">{% if ar %}حساب تحكم / Control Account{% else %}Control Account / حساب تحكم{% endif %}</label>
+            <div style="display:flex;gap:16px;">
+              <label style="cursor:pointer;"><input type="radio" name="control_account" value="No" id="ctrlNo" checked>
+                {% if ar %}لا / No{% else %}No / لا{% endif %}</label>
+              <label style="cursor:pointer;"><input type="radio" name="control_account" value="Yes" id="ctrlYes">
+                {% if ar %}نعم / Yes{% else %}Yes / نعم{% endif %}</label>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="modal-footer proledg-modal-footer">
+          <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+            <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+          </button>
+          <button type="submit" class="pl-footer-btn pl-btn-save">
+            <i class="fas fa-save me-1"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+/* ── COA per-level import (CSV or XLSX) ─────────────── */
+function coaLevelImport(input, level){
+  const f = input.files[0];
+  if(!f) return;
+  const fd = new FormData();
+  fd.set('file', f);
+  fd.set('level', level);
+  const csrf = '{{ csrf_token() }}';
+  fd.set('csrf_token', csrf);
+  fetch('{{ url_for("coa.coa_import") }}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        let msg = (({{ 'true' if ar else 'false' }})?'تمت الإضافة: ':'Added: ')+d.added+
+                  (({{ 'true' if ar else 'false' }})?'، تم التخطي: ':', skipped: ')+d.skipped;
+        if(d.errors && d.errors.length) msg += '\n' + d.errors.slice(0,10).join('\n');
+        alert(msg);
+        location.reload();
+      } else {
+        alert(d.error || 'Error');
+      }
+    }).catch(()=>alert('Network error'))
+    .finally(()=>{ input.value=''; });
+}
+</script>
+<script>
+/* ── Chart of Accounts grid (loads from /level-N/data) ─────────────── */
+(function () {
+  const IS_AR    = {{ 'true' if ar else 'false' }};
+  const LEVEL_NO = {{ level_no }};
+  const LIST_URL = {{ url_for(endpoints.list)|tojson }};
+  const CSRF     = '{{ csrf_token() }}';
+  const IS_ADMIN = {{ 'true' if current_user.is_admin() else 'false' }};
+  const DATA_URL = LIST_URL + '/data';
+
+  const PCODE = LEVEL_NO===2?'level_one_code':LEVEL_NO===3?'level_two_code':LEVEL_NO===4?'level_three_code':'level_four_code';
+  const PID   = LEVEL_NO===2?'level_one_id'  :LEVEL_NO===3?'level_two_id'  :LEVEL_NO===4?'level_three_id'  :'level_four_id';
+
+  function statusBadge(v){
+    const active = (v||'active')==='active';
+    const bg = active?'#dcfce7':'#fee2e2', fg = active?'#15803d':'#b91c1c';
+    const lbl = active ? (IS_AR?'نشط':'Active') : (IS_AR?'غير نشط':'Inactive');
+    return '<span style="background:'+bg+';color:'+fg+';padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;">'+lbl+'</span>';
+  }
+  function codeBadge(v,accent){
+    const s = accent?'background:#eff6ff;color:#2563eb;':'';
+    return '<span class="code-badge" style="'+s+'">'+(v==null?'':v)+'</span>';
+  }
+  window.coaDelete = function(id){
+    if(!confirm(IS_AR?'حذف هذا الحساب؟':'Delete this account?')) return;
+    const fd = new FormData(); fd.set('csrf_token', CSRF);
+    fetch(LIST_URL + '/' + id + '/delete', {method:'POST', body:fd})
+      .then(r=> r.ok ? r : Promise.reject())
+      .then(()=> window.coaReload())
+      .catch(()=> alert(IS_AR?'تعذّر الحذف (قد يملك حسابات فرعية)':'Delete failed (may have child accounts)'));
+  };
+  window.coaEdit = function(id, code, drawers, status, parent, control, drawers_ar, description_ar){
+    if (window.openEdit) window.openEdit(id, code, drawers, status, parent||null, control||'No', drawers_ar||'', description_ar||'');
+  };
+
+  class CoaAct {
+    init(p){
+      const d = p.data;
+      this.el = document.createElement('div');
+      this.el.style.cssText='display:flex;gap:4px;justify-content:center;';
+      const pid = d[PID]==null?'':d[PID];
+      this.el.innerHTML =
+        '<button type="button" class="action-btn action-btn-edit" title="'+(IS_AR?'تعديل':'Edit')+'"><i class="fas fa-pencil-alt"></i></button>'+
+        '<button type="button" class="action-btn action-btn-delete" title="'+(IS_AR?'حذف':'Delete')+'"><i class="fas fa-trash"></i></button>';
+      const btns = this.el.querySelectorAll('button');
+      btns[0].addEventListener('click', ()=> window.coaEdit(d.id, d.code, d.drawers, d.status||'active', pid, d.control_account||'No', d.drawers_ar||'', d.description_ar||''));
+      btns[1].addEventListener('click', ()=> window.coaDelete(d.id));
+    }
+    getGui(){ return this.el; }
+  }
+
+  const _cf = { filter:'agTextColumnFilter', filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} };
+  const cols = [
+    { headerName:IS_AR?'الطول':'Len', field:'code_length', width:90, filter:'agNumberColumnFilter' },
+    { headerName:IS_AR?'الأب':'Parent', field:PCODE, width:150, cellRenderer:p=>codeBadge(p.value,false), ..._cf },
+    { headerName:IS_AR?'الكود':'Code', field:'code', width:160, cellRenderer:p=>codeBadge(p.value,true), pinned:IS_AR?'right':'left', ..._cf },
+    { headerName:IS_AR?'المجموعة':'Drawers', field:'drawers', minWidth:200, flex:2, cellStyle:{fontWeight:600}, ..._cf },
+    { headerName:IS_AR?'المجموعة (ع)':'Drawers (AR)', field:'drawers_ar', minWidth:150, flex:1, cellStyle:{direction:'rtl'}, ..._cf },
+    { headerName:IS_AR?'الوصف':'Description', field:'description', minWidth:160, flex:1, cellStyle:{color:'#6b7280',fontSize:'12px'}, ..._cf },
+    { headerName:IS_AR?'الوصف (ع)':'Description (AR)', field:'description_ar', minWidth:150, flex:1, cellStyle:{color:'#6b7280',fontSize:'12px',direction:'rtl'}, ..._cf },
+    { headerName:IS_AR?'الحالة':'Status', field:'status', width:120, cellRenderer:p=>statusBadge(p.value),
+      filter:'agTextColumnFilter', filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} },
+  ];
+  if (LEVEL_NO === 5) cols.push({ headerName:IS_AR?'حساب تحكم':'Control Acct', field:'control_account', width:130,
+      cellRenderer:p=>{const y=(p.value==='Yes');return '<span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:'+(y?'#dcfce7':'#f1f5f9')+';color:'+(y?'#15803d':'#6b7280')+';">'+(p.value||'No')+'</span>';},
+      filter:'agTextColumnFilter', filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} });
+  if (IS_ADMIN) cols.push({ headerName:IS_AR?'إجراءات':'Actions', field:'_actions', width:120, pinned:IS_AR?'left':'right',
+      sortable:false, filter:false, suppressMenu:true, resizable:false, cellRenderer:CoaAct, cellStyle:{overflow:'visible'} });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    const el = document.getElementById('coaGrid'); if(!el || !window.agGrid) return;
+    const api = agGrid.createGrid(el, {
+      columnDefs: cols, rowData: [], pagination:true, paginationPageSize:25, paginationPageSizeSelector:[25,50,100],
+      rowSelection:'single', animateRows:true, enableRtl:IS_AR,
+      localeText: IS_AR?{noRowsToShow:'لا توجد حسابات',searchOoo:'بحث...'}:{noRowsToShow:'No accounts found',searchOoo:'Search...'},
+      multiSortKey:'ctrl',
+      defaultColDef:{ sortable:true, resizable:true, filter:true, floatingFilter:true, unSortIcon:true,
+        menuTabs:['filterMenuTab','generalMenuTab'], filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} },
+      onGridReady(p){ if(window.GridKit) GridKit.enhance(p,'coaGrid',{storageKey:'coa_l'+LEVEL_NO,exportName:'COA_Level'+LEVEL_NO}); p.api.sizeColumnsToFit(); window.coaReload(); },
+      onGridSizeChanged(p){ p.api.sizeColumnsToFit(); },
+      onModelUpdated(p){ const n=p.api.getDisplayedRowCount(); const c=document.getElementById('coaCount'); if(c) c.textContent = n + ' ' + (IS_AR?'حساب':'account(s)'); },
+    });
+    window.__coaApi = api;
+  });
+  window.coaReload = function(){
+    fetch(DATA_URL).then(r=>r.json()).then(d=>{ if(window.__coaApi) window.__coaApi.setGridOption('rowData', d||[]); });
+  };
+})();
+</script>
+
+<script>
+(function () {
+  const IS_AR      = {{ 'true' if ar else 'false' }};
+  const LEVEL_NO   = {{ level_no }};
+  const ADD_URL    = {{ url_for(endpoints.add)|tojson }};
+  const LIST_URL   = {{ url_for(endpoints.list)|tojson }};
+  const NEXTCODE   = {{ url_for(endpoints.next_code)|tojson }};
+  const PARENT_KEY = {{ parent_field|tojson }};
+
+  const T = {
+    add:  IS_AR ? 'اضافة حساب'  : 'Add Level ' + LEVEL_NO + ' Account',
+    edit: IS_AR ? 'تعديل حساب'  : 'Edit Level ' + LEVEL_NO + ' Account',
+    pick: IS_AR ? '-- اختر --'  : '-- Select --',
+    active: IS_AR ? 'نشط' : 'Active',
+    inactive: IS_AR ? 'غير نشط' : 'Inactive'
+  };
+
+  const $ = function (id) { return document.getElementById(id); };
+
+  /* ── Live validation for `drawers` ────────────────────────────
+     Red ✗ when empty or duplicate under the selected parent,
+     green ✓ when the value is valid. Debounced so we don't hammer
+     the server on every keystroke. ───────────────────────────── */
+  const LEVEL_SLUG = {2:'level-two',3:'level-three',4:'level-four',5:'level-five'}[LEVEL_NO];
+  var _drawersTimer = null;
+  var _drawersOk = false;      // gate the submit on this
+
+  function setDrawersState(state, msg) {
+    // state: 'ok' | 'bad' | 'none'
+    var inp  = $('drawersInp');
+    var icon = $('drawersIcon');
+    var hint = $('drawersMsg');
+    if (!inp || !icon || !hint) return;
+
+    inp.style.borderColor = '';
+    icon.style.display = 'none';
+    hint.style.display = 'none';
+
+    if (state === 'ok') {
+      _drawersOk = true;
+      inp.style.borderColor = '#16a34a';
+      icon.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a;"></i>';
+      icon.style.display = 'inline';
+      if (msg) { hint.textContent = msg; hint.style.color = '#16a34a'; hint.style.display = 'block'; }
+    } else if (state === 'bad') {
+      _drawersOk = false;
+      inp.style.borderColor = '#dc2626';
+      icon.innerHTML = '<i class="fas fa-times-circle" style="color:#dc2626;"></i>';
+      icon.style.display = 'inline';
+      if (msg) { hint.textContent = msg; hint.style.color = '#dc2626'; hint.style.display = 'block'; }
+    } else {
+      _drawersOk = false;
+    }
+  }
+
+  /* The parent id to scope the duplicate check against. On edit the parent
+     is fixed, so we send the value stashed by openEdit(). */
+  var _editParentId = null;
+  var _editRowId    = null;
+
+  function checkDrawers() {
+    var val = ($('drawersInp').value || '').trim();
+    if (!val) { setDrawersState('bad', IS_AR ? 'المجموعة مطلوبة' : 'Drawers is required'); return; }
+
+    var parentId = _editParentId !== null ? _editParentId : currentParentId();
+    var url = '/coa/validate/' + LEVEL_SLUG + '/drawers?drawers=' + encodeURIComponent(val);
+    if (parentId) url += '&parent_id=' + encodeURIComponent(parentId);
+    if (_editRowId) url += '&exclude=' + encodeURIComponent(_editRowId);
+
+    fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      setDrawersState(d.ok ? 'ok' : 'bad', d.msg || '');
+    }).catch(function () { setDrawersState('none'); });
+  }
+
+  function onDrawersInput() {
+    var val = ($('drawersInp').value || '').trim();
+    // Instant red for the empty case — no round-trip needed.
+    if (!val) { setDrawersState('bad', IS_AR ? 'المجموعة مطلوبة' : 'Drawers is required'); return; }
+    clearTimeout(_drawersTimer);
+    _drawersTimer = setTimeout(checkDrawers, 300);
+    if (window.coaTrans) window.coaTrans('drawersInp', 'drawersArInp');
+  }
+  window.onDrawersInput = onDrawersInput;
+
+  /* Fill a <select> with `code - Drawers` options and enable it. */
+  function fill(sel, items, selected) {
+    if (!sel) return;
+    var html = '<option value="">' + T.pick + '</option>';
+    items.forEach(function (i) {
+      var sel_attr = (String(i.id) === String(selected)) ? ' selected' : '';
+      html += '<option value="' + i.id + '"' + sel_attr + '>' + i.label + '</option>';
+    });
+    sel.innerHTML = html;
+    sel.disabled = false;
+  }
+
+  /* Reset a select to empty + disabled. */
+  function clearSel(sel) {
+    if (!sel) return;
+    sel.innerHTML = '<option value="">' + T.pick + '</option>';
+    sel.disabled = true;
+  }
+
+  function load(url, sel, selected) {
+    return fetch(url).then(function (r) { return r.json(); })
+      .then(function (d) { fill(sel, d, selected); return d; });
+  }
+
+  /* ── Cascade: changing a parent reloads the next level and
+        clears every dropdown below it. ────────────────────────── */
+  function onL1Change(selected) {
+    if ($('drawersInp') && $('drawersInp').value.trim()) setTimeout(checkDrawers, 350);
+    var id = $('selL1').value;
+    clearSel($('selL2')); clearSel($('selL3')); clearSel($('selL4'));
+    $('codePreview').value = '';
+    if (!id) return Promise.resolve();
+    if (LEVEL_NO === 2) return refreshCode();
+    return load('/coa/children/level-two?level_one_id=' + encodeURIComponent(id), $('selL2'), selected);
+  }
+
+  function onL2Change(selected) {
+    if ($('drawersInp') && $('drawersInp').value.trim()) setTimeout(checkDrawers, 350);
+    var el = $('selL2');
+    var id = el ? el.value : '';
+    clearSel($('selL3')); clearSel($('selL4'));
+    $('codePreview').value = '';
+    if (!id) return Promise.resolve();
+    if (LEVEL_NO === 3) return refreshCode();
+    return load('/coa/children/level-three?level_two_id=' + encodeURIComponent(id), $('selL3'), selected);
+  }
+
+  function onL3Change(selected) {
+    if ($('drawersInp') && $('drawersInp').value.trim()) setTimeout(checkDrawers, 350);
+    var el = $('selL3');
+    var id = el ? el.value : '';
+    clearSel($('selL4'));
+    $('codePreview').value = '';
+    if (!id) return Promise.resolve();
+    if (LEVEL_NO === 4) return refreshCode();
+    return load('/coa/children/level-four?level_three_id=' + encodeURIComponent(id), $('selL4'), selected);
+  }
+
+  function onL4Change() {
+    if ($('drawersInp') && $('drawersInp').value.trim()) setTimeout(checkDrawers, 350);
+    $('codePreview').value = '';
+    var el = $('selL4');
+    if (el && el.value) refreshCode();
+  }
+
+  /* The immediate parent for THIS level. */
+  function currentParentId() {
+    if (LEVEL_NO === 2) return $('selL1').value;
+    if (LEVEL_NO === 3) return $('selL2') ? $('selL2').value : '';
+    if (LEVEL_NO === 4) return $('selL3') ? $('selL3').value : '';
+    return $('selL4') ? $('selL4').value : '';
+  }
+
+  function refreshCode() {
+    var pid = currentParentId();
+    var prev = $('codePreview');
+    if (!pid) { prev.value = ''; return Promise.resolve(); }
+    prev.value = '...';
+    return fetch(NEXTCODE + '?' + PARENT_KEY + '=' + encodeURIComponent(pid))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { prev.value = d.code || ''; })
+      .catch(function () { prev.value = ''; });
+  }
+
+  function openAdd() {
+    $('lvlModalTitle').textContent = T.add;
+    var f = $('lvlForm');
+    f.setAttribute('action', ADD_URL);
+    f.reset();
+    $('selL1').value = '';
+    clearSel($('selL2')); clearSel($('selL3')); clearSel($('selL4'));
+    $('codePreview').value = '';
+    $('cascadeWrap').style.display = '';
+    $('stActive').checked = true;
+    var _ctrlNoAdd = $('ctrlNo'); if (_ctrlNoAdd) _ctrlNoAdd.checked = true;
+    _editParentId = null; _editRowId = null;
+    setDrawersState('none');
+    showLvlModal();
+  }
+
+  /* One code path opens the modal, so Bootstrap never ends up with two
+     competing instances on the same element. */
+  function showLvlModal() {
+    var el = $('lvlModal');
+    console.log('[COA] showLvlModal. modal:', el, 'bootstrap:', typeof bootstrap);
+    if (!el) { console.error('[COA] #lvlModal not found'); return; }
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+      console.error('[COA] Bootstrap Modal unavailable'); return;
+    }
+    try {
+      bootstrap.Modal.getOrCreateInstance(el).show();
+      console.log('[COA] .show() invoked OK');
+    } catch (err) {
+      console.error('[COA] .show() threw:', err);
+    }
+  }
+
+  /* EDIT: parent + code are immutable, so hide the cascade. */
+  function openEdit(id, code, drawers, status, parentId, control) {
+    console.log('[COA] openEdit fired:', {id: id, code: code, parentId: parentId});
+    $('lvlModalTitle').textContent = T.edit;
+    var f = $('lvlForm');
+    f.setAttribute('action', LIST_URL + '/' + id + '/edit');
+    $('codePreview').value = code;
+    $('drawersInp').value = drawers;
+    $(status === 'inactive' ? 'stInactive' : 'stActive').checked = true;
+    var _ctrlYes = $('ctrlYes'), _ctrlNo = $('ctrlNo');
+    if (_ctrlYes && _ctrlNo) { if ((control||'No')==='Yes') _ctrlYes.checked = true; else _ctrlNo.checked = true; }
+    $('cascadeWrap').style.display = 'none';
+    // Parent is immutable on edit; scope the duplicate check to it and
+    // exclude this row so its own name doesn't read as a duplicate.
+    _editRowId = id;
+    _editParentId = parentId || null;
+    setDrawersState('ok');
+    showLvlModal();
+  }
+
+  function validateLvl() {
+    var f = $('lvlForm');
+    var isEdit = (f.getAttribute('action') || '').indexOf('/edit') !== -1;
+    if (!isEdit) {
+      /* Enforce the whole chain so an invalid hierarchy can never be posted. */
+      if (!$('selL1').value) { alert(IS_AR ? 'اختر المستوى الأول' : 'Level 1 is required'); return false; }
+      if (LEVEL_NO >= 3 && !$('selL2').value) { alert(IS_AR ? 'اختر المستوى الثاني' : 'Level 2 is required'); return false; }
+      if (LEVEL_NO >= 4 && !$('selL3').value) { alert(IS_AR ? 'اختر المستوى الثالث' : 'Level 3 is required'); return false; }
+      if (LEVEL_NO >= 5 && !$('selL4').value) { alert(IS_AR ? 'اختر المستوى الرابع' : 'Level 4 is required'); return false; }
+    }
+    if (!$('drawersInp').value.trim()) {
+      setDrawersState('bad', IS_AR ? 'المجموعة مطلوبة' : 'Drawers is required');
+      return false;
+    }
+    if (!_drawersOk) {
+      alert(IS_AR ? 'الرجاء تصحيح حقل المجموعة' : 'Please fix the Drawers field');
+      return false;
+    }
+    return true;
+  }
+
+  /* Exposed so both the inline cascade handlers AND the separate binding
+     script below can reach them. */
+  window.onL1Change  = onL1Change;
+  window.onL2Change  = onL2Change;
+  window.onL3Change  = onL3Change;
+  window.onL4Change  = onL4Change;
+  window.onDrawersInput = onDrawersInput;
+  window.validateLvl = validateLvl;
+  window.openAdd     = openAdd;
+  window.openEdit    = openEdit;
+})();
+</script>
+
+{# ── Button binding lives in its OWN script block. If anything in the IIFE
+      above ever throws, its exports may be missing — but this block still
+      runs, and it fails loudly instead of silently. It binds by class hook,
+      not inline onclick, so a missing global can't turn clicks into no-ops. #}
+<script>
+(function () {
+  function bind() {
+    var addBtn = document.querySelector('.js-coa-add');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        if (typeof window.openAdd === 'function') window.openAdd();
+        else console.error('[COA] window.openAdd is not defined — the COA init script failed to load.');
+      });
+    }
+    document.querySelectorAll('.js-coa-edit').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (typeof window.openEdit !== 'function') {
+          console.error('[COA] window.openEdit is not defined — the COA init script failed to load.');
+          return;
+        }
+        window.openEdit(
+          this.getAttribute('data-id'),
+          this.getAttribute('data-code'),
+          this.getAttribute('data-drawers'),
+          this.getAttribute('data-status'),
+          this.getAttribute('data-parent') || null
+        );
+      });
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    bind();
+  }
+})();
+
+/* ── Arabic auto-translation (EN → AR) with refresh button ──────── */
+(function(){
+  var _t = {};
+  function doTrans(text, tgtId){
+    text = (text||'').trim();
+    var tgt = document.getElementById(tgtId);
+    if(!text || !tgt) return;
+    fetch('/translate', {method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':(document.querySelector('input[name=csrf_token]')||{}).value||''},
+      body: JSON.stringify({text:text, direction:'en|ar'})})
+      .then(function(r){return r.json();})
+      .then(function(d){ if(d && d.translated) tgt.value = d.translated; })
+      .catch(function(){});
+  }
+  window.coaTrans = function(srcId, tgtId){
+    clearTimeout(_t[srcId]);
+    _t[srcId] = setTimeout(function(){ doTrans((document.getElementById(srcId)||{}).value, tgtId); }, 600);
+  };
+  window.coaRetrans = function(srcId, tgtId){ doTrans((document.getElementById(srcId)||{}).value, tgtId); };
+  window.coaRetransText = function(text, tgtId){ doTrans(text, tgtId); };
+
+  // Populate / clear the AR fields when the modal opens (wraps existing openEdit/openAdd).
+  var _origEdit = window.openEdit, _origAdd = window.openAdd;
+  window.openEdit = function(id, code, drawers, status, parentId, control, drawers_ar, description_ar){
+    if(_origEdit) _origEdit(id, code, drawers, status, parentId, control);
+    var da = document.getElementById('drawersArInp'); if(da) da.value = drawers_ar || '';
+    var de = document.getElementById('descArInp');    if(de) de.value = description_ar || '';
+  };
+  window.openAdd = function(){
+    if(_origAdd) _origAdd();
+    var da = document.getElementById('drawersArInp'); if(da) da.value = '';
+    var de = document.getElementById('descArInp');    if(de) de.value = '';
+  };
+})();
+</script>
+{% endmacro %}

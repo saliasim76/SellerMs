@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}سلة المحذوفات{% else %}Recycle Bin{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}سلة المحذوفات{% else %}Recycle Bin{% endif %}</li>
+{% endblock %}
+{% block content %}
+<style>
+  .rb-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;}
+  .rb-head{padding:14px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .rb-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .rb-table th{text-align:{% if ar %}right{% else %}left{% endif %};padding:9px 12px;background:#f1f5f9;color:#475569;font-size:11px;text-transform:uppercase;}
+  .rb-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;}
+  .rb-act{border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;margin-inline-end:4px;}
+  .rb-restore{background:#dcfce7;color:#15803d;}
+  .rb-perm{background:#fee2e2;color:#dc2626;}
+  .rb-empty{padding:32px;text-align:center;color:#94a3b8;font-size:13px;}
+  .rb-expiry{font-size:11px;color:#92400e;}
+</style>
+
+<div style="padding:8px 4px 16px;">
+  <h2 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:4px;">{% if ar %}سلة المحذوفات{% else %}Recycle Bin{% endif %}</h2>
+  <p style="font-size:13px;color:#64748b;margin:0;">{% if ar %}السجلات المحذوفة تبقى هنا 7 أيام قبل الحذف النهائي التلقائي.{% else %}Deleted records stay here for 7 days before being automatically purged.{% endif %}</p>
+</div>
+
+<div class="rb-card">
+  <div class="rb-head">
+    <select id="rbModule" class="form-select form-select-sm" style="width:180px;" onchange="loadBin()">
+      <option value="">{% if ar %}كل الوحدات{% else %}All Modules{% endif %}</option>
+      <option value="employee">{% if ar %}الموظفون{% else %}Employee{% endif %}</option>
+      <option value="purchase">{% if ar %}المشتريات{% else %}Purchase{% endif %}</option>
+      <option value="sale">{% if ar %}المبيعات{% else %}Sale{% endif %}</option>
+      <option value="buyer">{% if ar %}المشترون{% else %}Buyer{% endif %}</option>
+      <option value="owner">{% if ar %}الملاك{% else %}Owner{% endif %}</option>
+      <option value="item">{% if ar %}الأصناف{% else %}Item{% endif %}</option>
+      <option value="coa">{% if ar %}دليل الحسابات{% else %}Chart of Accounts{% endif %}</option>
+      <option value="profession">{% if ar %}المهن{% else %}Profession{% endif %}</option>
+      <option value="allowance_type">{% if ar %}أنواع البدلات{% else %}Allowance Type{% endif %}</option>
+      <option value="unit_measurement">{% if ar %}وحدات القياس{% else %}Unit of Measurement{% endif %}</option>
+    </select>
+    <input type="date" id="rbFrom" class="form-control form-control-sm" style="width:150px;" onchange="loadBin()">
+    <input type="date" id="rbTo" class="form-control form-control-sm" style="width:150px;" onchange="loadBin()">
+    <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()">{% if ar %}مسح{% else %}Clear{% endif %}</button>
+  </div>
+  <table class="rb-table">
+    <thead><tr>
+      <th>{% if ar %}الوحدة{% else %}Module{% endif %}</th>
+      <th>{% if ar %}السجل{% else %}Record{% endif %}</th>
+      <th>{% if ar %}حذف بواسطة{% else %}Deleted By{% endif %}</th>
+      <th>{% if ar %}تاريخ الحذف{% else %}Deleted At{% endif %}</th>
+      <th>{% if ar %}ينتهي في{% else %}Expires{% endif %}</th>
+      <th style="text-align:center;">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+    </tr></thead>
+    <tbody id="rbRows"></tbody>
+  </table>
+  <div id="rbEmpty" class="rb-empty" style="display:none;">{% if ar %}السلة فارغة{% else %}Recycle Bin is empty{% endif %}</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+
+function clearFilters(){
+  document.getElementById('rbModule').value = '';
+  document.getElementById('rbFrom').value = '';
+  document.getElementById('rbTo').value = '';
+  loadBin();
+}
+
+function loadBin(){
+  const params = new URLSearchParams();
+  const mod = document.getElementById('rbModule').value;
+  const from = document.getElementById('rbFrom').value;
+  const to = document.getElementById('rbTo').value;
+  if(mod) params.set('module', mod);
+  if(from) params.set('date_from', from);
+  if(to) params.set('date_to', to);
+
+  fetch('{{ url_for("recycle_bin.recycle_bin_data") }}?' + params.toString()).then(r=>r.json()).then(rows=>{
+    const tb = document.getElementById('rbRows');
+    tb.innerHTML = '';
+    document.getElementById('rbEmpty').style.display = rows.length ? 'none' : 'block';
+    rows.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.module_key} / ${r.form_key}</td>
+        <td>${r.record_label || ('#' + r.record_pk)}</td>
+        <td>${r.deleted_by_name || ''}</td>
+        <td>${r.deleted_at || ''}</td>
+        <td class="rb-expiry">${r.purge_at || ''}</td>
+        <td style="text-align:center;">
+          <button class="rb-act rb-restore" onclick="restoreItem(${r.id})"><i class="fas fa-undo me-1"></i>${IS_AR?'استعادة':'Restore'}</button>
+          <button class="rb-act rb-perm" onclick="permDeleteItem(${r.id})"><i class="fas fa-trash-alt me-1"></i>${IS_AR?'حذف نهائي':'Delete Forever'}</button>
+        </td>`;
+      tb.appendChild(tr);
+    });
+  });
+}
+
+function restoreItem(id){
+  if(!confirm(IS_AR ? 'استعادة هذا السجل؟' : 'Restore this record?')) return;
+  fetch('/recycle-bin/' + id + '/restore', {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token() }}'}})
+    .then(r=>r.json()).then(d=>{
+      if(!d.ok){ alert(d.error || (IS_AR?'فشلت الاستعادة':'Restore failed')); return; }
+      loadBin();
+    });
+}
+
+function permDeleteItem(id){
+  if(!confirm(IS_AR ? 'حذف هذا السجل نهائياً؟ لا يمكن التراجع عن هذا الإجراء.' : 'Permanently delete this record? This cannot be undone.')) return;
+  fetch('/recycle-bin/' + id + '/permanent-delete', {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token() }}'}})
+    .then(r=>r.json()).then(d=>{
+      if(!d.ok){ alert(d.error || (IS_AR?'فشل الحذف':'Delete failed')); return; }
+      loadBin();
+    });
+}
+
+loadBin();
+</script>
+{% endblock %}

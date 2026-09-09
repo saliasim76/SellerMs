@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}ملخص الرواتب{% else %}Payroll Summary{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('payroll.payroll_list') }}">{% if ar %}توحيد الرواتب{% else %}Salary Consolidation{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}ملخص الرواتب{% else %}Payroll Summary{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+  /* Same visual language as the Payroll grid (templates/payroll/list.html)
+     -- this page is the payroll-batch-level view of the same module, so it
+     reuses the same card/toolbar/button/field conventions rather than
+     inventing a new look. */
+  .pr-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:14px;}
+  .pr-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  .pr-btn{padding:9px 16px;border-radius:7px;border:none;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .pr-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .pr-btn-blue{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;}
+  .pr-btn-gray{background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;}
+  .pr-field label{display:block;font-size:11.5px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px;}
+
+  #paySummaryGridRoot{width:100%;height:calc(100vh - 230px);min-height:520px;}
+  #paySummaryGridRoot .ag-row-pinned{font-weight:700;}
+  #paySummaryGridRoot .ag-row-pinned .ag-cell{border-top:2px solid #93c5fd;background:#eff6ff;}
+
+  .pr-flash{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:3000;padding:12px 22px;border-radius:9px;
+    font-size:14px;font-weight:700;color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.22);opacity:0;transition:opacity .25s;pointer-events:none;
+    text-align:center;max-width:80vw;}
+  .pr-flash.show{opacity:1;}
+  .pr-flash.ok{background:#16a34a;}
+  .pr-flash.err{background:#dc2626;}
+
+  /* Salary Month + Salary Order -- the one filter AG-Grid's own per-column
+     filters can't express on their own (a combo across two columns kept
+     linked together), so it gets a small custom multi-select popover. */
+  .mo-btn{min-width:220px;justify-content:space-between;}
+  .mo-panel{position:fixed;z-index:4000;background:#fff;border:1px solid #d1d5db;border-radius:8px;
+    box-shadow:0 10px 28px rgba(0,0,0,.18);padding:6px;display:none;max-height:340px;overflow:auto;min-width:240px;}
+  .mo-panel.show{display:block;}
+  .mo-panel .mo-actions{display:flex;justify-content:space-between;gap:10px;padding:5px 8px 8px;border-bottom:1px solid #f1f5f9;margin-bottom:4px;font-size:11.5px;}
+  .mo-panel .mo-actions a{color:#2563eb;cursor:pointer;text-decoration:none;font-weight:700;}
+  .mo-panel .mo-empty{padding:10px 8px;color:#9ca3af;font-size:12.5px;}
+  .mo-panel label{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12.5px;cursor:pointer;border-radius:5px;color:#374151;}
+  .mo-panel label:hover{background:#f8fafc;}
+  .mo-panel input[type=checkbox]{margin:0;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}ملخص الرواتب{% else %}Payroll Summary{% endif %}</h2>
+
+  <div class="pr-toolbar">
+    <div class="pr-field" style="position:relative;">
+      <label>{% if ar %}الشهر + أمر الراتب{% else %}Salary Month + Order{% endif %}</label>
+      <button type="button" class="pr-btn pr-btn-gray mo-btn" id="btnMonthOrder">
+        <span id="monthOrderLabel">{% if ar %}كل الأشهر / الأوامر{% else %}All Months / Orders{% endif %}</span>
+        <i class="fas fa-chevron-down" style="font-size:10px;"></i>
+      </button>
+    </div>
+    <button class="pr-btn pr-btn-blue" id="btnRefresh" style="align-self:flex-end;"><i class="fas fa-sync"></i> {% if ar %}تحديث{% else %}Refresh{% endif %}</button>
+  </div>
+
+  <div id="paySummaryGridRoot" class="ag-theme-alpine"></div>
+
+  <div id="monthOrderPanel" class="mo-panel"></div>
+  <div id="prFlash" class="pr-flash"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const AR = {{ 'true' if ar else 'false' }};
+const DATA_URL = "{{ url_for('payroll.payroll_summary_data') }}";
+const PAYROLL_LIST_URL = "{{ url_for('payroll.payroll_list') }}";
+const GRID_ROOT_EL = document.getElementById('paySummaryGridRoot');
+
+function flash(msg, ok) {
+  const el = document.getElementById('prFlash');
+  el.textContent = msg;
+  el.className = 'pr-flash show ' + (ok ? 'ok' : 'err');
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => { el.classList.remove('show'); }, 3000);
+}
+
+const money = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const intFmt = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString());
+
+// Columns worth a running total -- shown in each column's own header (via
+// GridKit's built-in gkTotal, the same Excel-SUBTOTAL-style mechanism the
+// Payroll grid itself uses) AND in a pinned bottom "TOTAL" row, both
+// recalculated from whatever rows the active filters currently leave
+// visible.
+const SUM_FIELDS = ['employee_count', 'basic_salary', 'allowance', 'absent', 'total_hours',
+  'ot_hour', 'ot_amount', 'bonus', 'deduction', 'advance', 'credit',
+  'salary_payable', 'paid', 'services_charges', 'invoice_amount'];
+
+let gridApi = null;
+let currentRows = [];
+
+// ── Salary Month + Salary Order linked multi-select filter ─────────────
+let selectedCombos = new Set();
+function comboKey(row) { return row.month + '||' + row.salary_order; }
+function comboLabel(row) { return row.month + ' — ' + (AR ? 'أمر ' : 'Order ') + row.salary_order; }
+
+function monthOrderOptions() {
+  const seen = new Map();
+  currentRows.forEach((r) => {
+    const k = comboKey(r);
+    if (!seen.has(k)) seen.set(k, { key: k, label: comboLabel(r), month_from: r.month_from || '', salary_order: r.salary_order || '' });
+  });
+  return Array.from(seen.values()).sort((a, b) => {
+    if (a.month_from !== b.month_from) return a.month_from < b.month_from ? 1 : -1;
+    return String(b.salary_order).localeCompare(String(a.salary_order), undefined, { numeric: true });
+  });
+}
+
+function updateMonthOrderLabel() {
+  const lbl = document.getElementById('monthOrderLabel');
+  lbl.textContent = selectedCombos.size
+    ? (AR ? 'محدد: ' : 'Selected: ') + selectedCombos.size
+    : (AR ? 'كل الأشهر / الأوامر' : 'All Months / Orders');
+}
+
+function renderMonthOrderPanel() {
+  const panel = document.getElementById('monthOrderPanel');
+  const opts = monthOrderOptions();
+  let h = '<div class="mo-actions"><a id="moSelAll">' + (AR ? 'تحديد الكل' : 'Select All') + '</a><a id="moClear">' + (AR ? 'مسح' : 'Clear') + '</a></div>';
+  h += opts.length ? '' : '<div class="mo-empty">' + (AR ? 'لا توجد بيانات' : 'No data') + '</div>';
+  panel.innerHTML = h;
+  opts.forEach((o) => {
+    const lab = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = o.key; cb.checked = selectedCombos.has(o.key);
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedCombos.add(o.key); else selectedCombos.delete(o.key);
+      updateMonthOrderLabel();
+      if (gridApi) gridApi.onFilterChanged();
+    });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(' ' + o.label));
+    panel.appendChild(lab);
+  });
+  const selAll = document.getElementById('moSelAll');
+  const clearAll = document.getElementById('moClear');
+  if (selAll) selAll.addEventListener('click', () => {
+    opts.forEach((o) => selectedCombos.add(o.key));
+    renderMonthOrderPanel(); updateMonthOrderLabel();
+    if (gridApi) gridApi.onFilterChanged();
+  });
+  if (clearAll) clearAll.addEventListener('click', () => {
+    selectedCombos.clear();
+    renderMonthOrderPanel(); updateMonthOrderLabel();
+    if (gridApi) gridApi.onFilterChanged();
+  });
+}
+
+function closeMonthOrderPanel() { document.getElementById('monthOrderPanel').classList.remove('show'); }
+
+document.getElementById('btnMonthOrder').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const panel = document.getElementById('monthOrderPanel');
+  const willShow = !panel.classList.contains('show');
+  closeMonthOrderPanel();
+  if (willShow) {
+    renderMonthOrderPanel();
+    const r = e.currentTarget.getBoundingClientRect();
+    panel.style.top = (r.bottom + 4) + 'px';
+    panel.style.left = r.left + 'px';
+    panel.classList.add('show');
+  }
+});
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('monthOrderPanel');
+  if (!panel.classList.contains('show')) return;
+  if (panel.contains(e.target) || e.target.closest('#btnMonthOrder')) return;
+  closeMonthOrderPanel();
+});
+
+// ── Pinned-bottom totals row -- recomputed from whatever the grid's
+// active filters (column filters + quick search + the Month/Order combo
+// filter above) currently leave visible, same Excel-SUBTOTAL semantics as
+// every other total in this page. ──
+function refreshPinnedTotal() {
+  if (!gridApi) return;
+  const sums = { payroll_id: AR ? 'الإجمالي' : 'TOTAL' };
+  SUM_FIELDS.forEach((f) => { sums[f] = 0; });
+  gridApi.forEachNodeAfterFilter((node) => {
+    if (!node.data) return;
+    SUM_FIELDS.forEach((f) => {
+      const v = Number(node.data[f]);
+      if (!isNaN(v)) sums[f] += v;
+    });
+  });
+  sums.balance = Math.round((sums.salary_payable - sums.paid) * 100) / 100;
+  gridApi.setGridOption('pinnedBottomRowData', [sums]);
+}
+
+// ── Columns ──────────────────────────────────────────────────────────
+const pillRenderer = (colorMap) => (p) => {
+  const c = colorMap[p.value] || colorMap._default;
+  return '<span style="padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:700;background:' +
+    c.bg + ';color:' + c.fg + ';">' + (p.value || '') + '</span>';
+};
+const STATUS_PILL = pillRenderer({
+  Post: { bg: '#e5e7eb', fg: '#374151' }, Ready: { bg: '#dcfce7', fg: '#15803d' },
+  _default: { bg: '#dbeafe', fg: '#1e40af' },
+});
+
+// Strips any non-numeric prefix/suffix (e.g. "PR-12" -> 12) so Payroll ID
+// and Salary Order both sort numerically instead of lexicographically
+// (which would otherwise put "PR-12" before "PR-2").
+function numericComparator(a, b) {
+  const na = parseFloat(String(a == null ? '' : a).replace(/[^0-9.]/g, ''));
+  const nb = parseFloat(String(b == null ? '' : b).replace(/[^0-9.]/g, ''));
+  if (!isNaN(na) && !isNaN(nb)) return na - nb;
+  return String(a || '').localeCompare(String(b || ''));
+}
+
+function buildColumnDefs() {
+  const moneyCol = (field, headerName, width, extra) => ({
+    field, headerName, width: width || 120, filter: 'agNumberColumnFilter',
+    valueFormatter: (p) => money(p.value), aggFunc: 'sum', gkTotal: true, ...(extra || {}),
+  });
+  const setCol = (field, headerName, width, extra) => ({
+    field, headerName, width: width || 130, filter: 'agSetColumnFilter', ...(extra || {}),
+  });
+
+  return [
+    {
+      field: 'payroll_id', headerName: AR ? 'رقم الكشف' : 'Payroll ID', width: 130, pinned: 'left',
+      sortIndex: 2, sort: 'desc', comparator: numericComparator,
+      cellRenderer: (p) => p.node.rowPinned ? ('<strong>' + (p.value || '') + '</strong>')
+        : '<span style="color:#2563eb;font-weight:700;cursor:pointer;text-decoration:underline;">' + (p.value || '') + '</span>',
+    },
+    {
+      field: 'payroll_status', headerName: AR ? 'حالة الكشف' : 'Payroll Status', width: 120,
+      filter: 'agSetColumnFilter', filterParams: { values: ['Initial', 'Ready', 'Post'] }, floatingFilter: false,
+      cellRenderer: (p) => p.node.rowPinned ? '' : STATUS_PILL(p),
+    },
+    setCol('month', AR ? 'الشهر' : 'Salary Month', 120, {
+      sortIndex: 0, sort: 'desc',
+      comparator: (a, b, nodeA, nodeB) => {
+        const da = (nodeA.data.month_from || ''), db = (nodeB.data.month_from || '');
+        return da < db ? -1 : da > db ? 1 : 0;
+      },
+    }),
+    setCol('salary_order', AR ? 'أمر الراتب' : 'Order', 100, { sortIndex: 1, sort: 'desc', comparator: numericComparator }),
+    setCol('kafeel', AR ? 'الكفيل' : 'Kafeel', 150),
+    setCol('buyer_name', AR ? 'المشتري' : 'Buyer', 160),
+    setCol('buyer_department', AR ? 'القسم' : 'Department', 140),
+    setCol('location', AR ? 'الموقع' : 'Location', 120),
+    {
+      field: 'employee_count', headerName: AR ? 'عدد الموظفين' : 'No. of Employees', width: 130,
+      filter: 'agNumberColumnFilter', valueFormatter: (p) => intFmt(p.value), aggFunc: 'sum', gkTotal: true,
+      cellStyle: { fontWeight: 700 },
+    },
+    setCol('salary_category', AR ? 'فئة الراتب' : 'Salary Category', 150),
+    moneyCol('basic_salary', AR ? 'الراتب الأساسي' : 'Basic Salary', 130),
+    moneyCol('allowance', AR ? 'البدل' : 'Allowance', 110),
+    { field: 'absent', headerName: AR ? 'الغياب' : 'Absent', width: 100, filter: 'agNumberColumnFilter', valueFormatter: (p) => intFmt(p.value), aggFunc: 'sum', gkTotal: true },
+    moneyCol('total_hours', AR ? 'إجمالي الساعات' : 'Total Hours', 120),
+    moneyCol('ot_hour', AR ? 'ساعات إضافية' : 'OT Hours', 105),
+    moneyCol('ot_amount', AR ? 'مبلغ الإضافي' : 'OT Amount', 120),
+    moneyCol('bonus', AR ? 'مكافأة' : 'Bonus', 110),
+    moneyCol('deduction', AR ? 'خصم' : 'Deduction', 110),
+    moneyCol('advance', AR ? 'سلفة' : 'Advances', 110),
+    moneyCol('credit', AR ? 'دائن' : 'Credit', 100),
+    moneyCol('salary_payable', AR ? 'صافي المستحق' : 'Salary Payable', 140, { cellStyle: { fontWeight: 700 } }),
+    moneyCol('paid', AR ? 'المدفوع' : 'Paid', 110),
+    moneyCol('balance', AR ? 'الرصيد' : 'Balance', 110, {
+      aggFunc: null, gkTotal: false,
+      cellStyle: (p) => ({ fontWeight: 700, color: Math.abs(p.value || 0) < 0.01 ? '#16a34a' : '#dc2626' }),
+    }),
+    moneyCol('services_charges', AR ? 'رسوم الخدمات' : 'Service Charges', 130),
+    moneyCol('invoice_amount', AR ? 'مبلغ الفاتورة' : 'Invoice Amount', 130),
+  ];
+}
+
+function load() {
+  if (!gridApi) return;
+  gridApi.setGridOption('loading', true);
+  fetch(DATA_URL, { credentials: 'same-origin' })
+    .then((r) => r.json())
+    .then((data) => {
+      currentRows = Array.isArray(data) ? data : [];
+      gridApi.setGridOption('rowData', currentRows);
+      gridApi.setGridOption('loading', false);
+      renderMonthOrderPanel();
+      refreshPinnedTotal();
+    })
+    .catch(() => { gridApi.setGridOption('loading', false); flash(AR ? 'تعذّر التحميل' : 'Failed to load data', false); });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  gridApi = agGrid.createGrid(GRID_ROOT_EL, {
+    columnDefs: buildColumnDefs(),
+    rowData: [],
+    getRowId: (p) => String(p.data.payroll_id),
+    animateRows: true, enableRtl: AR,
+    headerHeight: 48,
+    pagination: true, paginationPageSize: 25, paginationPageSizeSelector: [10, 25, 50, 100],
+    defaultColDef: {
+      sortable: true, unSortIcon: true, resizable: true,
+      filter: 'agTextColumnFilter', floatingFilter: true,
+    },
+    isExternalFilterPresent: () => selectedCombos.size > 0,
+    doesExternalFilterPass: (node) => !selectedCombos.size || selectedCombos.has(node.data.month + '||' + node.data.salary_order),
+    getRowStyle(p) { return p.node.rowIndex % 2 === 0 ? { background: '#fff' } : { background: '#fafbfc' }; },
+    onCellClicked(p) {
+      if (!p.node.rowPinned && p.colDef.field === 'payroll_id' && p.value) {
+        window.location.href = PAYROLL_LIST_URL + '?payroll_id=' + encodeURIComponent(p.value);
+      }
+    },
+    onFilterChanged() { refreshPinnedTotal(); },
+    onGridReady() {
+      if (window.GridKit) GridKit.enhance({ api: gridApi }, 'paySummaryGridRoot', { storageKey: 'payroll_summary', exportName: 'PayrollSummary', toolbar: '.pr-toolbar' });
+      load();
+    },
+  });
+
+  document.getElementById('btnRefresh').addEventListener('click', load);
+});
+</script>
+{% endblock %}

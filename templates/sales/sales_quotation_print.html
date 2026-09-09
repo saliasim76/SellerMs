@@ -1,0 +1,234 @@
+{% set ar = current_locale == 'ar' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if ar %}عرض سعر بيع{% else %}Sales Quotation{% endif %} · {{ doc.doc_no }}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+/* Multi-page A4 document: @page controls the real per-page margin so the
+   browser paginates normally; the outer <table> below uses a repeating
+   <thead>/<tfoot> so the letterhead header and footer print on EVERY page,
+   not just the first/last -- this is the standard cross-browser technique
+   for repeating page furniture in a paginated HTML print document. */
+@page { size: A4; margin: 15mm 14mm; }
+html { font-size:13.5px; }
+html, body { background:#e6e9ef; }
+body { font-family:'Segoe UI','Arial',sans-serif; color:#111c2e; }
+
+.toolbar { width:210mm; margin:16px auto 10px; display:flex; justify-content:flex-end; gap:10px; }
+.toolbar button, .toolbar a {
+  display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:7px;
+  font-size:13px; font-weight:600; cursor:pointer; border:none; text-decoration:none;
+}
+
+.sheet { width:210mm; margin:0 auto 24px; background:white; box-shadow:0 12px 30px rgba(0,0,0,.15); border:1px solid #d0d5de; }
+.doc-table { width:100%; border-collapse:collapse; }
+.doc-table > thead > tr > td, .doc-table > tfoot > tr > td, .doc-table > tbody > tr > td { padding:0; }
+
+/* ── Letterhead header (repeats on every printed page) ── */
+.lh-header { padding:0 12mm 3mm; border-bottom:2px solid #1a2b42; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.lh-header .lh-logo { max-width:110px; max-height:70px; object-fit:contain; flex-shrink:0; }
+.lh-owner-info { text-align:right; }
+.lh-owner-name { font-size:1.5rem; font-weight:700; line-height:1.3; }
+.lh-owner-name-ar { font-size:1.05rem; font-weight:600; color:#1e2a41; }
+.lh-owner-meta { font-size:.78rem; color:#4f6183; margin-top:.3rem; line-height:1.5; }
+.lh-header-img { width:100%; }
+.lh-header-img img { width:100%; max-height:32mm; object-fit:contain; display:block; }
+
+/* ── Letterhead footer (repeats on every printed page) ── */
+.lh-footer { margin-top:5mm; padding:3mm 12mm 6mm; border-top:1.5px solid #d2dae8; font-size:.72rem; color:#4f6183; display:flex; flex-wrap:wrap; justify-content:center; gap:4px 16px; text-align:center; }
+.lh-footer-img { width:100%; margin-top:5mm; }
+.lh-footer-img img { width:100%; max-height:24mm; object-fit:contain; display:block; }
+.lh-footer strong { color:#1e3a5f; }
+
+/* ── Body content ── */
+.sq-body { padding:4mm 12mm 3mm; }
+
+.doc-title { text-align:center; font-weight:700; font-size:1.15rem; color:#0f2642; margin:.3rem 0 .15rem; }
+.doc-no { text-align:left; font-size:.85rem; font-weight:600; margin-bottom:.6rem; }
+.doc-no span { font-weight:400; color:#4f6183; }
+
+.qi-stack { margin-bottom:.6rem; }
+.qi-line { text-align:left; font-size:.9rem; line-height:1.4; margin-bottom:.2rem; white-space:pre-wrap; }
+.qi-line .qi-lbl { font-weight:700; color:#3d4d66; }
+.qi-line .qi-val { font-weight:500; color:#111c2e; }
+.qi-line.remarks-line { font-size:.83rem; line-height:1.6; }
+
+.sig-row { display:flex; justify-content:flex-end; margin-top:1rem; }
+.sig-stamp { max-width:110px; max-height:110px; object-fit:contain; flex-shrink:0; }
+
+.section-hdr { font-weight:700; font-size:.85rem; color:#0b1f3b; text-transform:uppercase; letter-spacing:.4px; margin:.5rem 0 .25rem; }
+
+.items-table { width:100%; border-collapse:collapse; margin-top:.2rem; font-size:.83rem; border:1px solid #bcc4d2; }
+.items-table th { background:#e9edf5; color:#1b2b44; font-weight:700; padding:.3rem .3rem; border:1px solid #b0bacb; text-align:center; }
+.items-table td { padding:.28rem .3rem; border:1px solid #bdc6d6; text-align:center; }
+.items-table .desc-cell { text-align:left; padding-left:.6rem; font-weight:500; }
+.items-table tr { page-break-inside:avoid; }
+
+.totals-wrap { display:flex; justify-content:flex-end; margin-top:.4rem; }
+.totals-box { width:280px; }
+.total-line { display:flex; justify-content:space-between; padding:.18rem .1rem; border-bottom:1px solid #e2e7f0; font-size:.85rem; }
+.total-line .tlabel { color:#1b314d; }
+.total-line .tvalue { font-weight:600; color:#0f1e34; }
+.total-line.bold { font-weight:700; font-size:.98rem; border-bottom:2px solid #1b2f4a; }
+
+.tc-box { font-size:.83rem; line-height:1.6; margin-top:1rem; }
+.ss-print .ss-split { display:flex; gap:24px; margin-top:.4rem; }
+.ss-print .ss-left, .ss-print .ss-right { flex:1; }
+.ss-print .ss-right img { max-width:110px; max-height:110px; object-fit:contain; }
+
+
+@media print {
+  html { font-size:13.5px; }
+  body { background:white; }
+  .toolbar { display:none; }
+  .sheet { width:auto; margin:0; box-shadow:none; border:none; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="{{ url_for('sales.sq_view', id=doc.sales_quotation_id) }}" style="background:white;color:#374151;border:1.5px solid #d1d5db;"><i class="fas fa-arrow-left"></i>{% if ar %}رجوع{% else %}Back{% endif %}</a>
+  <a href="{{ url_for('sales.sq_print_word', id=doc.sales_quotation_id) }}" style="background:#1d4ed8;color:white;"><i class="fas fa-file-word"></i>{% if ar %}حفظ كملف وورد{% else %}Save as Word{% endif %}</a>
+  <button onclick="window.print()" style="background:#2563eb;color:white;"><i class="fas fa-print"></i>{% if ar %}طباعة{% else %}Print{% endif %}</button>
+</div>
+
+<div class="sheet">
+  <table class="doc-table">
+    <thead>
+      <tr><td>
+        {% if use_owner_hf %}
+        <div class="lh-header-img"><img src="{{ header_data_uri }}" alt="header"></div>
+        {% else %}
+        <div class="lh-header">
+            {% if logo_data_uri %}<img class="lh-logo" src="{{ logo_data_uri }}" alt="logo">{% endif %}
+            <div class="lh-owner-info">
+              <div class="lh-owner-name" style="color:{{ (owner.report_color if owner and owner.report_color else '#0b1a33') }};">{{ owner.name if owner else '—' }}</div>
+              {% if owner and owner.name_ar %}<div class="lh-owner-name-ar">{{ owner.name_ar }}</div>{% endif %}
+              <div class="lh-owner-meta">
+                {% if owner %}
+                  {% if owner.phone %}<i class="fas fa-phone" style="font-size:.7rem;"></i> {{ owner.phone }}{% endif %}
+                  {% if owner.email %}&nbsp;&nbsp;<i class="fas fa-envelope" style="font-size:.7rem;"></i> {{ owner.email }}{% endif %}
+                  <br>
+                  {% if owner.vat_number %}<strong>VAT:</strong> {{ owner.vat_number }}{% endif %}
+                  {% if owner.crn %}&nbsp;&nbsp;<strong>C.R:</strong> {{ owner.crn }}{% endif %}
+                {% else %}—{% endif %}
+              </div>
+            </div>
+        </div>
+        {% endif %}
+      </td></tr>
+    </thead>
+
+    <tfoot>
+      <tr><td>
+        {% if use_owner_hf %}
+        <div class="lh-footer-img"><img src="{{ footer_data_uri }}" alt="footer"></div>
+        {% else %}
+        <div class="lh-footer">
+          {% if owner %}
+            {%- set faddr = [owner.street_name, owner.building_number, owner.district, owner.city, owner.postal_code, owner.country] | select | join(', ') -%}
+            {% if faddr %}<span>{{ faddr }}</span>{% endif %}
+            {% if owner.phone %}<span><strong>{% if ar %}هاتف{% else %}Tel{% endif %}:</strong> {{ owner.phone }}</span>{% endif %}
+            {% if owner.email %}<span><strong>{% if ar %}بريد{% else %}Email{% endif %}:</strong> {{ owner.email }}</span>{% endif %}
+            {% if owner.website %}<span><strong>{% if ar %}موقع{% else %}Web{% endif %}:</strong> {{ owner.website }}</span>{% endif %}
+            {% if owner.vat_number %}<span><strong>VAT:</strong> {{ owner.vat_number }}</span>{% endif %}
+            {% if owner.crn %}<span><strong>C.R:</strong> {{ owner.crn }}</span>{% endif %}
+          {% else %}—{% endif %}
+        </div>
+        {% endif %}
+      </td></tr>
+    </tfoot>
+
+    <tbody>
+      <tr><td>
+        <div class="sq-body">
+
+          {# ── Document title (centered) + No. (left-aligned) ── #}
+          <div class="doc-title">{% if ar %}عرض سعر{% else %}SALES QUOTATION{% endif %}</div>
+          <div class="doc-no">{% if ar %}رقم:{% else %}<span>No:</span>{% endif %} {{ doc.doc_no }}</div>
+
+          {# ── Quotation Information: left-aligned stacked lines ── #}
+          <div class="qi-stack">
+            <div class="qi-line"><span class="qi-lbl">{% if ar %}التاريخ{% else %}Date{% endif %}:</span> <span class="qi-val">{{ doc.posting_date.strftime('%d-%b-%Y') if doc.posting_date else '—' }}</span></div>
+            <div class="qi-line"><span class="qi-lbl">{% if ar %}إلى{% else %}To{% endif %}:</span> <span class="qi-val">{{ doc.buyer.buyer_name_en if doc.buyer else '—' }}</span></div>
+            <div class="qi-line"><span class="qi-lbl">{% if ar %}الموضوع{% else %}Subject{% endif %}:</span> <span class="qi-val">{{ doc.subject or '—' }}</span></div>
+            {% if doc.body %}
+            <div class="qi-line remarks-line">{% if ar %}السادة المحترمين،{% else %}Dear Sir,{% endif %}</div>
+            <div class="qi-line remarks-line"><span class="qi-val">{{ doc.body }}</span></div>
+            {% endif %}
+          </div>
+
+          {# ── Line Items table: always shown, regardless of Item Summary Display ── #}
+          <div class="section-hdr">{% if ar %}النطاق والسعر{% else %}Scope & Rate{% endif %}</div>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width:34px;">S/N</th>
+                <th>{% if ar %}الوصف{% else %}Description{% endif %}</th>
+                <th style="width:70px;">{% if ar %}الكمية{% else %}Quantity{% endif %}</th>
+                <th style="width:60px;">{% if ar %}الوحدة{% else %}Unit{% endif %}</th>
+                <th style="width:80px;">{% if ar %}السعر{% else %}Rate{% endif %}</th>
+                <th style="width:90px;">{% if ar %}المبلغ{% else %}Amount{% endif %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for li in item_rows %}
+              <tr>
+                <td>{{ li.line_number }}</td>
+                <td class="desc-cell">{{ li.description or '—' }}</td>
+                <td>{{ '{:,.2f}'.format(li.quantity or 0) }}</td>
+                <td>{{ (li.uom or '')|upper or '—' }}</td>
+                <td>{{ '{:,.2f}'.format(li.rate or 0) }}</td>
+                <td style="font-weight:600;">{{ '{:,.2f}'.format(li.total or 0) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" style="text-align:center;padding:16px;color:#9ca3af;">{% if ar %}لا توجد بنود{% else %}No items{% endif %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          {# ── Totals summary: hidden when Item Summary Display is Off ── #}
+          {% if (doc.item_summary_display or 'on') == 'on' %}
+          <div class="totals-wrap">
+            <div class="totals-box">
+              <div class="total-line"><span class="tlabel">{% if ar %}الإجمالي قبل الخصم{% else %}Total before discount{% endif %}</span><span class="tvalue">{{ '{:,.2f}'.format(doc.total_before_discount or 0) }}</span></div>
+              <div class="total-line"><span class="tlabel">{% if ar %}الخصم{% else %}Total Discount{% endif %}</span><span class="tvalue">{{ '{:,.2f}'.format(doc.total_discount or 0) }}</span></div>
+              <div class="total-line"><span class="tlabel">{% if ar %}الشحن{% else %}Freight{% endif %}</span><span class="tvalue">{{ '{:,.2f}'.format(doc.total_freight or 0) }}</span></div>
+              <div class="total-line"><span class="tlabel">{% if ar %}الإجمالي بدون ضريبة{% else %}Total excl. VAT{% endif %}</span><span class="tvalue">{{ '{:,.2f}'.format(doc.total_excl_vat or 0) }}</span></div>
+              <div class="total-line"><span class="tlabel">{% if ar %}ضريبة القيمة المضافة{% else %}VAT Amount{% endif %}</span><span class="tvalue">{{ '{:,.2f}'.format(doc.vat_amount or 0) }}</span></div>
+              <div class="total-line bold"><span class="tlabel">{% if ar %}الإجمالي شامل الضريبة{% else %}Total incl. VAT{% endif %}</span><span class="tvalue">SAR {{ '{:,.2f}'.format(doc.total_incl_vat or 0) }}</span></div>
+            </div>
+          </div>
+          {% endif %}
+
+          {# ── Terms & Conditions (the entered content already carries its own heading) ── #}
+          {% if doc.terms_conditions %}
+          <div class="tc-box">{{ doc.terms_conditions | safe }}</div>
+          {% endif %}
+
+          {# ── Sign & Stamp (Name/Mobile on the left, stamp on the right) ── #}
+          {% if doc.sign_stamp %}
+          <div class="tc-box ss-print">{{ doc.sign_stamp | safe }}</div>
+          {% endif %}
+
+          {# ── Digital Signature (the creator's own saved signature, if any) ── #}
+          {% if signature_data_uri %}
+          <div class="sig-row">
+            <img class="sig-stamp" src="{{ signature_data_uri }}" alt="signature">
+          </div>
+          {% endif %}
+
+        </div>
+      </td></tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

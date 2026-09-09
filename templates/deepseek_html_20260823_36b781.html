@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tax Invoice · Muhammad Zaki Al Sheikh</title>
+    <!-- Font Awesome (optional, for icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #e6e9ef;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            padding: 2rem 1rem;
+        }
+
+        /* main card – mimics the PDF frame */
+        .invoice-wrapper {
+            max-width: 1100px;
+            width: 100%;
+            background: white;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+            border-radius: 6px;
+            padding: 1.8rem 2rem 2rem 2rem;
+            border: 1px solid #d0d5de;
+        }
+
+        /* header / title area */
+        .header-arabic {
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            color: #1e2a41;
+        }
+
+        .company-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0b1a33;
+            line-height: 1.3;
+        }
+
+        .company-name small {
+            font-weight: 400;
+            font-size: 1.1rem;
+            color: #2c3e5c;
+        }
+
+        .tax-badge {
+            background: #f0f3f8;
+            padding: 0.2rem 1rem;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #1f3a5f;
+            border: 1px solid #bcc3d0;
+            display: inline-block;
+        }
+
+        /* grid / table like layout */
+        .invoice-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem 1.8rem;
+            margin-top: 1.4rem;
+            border-top: 2px solid #222;
+            padding-top: 1.2rem;
+        }
+
+        .field-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            border-bottom: 1px dashed #dce1ea;
+            padding: 0.35rem 0;
+        }
+
+        .field-group .label {
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #3d4d66;
+            min-width: 110px;
+            letter-spacing: 0.2px;
+            text-transform: uppercase;
+        }
+
+        .field-group .value {
+            font-weight: 500;
+            color: #111c2e;
+            font-size: 0.9rem;
+            word-break: break-word;
+        }
+
+        .field-group .value-ar {
+            font-weight: 500;
+            color: #111c2e;
+            font-size: 0.9rem;
+            direction: rtl;
+            text-align: right;
+        }
+
+        /* two columns for seller/buyer */
+        .party-box {
+            border: 1px solid #ccd3df;
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            background: #fafcff;
+            margin-top: 0.5rem;
+        }
+
+        .party-box .party-title {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #0b1f3b;
+            border-bottom: 1px solid #d0d8e5;
+            padding-bottom: 0.25rem;
+            margin-bottom: 0.6rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .party-row {
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 0.8rem;
+            padding: 0.15rem 0;
+            border-bottom: 1px dotted #e3e8f0;
+        }
+
+        .party-row .plabel {
+            min-width: 100px;
+            font-weight: 600;
+            color: #3f5577;
+        }
+
+        .party-row .pvalue {
+            font-weight: 500;
+            color: #121f33;
+        }
+
+        /* items table (goods) */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.2rem;
+            font-size: 0.85rem;
+            border: 1px solid #bcc4d2;
+        }
+
+        .items-table th {
+            background: #e9edf5;
+            color: #1b2b44;
+            font-weight: 700;
+            padding: 0.5rem 0.3rem;
+            border: 1px solid #b0bacb;
+            text-align: center;
+        }
+
+        .items-table td {
+            padding: 0.5rem 0.3rem;
+            border: 1px solid #bdc6d6;
+            text-align: center;
+            background: white;
+        }
+
+        .items-table .desc-cell {
+            text-align: left;
+            padding-left: 0.7rem;
+            font-weight: 500;
+        }
+
+        .totals-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.2rem 2rem;
+            margin-top: 1.2rem;
+            border-top: 2px solid #1f2f47;
+            padding-top: 1rem;
+        }
+
+        .total-line {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0.1rem;
+            border-bottom: 1px solid #e2e7f0;
+            font-size: 0.9rem;
+        }
+
+        .total-line .tlabel {
+            font-weight: 600;
+            color: #1b314d;
+        }
+
+        .total-line .tvalue {
+            font-weight: 600;
+            color: #0f1e34;
+        }
+
+        .total-line.bold {
+            font-weight: 700;
+            font-size: 1rem;
+            border-bottom: 2px solid #1b2f4a;
+        }
+
+        .amount-words {
+            background: #f2f6fe;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            margin-top: 1.2rem;
+            font-weight: 500;
+            border: 1px solid #ced6e3;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1.5rem;
+            justify-content: space-between;
+        }
+
+        .amount-words .word-en {
+            color: #0f2642;
+        }
+
+        .amount-words .word-ar {
+            direction: rtl;
+            color: #0f2642;
+        }
+
+        .footer-note {
+            margin-top: 0.8rem;
+            font-size: 0.7rem;
+            color: #4f6183;
+            border-top: 1px solid #d2dae8;
+            padding-top: 0.7rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Responsive */
+        @media (max-width: 750px) {
+            .invoice-wrapper {
+                padding: 1.2rem;
+            }
+            .invoice-grid {
+                grid-template-columns: 1fr;
+                gap: 0.2rem;
+            }
+            .totals-grid {
+                grid-template-columns: 1fr;
+            }
+            .field-group .label {
+                min-width: 80px;
+            }
+            .party-row .plabel {
+                min-width: 70px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="invoice-wrapper">
+
+    <!-- HEADER: company + invoice number -->
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 2px solid #1a2b42; padding-bottom: 0.4rem;">
+        <div>
+            <div class="header-arabic">مؤسسة محمد زكي الى الشيخ للمقاولات العامة</div>
+            <div class="company-name">Muhammad Zaki Al Sheikh <small>General Contracting Est</small></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1.2rem; margin-top: 0.2rem;">
+                <span><span style="font-weight:600;">C.R :</span> 7036179716</span>
+                <span><span style="font-weight:600;">VAT :</span> 310540904600003</span>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div style="background: #0f2642; color: white; padding: 0.3rem 1.2rem; border-radius: 30px; font-weight: 700; font-size: 1.1rem; display: inline-block;">TAX INVOICE</div>
+            <div style="font-weight: 500; margin-top: 0.2rem; font-size: 0.9rem;">فاتورة ضريبية</div>
+        </div>
+    </div>
+
+    <!-- Invoice number & date row -->
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 0.5rem; background: #f2f6fc; padding: 0.3rem 0.8rem; border-radius: 6px;">
+        <div><span style="font-weight:600;">Invoice No:</span> STDINV-00001 <span style="margin-left:1.5rem; font-weight:600;">الفاتورة :</span> STDINV-00001</div>
+        <div><span style="font-weight:600;">Invoice Date</span> 28-Jun-2026 <span style="margin-left:1rem; font-weight:600;">تاريخ الفاتورة</span> 28-Jun-2026</div>
+    </div>
+
+    <!-- First grid: invoice meta -->
+    <div class="invoice-grid">
+        <div class="field-group"><span class="label">Invoice Type</span><span class="value">Account Number</span><span style="margin-left:0.5rem; font-weight:500;">68207172680000</span></div>
+        <div class="field-group"><span class="label">Invoice Period</span><span class="value">21-May-2026 To 20-Jun-2026</span><span class="value-ar" style="margin-left:0.3rem;">شهر الفاتورة</span></div>
+        <div class="field-group"><span class="label">Bank | المصرف</span><span class="value">ALINMA BANK</span></div>
+        <div class="field-group"><span class="label">Due Date</span><span class="value">15-Jul-2026</span><span class="value-ar" style="margin-left:0.5rem;">تاريخ الاستحقاق</span></div>
+        <div class="field-group"><span class="label">Department</span><span class="value">Branch | فرع</span><span style="margin-left:0.3rem; font-weight:500;">QATIF</span></div>
+        <div class="field-group"><span class="label">Project / Ref No.</span><span class="value">Dammam</span><span class="value-ar" style="margin-left:0.3rem;">رقم أمر الشراء</span></div>
+        <div class="field-group"><span class="label">Swift | رقم السويفت</span><span class="value">INMASARI</span></div>
+        <div class="field-group"><span class="label">Contract / PO No.</span><span class="value">المشروع</span><span class="value-ar" style="margin-left:0.5rem;">رقم المرجع / المشروع</span></div>
+        <div class="field-group"><span class="label">IBAN | رقم الابيان</span><span class="value">SA7805000068207172680000</span></div>
+    </div>
+
+    <!-- Seller & Buyer details (two columns) -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.8rem;">
+        <!-- Seller -->
+        <div class="party-box">
+            <div class="party-title"><span>Seller Details</span> <span>المورد</span></div>
+            <div><strong>Name:</strong> Muhammad Zaki Al Sheikh General Contracting Est</div>
+            <div style="direction: rtl; text-align: right; font-weight:500;">مؤسسة محمد زكي الى الشيخ للمقاولات العامة</div>
+            <div class="party-row"><span class="plabel">Street Name:</span><span class="pvalue">King Faisal Ibn Abdulaziz Soud</span><span style="margin-left:0.5rem; font-weight:500;">اسم الشارع</span></div>
+            <div class="party-row"><span class="plabel">Building No:</span><span class="pvalue">2618</span><span style="margin-left:0.5rem;">رقم المبنى</span></div>
+            <div class="party-row"><span class="plabel">City:</span><span class="pvalue">القطيف</span><span style="margin-left:0.5rem;">المدينه</span></div>
+            <div class="party-row"><span class="plabel">District:</span><span class="pvalue">حي غيماتة</span><span style="margin-left:0.5rem;">الحي</span></div>
+            <div class="party-row"><span class="plabel">Country:</span><span class="pvalue">المملكة العربية السعودية</span><span style="margin-left:0.5rem;">البلد</span></div>
+            <div class="party-row"><span class="plabel">CRN:</span><span class="pvalue">7:36:17:9716</span><span style="margin-left:0.5rem;">معرف آخر</span></div>
+            <div class="party-row"><span class="plabel">الرقم الإضافي</span><span class="pvalue">الرمز البريدي</span><span style="margin-left:0.5rem;">الرقم الضريبي</span></div>
+        </div>
+        <!-- Buyer -->
+        <div class="party-box">
+            <div class="party-title"><span>Buyer Detail</span> <span>تفاصيل شركة العميل</span></div>
+            <div><strong>Name:</strong> Construct Direct Contracting Company</div>
+            <div style="direction: rtl; text-align: right; font-weight:500;">شركة كونتستردات دايرك</div>
+            <div class="party-row"><span class="plabel">Street Name:</span><span class="pvalue">Adh Dhahran</span><span style="margin-left:0.5rem;">اسم الشارع</span></div>
+            <div class="party-row"><span class="plabel">Building No:</span><span class="pvalue">3381</span><span style="margin-left:0.5rem;">رقم المبنى</span></div>
+            <div class="party-row"><span class="plabel">City:</span><span class="pvalue">المدينة</span><span style="margin-left:0.5rem;">المدينه</span></div>
+            <div class="party-row"><span class="plabel">District:</span><span class="pvalue">منطقة الثقة</span><span style="margin-left:0.5rem;">الحي</span></div>
+            <div class="party-row"><span class="plabel">Country:</span><span class="pvalue">المملكة العربية السعودية</span><span style="margin-left:0.5rem;">البلد</span></div>
+            <div class="party-row"><span class="plabel">CRN:</span><span class="pvalue">V 0-0-0-0-0-0-0-0-0-0-0</span><span style="margin-left:0.5rem;">الرقم الضريبي</span></div>
+            <div class="party-row"><span class="plabel">الرقم الإضافي</span><span class="pvalue">الرمز البريدي</span><span style="margin-left:0.5rem;">الرقم الضريبي</span></div>
+        </div>
+    </div>
+
+    <!-- Items table (goods/services) -->
+    <div style="margin-top: 1.2rem; font-weight:600; font-size:0.9rem; display:flex; justify-content:space-between;">
+        <span># تفاصيل السلع أو الخدمات</span>
+        <span style="font-weight:400;">1 Helper</span>
+    </div>
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>تفاصيل السلع أو الخدمات</th>
+                <th>القياس</th>
+                <th>Quantity</th>
+                <th>معدل Rate</th>
+                <th>الخصومات</th>
+                <th>للضريبة</th>
+                <th>Tax % Amount</th>
+                <th>مبلغ الضريبة</th>
+                <th>الضريبة</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="desc-cell" colspan="2">Helper services (1 unit)</td>
+                <td>—</td>
+                <td>1</td>
+                <td>92,552.00</td>
+                <td>—</td>
+                <td>15%</td>
+                <td>12,072.00</td>
+                <td>12,072.00</td>
+                <td>***** % شريح دفع / Nothing follow</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Totals section -->
+    <div class="totals-grid">
+        <div class="total-line"><span class="tlabel">Gross Total (SAR)</span><span class="tvalue">80,480.00</span></div>
+        <div class="total-line"><span class="tlabel">Total Discount (SAR)</span><span class="tvalue">-</span></div>
+        <div class="total-line"><span class="tlabel">Total excl. VAT (SAR)</span><span class="tvalue">80,480.00</span></div>
+        <div class="total-line"><span class="tlabel">VAT Amount (SAR)</span><span class="tvalue">12,072.00</span></div>
+        <div class="total-line bold"><span class="tlabel">Amount incl. VAT (SAR)</span><span class="tvalue">92,552.00</span></div>
+        <div class="total-line"><span class="tlabel">Less: 0% Retention (SAR)</span><span class="tvalue">-</span></div>
+        <div class="total-line bold" style="border-bottom: 2px solid #0b1f3b;"><span class="tlabel">Balance Due (SAR)</span><span class="tvalue">92,552.00</span></div>
+    </div>
+
+    <!-- Arabic labels for totals (inline) -->
+    <div style="display: flex; flex-wrap: wrap; gap: 0.2rem 1.2rem; font-size:0.7rem; color:#2d405e; margin-top:0.2rem; border-bottom:1px solid #d7dfeb; padding-bottom:0.3rem;">
+        <span>السعر الإجمالي (ريال سعودي)</span>
+        <span>الخصم الإضافي (ريال سعودي)</span>
+        <span>الإجمالي غير شامل ضريبة القيمة المضافة (ريال سعودي)</span>
+        <span>ضريبة القيمة المضافة (ريال سعودي)</span>
+        <span>المبلغ شامل ضريبة القيمة المضافة (ريال سعودي)</span>
+        <span>أقل: 0% احتفاظ (ريال سعودي)</span>
+        <span>إجمالي المبلغ المستحق (ريال سعودي)</span>
+    </div>
+
+    <!-- Amount in words -->
+    <div class="amount-words">
+        <span class="word-en"><i class="fas fa-file-invoice" style="margin-right:6px;"></i> Amount in words: ninety-two thousand five hundred and fifty-two halalas only.</span>
+        <span class="word-ar">تسعون واثنان ألف وخمسة مئة وخمسون واثنان لا غير</span>
+    </div>
+
+    <!-- Footer / extra meta -->
+    <div class="footer-note">
+        <span>Invoice No: STDINV-00001 · VAT: 310540904600003</span>
+        <span>CR: 7036179716 · IBAN: SA7805000068207172680000</span>
+        <span><i class="far fa-calendar-alt"></i> 28-Jun-2026</span>
+    </div>
+
+    <!-- preserved PDF hints: box borders, captions, frame size -->
+    <div style="margin-top: 0.4rem; font-size: 0.65rem; color: #3e5780; border-top: 1px solid #dbe1ed; padding-top: 0.2rem; display: flex; justify-content: flex-end;">
+        <span>⚡ invoice # STDINV-00001 · generated from PDF structure</span>
+    </div>
+
+</div>
+<!-- end invoice-wrapper -->
+</body>
+</html>

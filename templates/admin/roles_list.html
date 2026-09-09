@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}الأدوار{% else %}Roles{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}الأدوار{% else %}Roles{% endif %}</li>
+{% endblock %}
+{% block content %}
+<style>
+  .rl-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;}
+  .rl-head{padding:14px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+  .rl-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .rl-table th{text-align:{% if ar %}right{% else %}left{% endif %};padding:9px 12px;background:#f1f5f9;color:#475569;font-size:11px;text-transform:uppercase;}
+  .rl-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;}
+  .rl-pill{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#eff6ff;color:#2563eb;}
+</style>
+<div style="padding:8px 4px 16px;">
+  <h2 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:4px;">{% if ar %}الأدوار{% else %}Roles{% endif %}</h2>
+  <p style="font-size:13px;color:#64748b;margin:0;">{% if ar %}الأدوار الأربعة الأساسية للنظام — عدّل صلاحيات كل دور من مصفوفة الصلاحيات.{% else %}The system's 4 fixed roles — edit each role's permissions from the Permission Matrix.{% endif %}</p>
+</div>
+<div class="rl-card">
+  <div class="rl-head"><i class="fas fa-user-tag me-2"></i>{% if ar %}قائمة الأدوار{% else %}Role List{% endif %}</div>
+  <table class="rl-table">
+    <thead><tr>
+      <th>{% if ar %}الاسم{% else %}Name{% endif %}</th>
+      <th>{% if ar %}الرمز{% else %}Code{% endif %}</th>
+      <th>{% if ar %}الوصف{% else %}Description{% endif %}</th>
+      <th style="text-align:center;">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+    </tr></thead>
+    <tbody>
+      {% for r in roles %}
+      <tr>
+        <td><strong>{{ r.name }}</strong></td>
+        <td><span class="rl-pill">{{ r.code }}</span></td>
+        <td>{{ r.description or '' }}</td>
+        <td style="text-align:center;">
+          <a href="{{ url_for('rbac_ui.permission_matrix') }}" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-sliders-h me-1"></i>{% if ar %}الصلاحيات{% else %}Permissions{% endif %}
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

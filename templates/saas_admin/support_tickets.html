@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}تذاكر الدعم{% else %}Support Tickets{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}تذاكر الدعم{% else %}Support Tickets{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.prio-badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.prio-low{background:#e0f2fe;color:#0369a1;}
+.prio-medium{background:#dcfce7;color:#15803d;}
+.prio-high{background:#fef3c7;color:#b45309;}
+.prio-urgent{background:#fee2e2;color:#dc2626;}
+.status-badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.status-open{background:#dbeafe;color:#1e40af;}
+.status-in_progress{background:#fef3c7;color:#b45309;}
+.status-resolved{background:#dcfce7;color:#15803d;}
+.status-closed{background:#f1f5f9;color:#64748b;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading"><i class="fas fa-headset" style="color:#10b981;margin-right:8px;"></i>{% if ar %}تذاكر الدعم{% else %}Support Tickets{% endif %}</h2>
+  <p style="color:#6b7280;font-size:13px;margin-top:-8px;margin-bottom:16px;">
+    {% if ar %}جميع تذاكر الدعم الواردة من كل عملاء SaaS.{% else %}Every support ticket submitted by every SaaS customer.{% endif %}
+  </p>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <select id="tqStatus" class="form-select form-select-sm" style="width:auto;" onchange="loadTickets()">
+        <option value="">{% if ar %}كل الحالات{% else %}All Statuses{% endif %}</option>
+        <option value="open">Open</option>
+        <option value="in_progress">In Progress</option>
+        <option value="resolved">Resolved</option>
+        <option value="closed">Closed</option>
+      </select>
+      <select id="tqCategory" class="form-select form-select-sm" style="width:auto;" onchange="loadTickets()">
+        <option value="">{% if ar %}كل الفئات{% else %}All Categories{% endif %}</option>
+        <option value="inquiry">General Inquiry</option>
+        <option value="complaint">Complaint</option>
+        <option value="billing">Billing & Invoice Issues</option>
+        <option value="technical">Technical Support</option>
+        <option value="account">Account Management</option>
+        <option value="package_update">Package Update</option>
+        <option value="renewal">Renewal Process</option>
+        <option value="feature_request">Feature Request</option>
+        <option value="reporting">Data & Reporting Issues</option>
+      </select>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" class="search-input" id="tqSearch" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="renderTickets()">
+      </div>
+    </div>
+  </div>
+
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>{% if ar %}رقم التذكرة{% else %}Ticket #{% endif %}</th>
+          <th>{% if ar %}الشركة{% else %}Company{% endif %}</th>
+          <th>{% if ar %}المرسل{% else %}Submitted By{% endif %}</th>
+          <th>{% if ar %}الفئة{% else %}Category{% endif %}</th>
+          <th>{% if ar %}الأولوية{% else %}Priority{% endif %}</th>
+          <th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
+          <th>{% if ar %}التاريخ{% else %}Date{% endif %}</th>
+          <th style="width:80px" class="text-center">{% if ar %}عرض{% else %}View{% endif %}</th>
+        </tr>
+      </thead>
+      <tbody id="tqBody">
+        <tr><td colspan="9" class="empty-row"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>{% if ar %}لا توجد تذاكر{% else %}No tickets found{% endif %}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Ticket Detail / Status Modal -->
+<div class="modal fade" id="tqModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="tqModalTitle">{% if ar %}تفاصيل التذكرة{% else %}Ticket Detail{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><strong>{% if ar %}الشركة{% else %}Company{% endif %}:</strong> <span id="tq_company"></span></div>
+          <div class="col-md-6"><strong>{% if ar %}المرسل{% else %}From{% endif %}:</strong> <span id="tq_from"></span></div>
+          <div class="col-md-6"><strong>{% if ar %}البريد{% else %}Email{% endif %}:</strong> <span id="tq_email"></span></div>
+          <div class="col-md-6"><strong>{% if ar %}الهاتف{% else %}Phone{% endif %}:</strong> <span id="tq_phone"></span></div>
+          <div class="col-md-6"><strong>{% if ar %}الفئة{% else %}Category{% endif %}:</strong> <span id="tq_category"></span></div>
+          <div class="col-md-6"><strong>{% if ar %}الأولوية{% else %}Priority{% endif %}:</strong> <span id="tq_priority"></span></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{% if ar %}المحادثة{% else %}Conversation{% endif %}</label>
+          <div id="tq_thread" style="max-height:280px;overflow-y:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;"></div>
+          <div class="d-flex gap-2 mt-2">
+            <textarea id="tq_reply" class="form-control" rows="2" placeholder="{% if ar %}اكتب رداً...{% else %}Write a reply...{% endif %}"></textarea>
+            <button type="button" class="btn btn-success" onclick="sendTicketReply()"><i class="fas fa-paper-plane"></i></button>
+          </div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">{% if ar %}الحالة{% else %}Status{% endif %}</label>
+            <select id="tq_status" class="form-select">
+              <option value="open">Open</option>
+              <option value="in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">{% if ar %}ملاحظات داخلية{% else %}Internal Notes{% endif %}</label>
+          <textarea id="tq_notes" class="form-control" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">{% if ar %}إغلاق{% else %}Close{% endif %}</button>
+        <button type="button" class="pl-footer-btn pl-btn-save" onclick="saveTicketStatus()">{% if ar %}حفظ{% else %}Save{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const TQ_CSRF = '{{ csrf_token() }}';
+let TICKETS = [];
+let CURRENT_ID = null;
+
+function loadTickets(){
+  const params = new URLSearchParams();
+  const status = document.getElementById('tqStatus').value;
+  const category = document.getElementById('tqCategory').value;
+  if(status) params.set('status', status);
+  if(category) params.set('category', category);
+  fetch('/saas-admin/support-tickets/data?' + params.toString()).then(r=>r.json()).then(d=>{
+    TICKETS = d || [];
+    renderTickets();
+  });
+}
+
+function renderTickets(){
+  const q = (document.getElementById('tqSearch').value || '').toLowerCase();
+  const body = document.getElementById('tqBody');
+  const rows = TICKETS.filter(t => !q || JSON.stringify(t).toLowerCase().includes(q));
+  if(!rows.length){
+    body.innerHTML = '<tr><td colspan="9" class="empty-row"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>'+(IS_AR?'لا توجد تذاكر':'No tickets found')+'</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map((t,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td class="fw-semibold">${t.ticket_no}</td>
+      <td>${t.customer_name || '—'}</td>
+      <td>${t.full_name}</td>
+      <td>${t.category}</td>
+      <td><span class="prio-badge prio-${t.priority}">${t.priority}</span></td>
+      <td><span class="status-badge status-${t.status}">${t.status.replace('_',' ')}</span></td>
+      <td>${t.created_at}</td>
+      <td class="text-center"><button class="action-btn action-btn-edit" onclick="openTicket(${t.id})"><i class="fas fa-eye"></i></button></td>
+    </tr>
+  `).join('');
+}
+
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function threadBubble(name, when, text, mine){
+  return `<div style="display:flex;flex-direction:column;align-items:${mine?'flex-end':'flex-start'};margin-bottom:10px;">
+      <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">${escapeHtml(name)} &middot; ${when}</div>
+      <div style="max-width:80%;padding:9px 13px;border-radius:12px;font-size:13px;white-space:pre-wrap;
+                  background:${mine?'#10b981':'#fff'};color:${mine?'#fff':'#111827'};border:${mine?'none':'1px solid #e2e8f0'};">${escapeHtml(text)}</div>
+    </div>`;
+}
+
+function loadTicketThread(t){
+  const box = document.getElementById('tq_thread');
+  box.innerHTML = threadBubble(t.full_name, t.created_at, t.message, false);
+  fetch('/saas-admin/support-tickets/' + t.id + '/messages').then(r=>r.json()).then(msgs=>{
+    (msgs||[]).forEach(m => {
+      box.innerHTML += threadBubble(m.sender_name || (m.sender_type==='proledg' ? 'Proledg' : ''), m.created_at, m.message, m.sender_type==='proledg');
+    });
+    box.scrollTop = box.scrollHeight;
+  });
+}
+
+function sendTicketReply(){
+  const text = document.getElementById('tq_reply').value.trim();
+  if(!text || !CURRENT_ID) return;
+  const fd = new FormData();
+  fd.append('message', text);
+  fetch('/saas-admin/support-tickets/' + CURRENT_ID + '/messages/add', { method:'POST', headers:{'X-CSRFToken':TQ_CSRF}, body:fd })
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        document.getElementById('tq_reply').value = '';
+        const t = TICKETS.find(x => x.id === CURRENT_ID);
+        if(t) loadTicketThread(t);
+      } else {
+        alert(d.error || (IS_AR ? 'فشل الإرسال' : 'Send failed'));
+      }
+    }).catch(()=>alert(IS_AR ? 'خطأ في الشبكة' : 'Network error'));
+}
+
+function openTicket(id){
+  const t = TICKETS.find(x => x.id === id);
+  if(!t) return;
+  CURRENT_ID = id;
+  document.getElementById('tq_company').textContent = t.customer_name || '—';
+  document.getElementById('tq_from').textContent = t.full_name;
+  document.getElementById('tq_email').textContent = t.email;
+  document.getElementById('tq_phone').textContent = t.phone || '—';
+  document.getElementById('tq_category').textContent = t.category;
+  document.getElementById('tq_priority').textContent = t.priority;
+  document.getElementById('tq_reply').value = '';
+  loadTicketThread(t);
+  document.getElementById('tq_status').value = t.status;
+  document.getElementById('tq_notes').value = t.admin_notes || '';
+  new bootstrap.Modal(document.getElementById('tqModal')).show();
+}
+
+function saveTicketStatus(){
+  if(!CURRENT_ID) return;
+  const fd = new FormData();
+  fd.append('status', document.getElementById('tq_status').value);
+  fd.append('admin_notes', document.getElementById('tq_notes').value);
+  fetch('/saas-admin/support-tickets/' + CURRENT_ID + '/status', { method:'POST', headers:{'X-CSRFToken':TQ_CSRF}, body:fd })
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        bootstrap.Modal.getInstance(document.getElementById('tqModal')).hide();
+        loadTickets();
+      } else {
+        alert(d.error || (IS_AR ? 'فشل الحفظ' : 'Save failed'));
+      }
+    }).catch(()=>alert(IS_AR ? 'خطأ في الشبكة' : 'Network error'));
+}
+
+document.addEventListener('DOMContentLoaded', loadTickets);
+</script>
+{% endblock %}

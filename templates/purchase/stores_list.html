@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% set ar = current_locale != 'en' %}
+{% block title %}{{ t('stores') }} – Seller MS{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{{ t('dashboard') }}</a></li>
+<li class="breadcrumb-item active">{{ t('stores') }}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.tool-btn{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:38px;padding:0 12px;border:none;border-radius:8px;font-size:14px;cursor:pointer;color:#fff;transition:filter .15s;}
+.tool-btn:hover{filter:brightness(0.92);}
+.ag-theme-alpine{--ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#eff6ff;--ag-header-height:44px;--ag-row-height:42px;--ag-cell-horizontal-padding:12px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading"><i class="fas fa-warehouse me-2"></i>{{ t('stores') }}</h2>
+  <div style="font-size:12px;color:#6b7280;margin-bottom:12px;">
+    <i class="fas fa-info-circle me-1"></i>
+    {% if ar %}المخازن الثلاثة ثابتة ويتم إنشاؤها تلقائياً؛ الرصيد يُحسب مباشرة من عمليات الاستلام المرحّلة فقط.{% else %}The 3 stores are fixed and auto-created; balances are computed live from Posted receipts only.{% endif %}
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="tool-btn tool-btn-blue" onclick="refreshGrid()" title="{{ t('refresh') }}"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn tool-btn-green" onclick="exportCSV()" title="{{ t('export_action') }}"><i class="fas fa-file-csv"></i></button>
+    </div>
+    <span id="selText" style="font-size:12px;font-weight:600;color:var(--gray-400);">0 {{ t('records') }}</span>
+  </div>
+  <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
+    <div id="storesGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 300px);min-height:400px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const DATA_URL = '/purchase/stores/data';
+
+let gridApi;
+agGrid.createGrid(document.getElementById('storesGrid'), {
+  columnDefs: [
+    {headerName: IS_AR?'المخزن':'Store', field:'name', minWidth:220, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'عدد الأصناف':'Item Count', field:'item_count', width:130, filter:'agNumberColumnFilter'},
+    {headerName: IS_AR?'الرصيد الحالي':'Current Balance', field:'balance_quantity', width:150, filter:'agNumberColumnFilter', cellStyle:{fontWeight:700,color:'#166534'}},
+    {headerName: IS_AR?'رابط':'View Transactions', field:'_v', width:170, sortable:false, filter:false,
+      cellRenderer: p => `<a href="/purchase/store-tracking" style="color:#2563eb;text-decoration:none;font-size:12px;"><i class="fas fa-list me-1"></i>${IS_AR?'عرض العمليات':'View Transactions'}</a>`},
+  ],
+  rowData: [], pagination:true, paginationPageSize:20,
+  animateRows:true, enableRtl:IS_AR,
+  defaultColDef:{sortable:true, resizable:true, filter:true, floatingFilter:true},
+  onGridReady(p){ gridApi = p.api; loadData(); },
+});
+
+function loadData(){
+  fetch(DATA_URL).then(r=>r.json()).then(d=>{
+    gridApi.setGridOption('rowData', d);
+    document.getElementById('selText').textContent = (d||[]).length + ' ' + '{{ t("records") }}';
+  });
+}
+function refreshGrid(){ if(gridApi) loadData(); }
+function exportCSV(){ if(gridApi) gridApi.exportDataAsCsv({fileName:'stores.csv'}); }
+</script>
+{% endblock %}

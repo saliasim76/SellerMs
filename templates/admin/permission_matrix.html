@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}الأدوار والصلاحيات{% else %}Roles & Permissions{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}مصفوفة الصلاحيات{% else %}Permission Matrix{% endif %}</li>
+{% endblock %}
+{% block content %}
+<style>
+  .pm-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;}
+  .pm-head{padding:14px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+  .pm-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .pm-table th{padding:8px 10px;background:#f1f5f9;color:#475569;font-size:10.5px;text-transform:uppercase;text-align:center;position:sticky;top:0;}
+  .pm-table th.pm-form-col{text-align:{% if ar %}right{% else %}left{% endif %};min-width:220px;}
+  .pm-table td{padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:center;}
+  .pm-table td.pm-form-col{text-align:{% if ar %}right{% else %}left{% endif %};font-weight:600;color:#334155;}
+  .pm-mod-row td{background:#eff6ff;font-weight:800;color:#1d4ed8;padding:8px 10px;}
+  .pm-save{background:#16a34a;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;}
+  .pm-save:hover{filter:brightness(1.08);}
+</style>
+
+<div style="padding:8px 4px 16px;">
+  <h2 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:4px;">{% if ar %}مصفوفة الأدوار والصلاحيات{% else %}Role Permission Matrix{% endif %}</h2>
+  <p style="font-size:13px;color:#64748b;margin:0;">{% if ar %}اختر دوراً لعرض/تعديل صلاحياته لكل وحدة ونموذج{% else %}Pick a role to view/edit its module-by-form permissions{% endif %}</p>
+</div>
+
+<div class="pm-card">
+  <div class="pm-head">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <label class="small fw-bold mb-0">{% if ar %}الدور{% else %}Role{% endif %}</label>
+      <select id="pmRole" class="form-select form-select-sm" style="width:220px;" onchange="loadMatrix()">
+        <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
+        {% for r in roles %}<option value="{{ r.id }}" data-code="{{ r.code }}">{{ r.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="pm-save" id="pmSaveBtn" style="display:none;" onclick="saveMatrix()"><i class="fas fa-save me-1"></i>{% if ar %}حفظ التغييرات{% else %}Save Changes{% endif %}</button>
+  </div>
+  <div id="pmSuperAdminNote" style="display:none;padding:14px 18px;color:#92400e;background:#fef3c7;font-size:12.5px;">
+    <i class="fas fa-info-circle me-1"></i>{% if ar %}المدير الأعلى يملك دائماً صلاحية كاملة ولا يمكن تعديلها.{% else %}Super Admin always has full access and cannot be edited here.{% endif %}
+  </div>
+  <div style="overflow:auto;max-height:65vh;">
+    <table class="pm-table" id="pmTable" style="display:none;">
+      <thead><tr id="pmHeadRow"><th class="pm-form-col">{% if ar %}النموذج{% else %}Form{% endif %}</th></tr></thead>
+      <tbody id="pmBody"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const ACTIONS = ['view','add','edit','delete','restore','permanent_delete','change_status','approve','post','print','export','report','visible'];
+const ACTION_LABELS = IS_AR
+  ? {view:'عرض',add:'إضافة',edit:'تعديل',delete:'حذف',restore:'استعادة',permanent_delete:'حذف نهائي',change_status:'تغيير الحالة',approve:'اعتماد',post:'ترحيل',print:'طباعة',export:'تصدير',report:'تقرير',visible:'ظاهر'}
+  : {view:'View',add:'Add',edit:'Edit',delete:'Delete',restore:'Restore',permanent_delete:'Perm. Delete',change_status:'Status',approve:'Approve',post:'Post',print:'Print',export:'Export',report:'Report',visible:'Visible'};
+
+let _pending = {}; // permission_id -> allowed
+
+function loadMatrix(){
+  const sel = document.getElementById('pmRole');
+  const roleId = sel.value;
+  const isSuper = sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.code === 'super_admin';
+  document.getElementById('pmSuperAdminNote').style.display = isSuper ? 'block' : 'none';
+  document.getElementById('pmSaveBtn').style.display = (roleId && !isSuper) ? '' : 'none';
+  if(!roleId){ document.getElementById('pmTable').style.display='none'; return; }
+  _pending = {};
+
+  fetch('/admin/permissions/data?role_id=' + roleId).then(r=>r.json()).then(d=>{
+    if(!d.ok){ alert(d.error||'Error'); return; }
+    const headRow = document.getElementById('pmHeadRow');
+    headRow.innerHTML = '<th class="pm-form-col">' + (IS_AR?'النموذج':'Form') + '</th>' +
+      ACTIONS.map(a=>`<th>${ACTION_LABELS[a]}</th>`).join('');
+
+    const body = document.getElementById('pmBody');
+    body.innerHTML = '';
+    d.modules.forEach(mod=>{
+      const modTr = document.createElement('tr');
+      modTr.className = 'pm-mod-row';
+      modTr.innerHTML = `<td colspan="${ACTIONS.length+1}"><i class="fas fa-folder me-1"></i>${IS_AR?mod.label_ar||mod.label_en:mod.label_en}</td>`;
+      body.appendChild(modTr);
+      mod.forms.forEach(frm=>{
+        const tr = document.createElement('tr');
+        let cells = `<td class="pm-form-col">${IS_AR?frm.label_ar||frm.label_en:frm.label_en}</td>`;
+        ACTIONS.forEach(acode=>{
+          const act = frm.actions.find(a=>a.action_code===acode);
+          if(!act){ cells += '<td>-</td>'; return; }
+          const checked = act.allowed ? 'checked' : '';
+          cells += `<td><input type="checkbox" ${checked} ${isSuper?'disabled':''}
+                     onchange="_pending[${act.permission_id}]=this.checked"></td>`;
+        });
+        tr.innerHTML = cells;
+        body.appendChild(tr);
+      });
+    });
+    document.getElementById('pmTable').style.display = '';
+  });
+}
+
+function saveMatrix(){
+  const roleId = document.getElementById('pmRole').value;
+  const changes = Object.keys(_pending).map(pid => ({permission_id: parseInt(pid), allowed: _pending[pid]}));
+  if(!changes.length){ alert(IS_AR?'لا توجد تغييرات':'No changes'); return; }
+  fetch('/admin/permissions/save', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token() }}'},
+    body: JSON.stringify({role_id: parseInt(roleId), changes}),
+  }).then(r=>r.json()).then(d=>{
+    if(d.ok){ alert(IS_AR?'تم الحفظ':'Saved'); _pending={}; loadMatrix(); }
+    else alert(d.error || (IS_AR?'فشل الحفظ':'Save failed'));
+  });
+}
+</script>
+{% endblock %}

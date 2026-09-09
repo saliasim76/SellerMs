@@ -1,0 +1,1422 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}توزيع العمل{% else %}Work Allocation{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+/* ═══════════════════════════════════════════════════════
+   AG Grid - Enterprise Theme with Proledg styling (EXACTLY LIKE EMPLOYEES)
+   ═══════════════════════════════════════════════════════ */
+.ag-theme-alpine {
+    --ag-font-family:'Segoe UI',system-ui,sans-serif;
+    --ag-font-size:13px;
+    --ag-header-background-color:#1e3a5f;
+    --ag-header-foreground-color:#fff;
+    --ag-border-color:#e2e8f0;
+    --ag-row-hover-color:#eff6ff;
+    --ag-selected-row-background-color:#dbeafe;
+    --ag-header-height:44px;
+    --ag-row-height:44px;
+    --ag-cell-horizontal-padding:12px;
+}
+.ag-theme-alpine .ag-header-cell-label {
+    font-weight:700;
+    font-size:11.5px;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    overflow:visible;
+}
+.ag-theme-alpine .ag-header-cell-text {
+    overflow:visible;
+    text-overflow:clip;
+    white-space:nowrap;
+}
+.ag-theme-alpine .ag-header-cell:hover {
+    background:rgba(255,255,255,.08) !important;
+}
+.ag-theme-alpine .ag-sort-ascending-icon,
+.ag-theme-alpine .ag-sort-descending-icon,
+.ag-theme-alpine .ag-sort-none-icon {
+    color:#94a3b8;
+}
+.ag-theme-alpine .ag-header-icon {
+    color:#94a3b8;
+}
+.ag-theme-alpine .ag-filter {
+    border-radius:10px !important;
+    box-shadow:0 8px 30px rgba(0,0,0,.15) !important;
+    border:1px solid #e2e8f0 !important;
+    overflow:hidden;
+    min-width:260px;
+    background:white;
+}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input {
+    border:1.5px solid #d1d5db !important;
+    border-radius:7px !important;
+    padding:6px 10px !important;
+    font-size:12px !important;
+}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input:focus {
+    outline:none !important;
+    border-color:#2563eb !important;
+    box-shadow:0 0 0 2px rgba(37,99,235,.12) !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel {
+    padding:8px 10px !important;
+    background:#f8fafc !important;
+    border-top:1px solid #e2e8f0 !important;
+    display:flex !important;
+    gap:6px !important;
+    justify-content:space-between !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button {
+    padding:5px 14px !important;
+    border-radius:7px !important;
+    font-size:12px !important;
+    font-weight:600 !important;
+    border:none !important;
+    cursor:pointer !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="applyFilterButton"] {
+    background:linear-gradient(135deg,#16a34a,#15803d) !important;
+    color:white !important;
+}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="clearFilterButton"],
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="resetFilterButton"] {
+    background:white !important;
+    color:#374151 !important;
+    border:1.5px solid #d1d5db !important;
+}
+.ag-theme-alpine .ag-floating-filter-input input {
+    border:1px solid #e2e8f0 !important;
+    border-radius:5px !important;
+    padding:3px 7px !important;
+    font-size:11px !important;
+}
+.ag-theme-alpine .ag-floating-filter-input input:focus {
+    outline:none !important;
+    border-color:#2563eb !important;
+}
+.ag-theme-alpine .ag-row-even {
+    background:white;
+}
+.ag-theme-alpine .ag-row-odd {
+    background:#fafbfc;
+}
+.ag-theme-alpine .ag-row-hover {
+    background:#eff6ff !important;
+}
+.ag-theme-alpine .ag-cell {
+    border-right:1px solid #f1f5f9 !important;
+}
+
+/* Action buttons (matching Employees/Suppliers) */
+.ag-ab {
+    width:28px;
+    height:28px;
+    border-radius:7px;
+    border:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    cursor:pointer;
+    transition:all .12s;
+}
+.ag-ab:hover {
+    transform:translateY(-1px);
+    box-shadow:0 2px 6px rgba(0,0,0,.2);
+}
+.ag-ab-view { background:#0ea5e9; color:white; }
+.ag-ab-view:hover { background:#0284c7; }
+.ag-ab-edit { background:#f59e0b; color:white; }
+.ag-ab-edit:hover { background:#d97706; }
+.ag-ab-del { background:#ef4444; color:white; }
+.ag-ab-del:hover { background:#dc2626; }
+
+/* Status pill */
+.st-pill {
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:3px 10px;
+    border-radius:10px;
+    font-size:11px;
+    font-weight:700;
+}
+.st-active { background:#dcfce7; color:#15803d; }
+.st-inactive { background:#f1f5f9; color:#6b7280; }
+.st-open { background:#dbeafe; color:#2563eb; }
+.st-approved { background:#dcfce7; color:#15803d; }
+.st-pending { background:#fef3c7; color:#d97706; }
+.st-closed { background:#f1f5f9; color:#6b7280; }
+.st-cancelled { background:#fee2e2; color:#dc2626; }
+
+/* Toolbar (matching Employees/Suppliers) */
+.toolbar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-bottom:14px;
+}
+.toolbar-left, .toolbar-right {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.tool-btn {
+    width:34px;
+    height:34px;
+    border-radius:7px;
+    border:1.5px solid #d1d5db;
+    background:white;
+    color:#6b7280;
+    cursor:pointer;
+    font-size:13px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+    transition:all .12s;
+}
+.tool-btn:hover {
+    border-color:#2563eb;
+    color:#2563eb;
+    background:#eff6ff;
+}
+.tool-btn-green { background:#16a34a; color:white; border:none; }
+.tool-btn-green:hover { background:#15803d; }
+.tool-btn-blue { background:#2563eb; color:white; border:none; }
+.tool-btn-blue:hover { background:#1d4ed8; }
+.tool-btn-wide { width:auto; padding:0 14px; gap:6px; }
+
+.search-form { position:relative; }
+.search-icon {
+    position:absolute;
+    left:10px;
+    top:50%;
+    transform:translateY(-50%);
+    color:#9ca3af;
+    font-size:12px;
+    z-index:2;
+}
+.search-input {
+    padding:7px 12px 7px 32px;
+    border:1.5px solid #d1d5db;
+    border-radius:7px;
+    font-size:12px;
+    outline:none;
+}
+.search-input:focus { border-color:#2563eb; }
+
+.sel-badge {
+    font-size:11px;
+    color:#6b7280;
+    background:#f1f5f9;
+    padding:4px 10px;
+    border-radius:5px;
+    font-weight:600;
+}
+
+.proledg-pagination {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 16px;
+    background:#f8fafc;
+    border:1px solid #e2e8f0;
+    border-top:none;
+    border-radius:0 0 8px 8px;
+}
+.page-count { font-size:12px; color:#6b7280; font-weight:600; }
+
+/* ── Modal Styles ── */
+.wa-hdr {
+    background:linear-gradient(135deg,#1e3a5f,#2563eb);
+    padding:16px 22px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.wa-hdr h5 { margin:0; color:white; font-weight:700; font-size:15px; }
+.wa-footer {
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    padding:12px 20px;
+    background:#f8fafc;
+    border-top:1px solid #e2e8f0;
+}
+.btn-f {
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:8px 20px;
+    border-radius:7px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    border:none;
+    transition:all .15s;
+}
+.btn-f-green { background:#16a34a; color:white; }
+.btn-f-green:hover { background:#15803d; }
+.btn-f-blue { background:#2563eb; color:white; }
+.btn-f-blue:hover { background:#1d4ed8; }
+.btn-f-cancel { background:white; color:#374151; border:1.5px solid #d1d5db; }
+.btn-f-cancel:hover { background:#f9fafb; }
+
+.wa-section {
+    border:1px solid #e2e8f0;
+    border-radius:8px;
+    overflow:hidden;
+    margin-bottom:12px;
+}
+.wa-section-hdr {
+    width:100%;
+    background:white;
+    border:none;
+    padding:12px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    cursor:pointer;
+    font-size:13px;
+    font-weight:600;
+    color:#374151;
+    text-align:left;
+}
+.wa-section-hdr:hover { background:#f8fafc; }
+.wa-section-hdr .sec-icon {
+    width:28px;
+    height:28px;
+    border-radius:6px;
+    background:#f3f4f6;
+    color:#6b7280;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    margin-right:10px;
+}
+.wa-section-hdr.open .sec-icon {
+    background:#dcfce7;
+    color:#16a34a;
+}
+.wa-section-body {
+    padding:16px;
+    border-top:1px solid #e2e8f0;
+    display:none;
+}
+.wa-section-body.show { display:block; }
+
+.f-row {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-bottom:12px;
+}
+.f-row3 {
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:14px;
+    margin-bottom:12px;
+}
+.f-item { display:flex; flex-direction:column; }
+.f-lbl {
+    font-size:11px;
+    font-weight:700;
+    color:#374151;
+    margin-bottom:5px;
+    text-transform:uppercase;
+    letter-spacing:.3px;
+}
+.f-req { color:#ef4444; }
+.f-inp {
+    border:1.5px solid #d1d5db;
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:13px;
+    width:100%;
+    background:white;
+    font-family:inherit;
+}
+.f-inp:focus {
+    outline:none;
+    border-color:#2563eb;
+    box-shadow:0 0 0 3px rgba(37,99,235,.1);
+}
+select.f-inp {
+    appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    padding-right:32px;
+}
+.bi-wrap {
+    position:relative;
+    display:flex;
+    align-items:center;
+}
+.bi-inp {
+    border:1.5px solid #d1d5db;
+    border-radius:8px;
+    padding:8px 34px 8px 12px;
+    font-size:13px;
+    width:100%;
+    font-family:inherit;
+}
+.bi-inp:focus {
+    outline:none;
+    border-color:#2563eb;
+    box-shadow:0 0 0 3px rgba(37,99,235,.1);
+}
+.bi-inp-ar {
+    background:#f8faf9;
+    direction:rtl;
+    padding:8px 12px 8px 34px;
+}
+.bi-btn {
+    position:absolute;
+    right:6px;
+    width:22px;
+    height:22px;
+    border-radius:5px;
+    border:1px solid #bfdbfe;
+    background:#eff6ff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    font-size:10px;
+    color:#2563eb;
+}
+.bi-btn-ar {
+    right:auto;
+    left:6px;
+    background:#f0fdf4;
+    border-color:#bbf7d0;
+    color:#16a34a;
+}
+
+.mcq-grp {
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.mcq-opt {
+    padding:6px 16px;
+    border-radius:20px;
+    border:1.5px solid #d1d5db;
+    cursor:pointer;
+    font-size:12px;
+    font-weight:600;
+    color:#374151;
+    background:white;
+}
+.mcq-opt.on {
+    border-color:#16a34a;
+    background:#f0fdf4;
+    color:#16a34a;
+}
+
+.emp-chips-wrap {
+    min-height:44px;
+    border:1.5px solid #d1d5db;
+    border-radius:8px;
+    padding:6px 10px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    align-items:center;
+    background:white;
+    cursor:pointer;
+}
+.emp-chips-wrap:hover { border-color:#2563eb; }
+.emp-chip {
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    background:#eff6ff;
+    color:#1d4ed8;
+    border:1px solid #bfdbfe;
+    border-radius:20px;
+    padding:3px 10px;
+    font-size:12px;
+    font-weight:600;
+}
+.emp-chip-remove {
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    border:none;
+    background:#bfdbfe;
+    color:#1d4ed8;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:9px;
+    padding:0;
+    line-height:1;
+}
+.emp-chip-remove:hover { background:#93c5fd; }
+
+/* ── Picker Modal ── */
+.picker-grid.ag-theme-alpine {
+    --ag-header-height:40px;
+    --ag-row-height:40px;
+    --ag-font-size:13px;
+}
+.sel-footer {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 20px;
+    background:#f8fafc;
+    border-top:1px solid #e2e8f0;
+}
+
+/* ── View Modal ── */
+.vw-sec {
+    font-size:11px;
+    font-weight:700;
+    color:#2563eb;
+    margin:14px 0 8px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+}
+.vw-sec::after {
+    content:'';
+    flex:1;
+    height:1px;
+    background:#e2e8f0;
+}
+.vw-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+.vw-item {
+    background:#f8fafc;
+    border-radius:7px;
+    padding:9px 12px;
+    border-left:3px solid #2563eb;
+}
+.vw-label {
+    font-size:10px;
+    font-weight:700;
+    color:#6b7280;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    margin-bottom:3px;
+}
+.vw-value {
+    font-size:13px;
+    font-weight:600;
+    color:#111827;
+}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}توزيع العمل{% else %}Work Allocation{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}توزيع العمل{% else %}Work Allocation{% endif %}</h2>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-wide tool-btn-green" onclick="openAddWA('new')" title="{% if ar %}إضافة موظف جديد{% else %}Add New Employee{% endif %}"><i class="fas fa-user-plus"></i> {% if ar %}موظف جديد{% else %}New Employee{% endif %}</button>
+      <button class="tool-btn tool-btn-wide tool-btn-orange" onclick="openAddWA('old')" title="{% if ar %}إضافة موظف قديم{% else %}Add Old Employee{% endif %}"><i class="fas fa-user-clock"></i> {% if ar %}موظف قديم{% else %}Old Employee{% endif %}</button>
+      {% endif %}
+      <button class="tool-btn tool-btn-blue" onclick="loadData()"><i class="fas fa-sync-alt"></i></button>
+      <a class="tool-btn tool-btn-teal" href="/io/work-allocations/export?fmt=xlsx" style="text-decoration:none;" title="{% if ar %}تصدير Excel{% else %}Export Excel{% endif %}"><i class="fas fa-file-excel"></i></a>
+      <a class="tool-btn tool-btn-purple" href="/io/work-allocations/template?fmt=xlsx" style="text-decoration:none;" title="Template"><i class="fas fa-file-download"></i></a>
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-orange" title="{% if ar %}استيراد{% else %}Import{% endif %}" onclick="document.getElementById('waImp').click()"><i class="fas fa-file-import"></i></button>
+      <input type="file" id="waImp" accept=".xlsx,.xlsm" style="display:none;" onchange="ioImport(this,'work-allocations')">
+      {% endif %}
+      <button class="tool-btn tool-btn-gray" onclick="gridApi&&gridApi.setFilterModel(null)"><i class="fas fa-times-circle"></i></button>
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-red" id="btnBulkDelWA" style="display:none;" onclick="confBulkDelWA()" title="{% if ar %}حذف المحدد{% else %}Delete Selected{% endif %}"><i class="fas fa-trash-alt"></i> <span id="bulkDelWACount"></span></button>
+      {% endif %}
+    </div>
+    <div class="toolbar-right d-flex align-items-center gap-3">
+      <div class="sel-badge"><span id="selText">0 {% if ar %}سجل{% else %}records{% endif %}</span></div>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">
+    <div id="waGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:520px;"></div>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count" id="pageInfo">–</span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-muted">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="gridApi&&gridApi.setGridOption('paginationPageSize',+this.value)">
+        <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+{# ══ ADD / EDIT MODAL ═══════════════════════════════════════════ #}
+<div class="modal fade" id="waModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" style="border:none;border-radius:8px;overflow:hidden;">
+      <div class="wa-hdr">
+        <h5 id="waModalTitle"><i class="fas fa-tasks me-2"></i>{% if ar %}إضافة تخصيص عمل{% else %}Add Work Allocation{% endif %}</h5>
+        <button type="button" class="btn-close" style="filter:brightness(0) invert(1);" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body p-0">
+        <form id="waForm" method="POST" action="{{ url_for('work_allocations.add_wa') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" id="waFormId" name="_wa_id">
+          <div id="selectedEmpInputs"></div>
+          <div style="padding:16px 20px;">
+
+            {# ── One panel: Work Information (multi-employee) ── #}
+            <div class="wa-section">
+              <button type="button" class="wa-section-hdr open" onclick="togSec('sec_work')">
+                <div style="display:flex;align-items:center;">
+                  <div class="sec-icon"><i class="fas fa-briefcase"></i></div>
+                  {% if ar %}معلومات العمل / Work Information{% else %}Work Information / معلومات العمل{% endif %}
+                </div>
+                <i class="fas fa-chevron-up" id="chevron_sec_work" style="color:#2563eb;font-size:12px;"></i>
+              </button>
+              <div class="wa-section-body show" id="sec_work">
+
+                {# Employees — multiple, saved in one go #}
+                <div style="margin-bottom:14px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <div class="f-lbl">{% if ar %}الموظفون المحددون (يمكن اختيار أكثر من موظف){% else %}Selected Employees (multiple allowed){% endif %} <span class="f-req">*</span></div>
+                    <div style="display:flex;gap:6px;">
+                      <button type="button" class="btn btn-sm btn-outline-success" style="font-size:11px;padding:3px 10px;" onclick="openPickerModal()">
+                        <i class="fas fa-search me-1"></i>{% if ar %}اختر الموظفين{% else %}Pick Employees{% endif %}
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size:11px;padding:3px 10px;" onclick="clearAllEmps()">
+                        <i class="fas fa-times me-1"></i>{% if ar %}مسح الكل{% else %}Clear All{% endif %}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="emp-chips-wrap" id="empChipsWrap" onclick="openPickerModal()">
+                    <span id="empChipsPlaceholder" style="color:#9ca3af;font-size:13px;">{% if ar %}انقر لاختيار الموظفين...{% else %}Click to pick employees...{% endif %}</span>
+                  </div>
+                  <div id="empRequired" style="color:#dc2626;font-size:12px;margin-top:4px;display:none;">
+                    {% if ar %}يرجى اختيار موظف واحد على الأقل{% else %}Please select at least one employee{% endif %}
+                  </div>
+                </div>
+
+                {# Company -> Department -> Location, the same cascade as the employee form #}
+                <div class="f-row">
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}الشركة{% else %}Company{% endif %} <span class="f-req">*</span></div>
+                    <select name="buyer_id" id="wa_buyer" class="f-inp" required onchange="waCompanyChange()">
+                      <option value="">{% if ar %}-- اختر الشركة --{% else %}-- Select Company --{% endif %}</option>
+                    </select>
+                  </div>
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}القسم{% else %}Department{% endif %}</div>
+                    <select id="wa_department_id" class="f-inp" onchange="waDeptChange()" disabled>
+                      <option value="">-- {% if ar %}اختر الشركة أولاً{% else %}Select a company first{% endif %} --</option>
+                    </select>
+                    <input type="hidden" name="department" id="wa_department_en">
+                    <input type="hidden" name="department_ar" id="wa_department_ar">
+                  </div>
+                </div>
+
+                <div class="f-row">
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}الموقع (EN){% else %}Location{% endif %}</div>
+                    <input type="text" name="section" id="wa_location_en" class="f-inp" dir="ltr"
+                           readonly style="background:#f8fafc;"
+                           title="{% if ar %}يُملأ تلقائياً من القسم{% else %}Filled from the selected department{% endif %}">
+                  </div>
+                  <div class="f-item">
+                    <div class="f-lbl" dir="rtl" style="text-align:right">{% if ar %}الموقع{% else %}الموقع (AR){% endif %}</div>
+                    <input type="text" name="section_ar" id="wa_location_ar" class="f-inp" dir="rtl"
+                           readonly style="background:#f8fafc;"
+                           title="{% if ar %}يُملأ تلقائياً من القسم{% else %}Filled from the selected department{% endif %}">
+                  </div>
+                </div>
+
+                <div class="f-row3">
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}تاريخ انتهاء السجل السابق{% else %}Previous Record End Date{% endif %}</div>
+                    <input type="date" name="prev_end_date" id="wa_prev_end" class="f-inp" dir="ltr">
+                    <input type="hidden" name="prev_wa_id" id="wa_prev_id">
+                    <div id="wa_prev_hint" style="font-size:10px;color:#94a3b8;margin-top:2px;"></div>
+                  </div>
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}تاريخ الانضمام{% else %}Joining Date{% endif %}</div>
+                    <input type="date" name="joining_date" id="wa_joining" class="f-inp" dir="ltr" onchange="checkPrevEnd()">
+                  </div>
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}تاريخ الانتهاء{% else %}End Date{% endif %}</div>
+                    <input type="date" name="end_date" id="wa_end" class="f-inp" dir="ltr">
+                  </div>
+                </div>
+
+                <div class="f-row">
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div>
+                    <select name="status" id="wa_status" class="f-inp">
+                      <option value="active" selected>{% if ar %}نشيط{% else %}Active{% endif %}</option>
+                      <option value="inactive">{% if ar %}غير نشيط{% else %}Inactive{% endif %}</option>
+                    </select>
+                  </div>
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}الوردية{% else %}Shift{% endif %}</div>
+                    <select name="shift_type" id="wa_shift" class="f-inp">
+                      <option value="day" selected>{% if ar %}نهاري{% else %}Day{% endif %}</option>
+                      <option value="night">{% if ar %}ليلي{% else %}Night{% endif %}</option>
+                    </select>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </form>
+      </div>
+
+      <div class="wa-footer">
+        <button type="button" class="btn-f btn-f-cancel" onclick="resetWAForm()"><i class="fas fa-redo me-1"></i>{% if ar %}إعادة{% else %}Reset{% endif %}</button>
+        <button type="button" class="btn-f btn-f-cancel" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" class="btn-f btn-f-green" onclick="submitWA()">
+          <i class="fas fa-check me-1"></i>{% if ar %}حفظ / Save{% else %}Save / حفظ{% endif %}
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# ══ EMPLOYEE PICKER MODAL (nested) ═════════════════════════════ #}
+<div class="modal fade" id="pickerModal" tabindex="-1" style="z-index:1070;">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width:900px;">
+    <div class="modal-content" style="border:none;border-radius:8px;overflow:hidden;">
+      <div style="background:white;padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:700;font-size:15px;color:#111827;">
+          <i class="fas fa-search me-2" style="color:#16a34a;"></i>
+          {% if ar %}اختر الموظف / Select Employees{% else %}Select Employees / اختر الموظف{% endif %}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size:11px;" onclick="pickerGridApi&&pickerGridApi.setFilterModel(null)">
+            <i class="fas fa-filter me-1"></i>{% if ar %}مسح الفلاتر{% else %}Clear Filters{% endif %}
+          </button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+      </div>
+      <div style="padding:0;">
+        <div id="pickerGrid" class="ag-theme-alpine picker-grid" style="width:100%;height:400px;"></div>
+      </div>
+      <div class="sel-footer">
+        <div style="font-size:13px;font-weight:600;color:#374151;">
+          {% if ar %}المحدد:{% else %}Selected:{% endif %} <span id="pickerSelCount" style="color:#16a34a;font-weight:700;">0</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn-f btn-f-cancel" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+          <button type="button" class="btn-f btn-f-green" onclick="confirmPickedEmps()">
+            <i class="fas fa-check me-1"></i><span id="pickerAddBtn">{% if ar %}إضافة المحددين (0){% else %}Add Selected (0){% endif %}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ══ VIEW MODAL ══════════════════════════════════════════════════ #}
+<div class="modal fade" id="viewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="border:none;border-radius:8px;overflow:hidden;">
+      <div class="wa-hdr" style="background:linear-gradient(135deg,#d97706,#b45309);">
+        <h5><i class="fas fa-eye me-2"></i>{% if ar %}تفاصيل تخصيص العمل{% else %}Work Allocation Details{% endif %}</h5>
+        <button type="button" class="btn-close" style="filter:brightness(0) invert(1);" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="viewBody" style="padding:20px 24px;"></div>
+      <div class="wa-footer">
+        <button type="button" class="btn-f btn-f-cancel" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>{% if ar %}إغلاق{% else %}Close{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Delete #}
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog modal-sm"><div class="modal-content">
+    <div class="modal-header border-0"><h6 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>{% if ar %}تأكيد الحذف{% else %}Confirm Delete{% endif %}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><p id="delTxt" class="mb-0 fw-semibold"></p></div>
+    <div class="modal-footer border-0">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+      <form id="delForm" method="POST" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-sm btn-danger">{% if ar %}حذف{% else %}Delete{% endif %}</button></form>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const TR       = '{{ url_for("sellers.translate_text") }}';
+const CSRF     = '{{ csrf_token() }}';
+const IS_AR    = {{ 'true' if ar else 'false' }};
+const ADM      = {{ 'true' if current_user.is_admin() else 'false' }};
+const DATA_URL = '{{ url_for("work_allocations.wa_data") }}';
+const EMP_URL  = '{{ url_for("work_allocations.wa_employees") }}';
+const ADD_URL  = '{{ url_for("work_allocations.add_wa") }}';
+const BUY_URL  = '{{ url_for("lookups.buyers_data") }}';
+
+let _empCache = null, _buyerCache = null;
+let _selEmps  = new Map(); // id → employee object
+let _isEdit   = false;
+let _editId   = null;
+
+/* ══ Load data ══ */
+function loadEmps(cb) {
+  if (_empCache) { cb(_empCache); return; }
+  fetch(EMP_URL).then(r=>r.json()).then(d=>{ _empCache=d; cb(d); }).catch(()=>cb([]));
+}
+function loadBuyers(cb) {
+  if (_buyerCache) { cb(_buyerCache); return; }
+  fetch(BUY_URL).then(r=>r.json()).then(d=>{ _buyerCache=d; cb(d); }).catch(()=>cb([]));
+}
+function fillBuyerDropdown(selectedId) {
+  loadBuyers(buyers=>{
+    const sel=document.getElementById('wa_buyer');
+    sel.innerHTML=`<option value="">${IS_AR?'-- اختر المشتري --':'-- Select Buyer / HR --'}</option>`;
+    buyers.forEach(b=>sel.innerHTML+=`<option value="${b.id}"${b.id==selectedId?' selected':''}>${b.label||b.en}</option>`);
+  });
+}
+
+/* ══ Accordion sections ══ */
+function togSec(id) {
+  const body=document.getElementById(id);
+  const btn=body.previousElementSibling;
+  const chevron=document.getElementById('chevron_'+id);
+  const isOpen=body.classList.contains('show');
+  body.classList.toggle('show',!isOpen);
+  btn.classList.toggle('open',!isOpen);
+  if(chevron) { chevron.className=isOpen?'fas fa-chevron-down':'fas fa-chevron-up'; chevron.style.color='#9ca3af'; chevron.style.fontSize='12px'; }
+}
+
+/* ══ MCQ ══ */
+function pickMCQ(grpId,el,hidId,val) {
+  document.querySelectorAll('#'+grpId+' .mcq-opt').forEach(o=>o.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById(hidId).value=val;
+}
+
+/* ══ Previous-record end date ══ */
+function checkPrevEnd() {
+  const prev = document.getElementById('wa_prev_end');
+  const join = document.getElementById('wa_joining');
+  const hint = document.getElementById('wa_prev_hint');
+  if (!prev || !join) return;
+  if (prev.value && join.value && prev.value > join.value) {
+    prev.style.borderColor = '#dc2626';
+    if (hint) { hint.style.color = '#dc2626';
+      hint.textContent = IS_AR ? 'لا يمكن أن يكون بعد تاريخ الانضمام' : 'Cannot be later than joining date'; }
+    return false;
+  }
+  prev.style.borderColor = '';
+  if (hint) { hint.style.color = '#94a3b8';
+    hint.textContent = _prevHintDefault || ''; }
+  return true;
+}
+let _prevHintDefault = '';
+
+/* ══ Translation ══ */
+const _tTimers={};
+function waTrans(srcId,tgtId,sl) {
+  if (!IS_AR&&sl==='ar') return;
+  if ( IS_AR&&sl==='en') return;
+  clearTimeout(_tTimers[tgtId]);
+  const src=document.getElementById(srcId),tgt=document.getElementById(tgtId);
+  const text=src?src.value.trim():'';
+  if (!text){if(tgt)tgt.value='';return;}
+  _tTimers[tgtId]=setTimeout(()=>{
+    fetch(TR,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+              body:JSON.stringify({text,direction:`${sl}|${sl==='en'?'ar':'en'}`})})
+    .then(r=>r.json()).then(d=>{if(d.translated&&tgt)tgt.value=d.translated;}).catch(()=>{});
+  },700);
+}
+function waRetrans(tgtId,srcId,tl) {
+  const src=document.getElementById(srcId),tgt=document.getElementById(tgtId);
+  const text=src?src.value.trim():'';
+  if (!text||!tgt) return;
+  fetch(TR,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+            body:JSON.stringify({text,direction:`${tl==='ar'?'en':'ar'}|${tl}`})})
+  .then(r=>r.json()).then(d=>{if(d.translated)tgt.value=d.translated;});
+}
+
+/* ══ Employee chips ══ */
+function renderChips() {
+  const wrap=document.getElementById('empChipsWrap');
+  const ph=document.getElementById('empChipsPlaceholder');
+  if (_selEmps.size===0) {
+    wrap.innerHTML='';
+    wrap.appendChild(ph||Object.assign(document.createElement('span'),{style:'color:#9ca3af;font-size:13px;',textContent:IS_AR?'انقر لاختيار الموظفين...':'Click to pick employees...'}));
+    return;
+  }
+  wrap.innerHTML='';
+  _selEmps.forEach((e,id)=>{
+    const chip=document.createElement('span');
+    chip.className='emp-chip';
+    chip.innerHTML=`${e.employee_code}<button type="button" class="emp-chip-remove" onclick="removeChip(${id});event.stopPropagation();"><i class="fas fa-times" style="font-size:8px;"></i></button>`;
+    wrap.appendChild(chip);
+  });
+  syncPrevEndState();
+}
+
+/* Prev-end field state, governed by mode. End date stays disabled always. */
+function syncPrevEndState() {
+  const prev = document.getElementById('wa_prev_end');
+  const prevId = document.getElementById('wa_prev_id');
+  const hint = document.getElementById('wa_prev_hint');
+  const endEl = document.getElementById('wa_end');
+  if (endEl) endEl.disabled = true;   // new record always active
+  if (!prev) return;
+  const emps = Array.from(_selEmps.values());
+
+  // NEW mode: previous end date is never applicable.
+  if (_waMode === 'new') {
+    prev.value=''; prev.disabled=true; prev.style.borderColor='';
+    if (prevId) prevId.value='';
+    if (hint) { hint.style.color='#94a3b8';
+      hint.textContent = emps.length ? (IS_AR?'موظف جديد — لا يوجد سجل سابق':'New employee — no previous record') : ''; }
+    _prevHintDefault='';
+    return;
+  }
+
+  // OLD mode: single employee, editable prev-end pre-filled from last record.
+  prev.disabled = false;
+  if (emps.length === 1) {
+    const e = emps[0];
+    prev.value = e.last_end_date || '';
+    if (prevId) prevId.value = e.last_wa_id || '';
+    _prevHintDefault = e.last_end_date
+      ? (IS_AR?'تاريخ انتهاء السجل السابق':'Previous record end date')
+      : (IS_AR?'السجل السابق بدون تاريخ انتهاء — يمكنك إضافته':'Previous record has no end date — you can set it');
+    if (hint) { hint.style.color='#94a3b8'; hint.textContent=_prevHintDefault; }
+  } else if (emps.length === 0) {
+    prev.value=''; if (prevId) prevId.value='';
+    if (hint) { hint.style.color='#94a3b8'; hint.textContent=''; }
+  } else {
+    // more than one in old mode (shouldn't happen with single-select) -> warn
+    if (prevId) prevId.value='';
+    if (hint) { hint.style.color='#dc2626';
+      hint.textContent = IS_AR?'اختر موظفاً واحداً فقط':'Select only one employee'; }
+  }
+}
+function removeChip(id) {
+  _selEmps.delete(id);
+  renderChips();
+}
+function clearAllEmps() {
+  _selEmps.clear();
+  renderChips();
+  if (pickerGridApi) pickerGridApi.deselectAll();
+}
+
+/* ══ Employee Picker Modal ══ */
+let pickerGridApi = null;
+
+function openPickerModal() {
+  loadEmps(all=>{
+    // Filter by mode: 'new' -> no history; 'old' -> has history.
+    const emps = all.filter(e => _waMode === 'old' ? e.has_history : !e.has_history);
+    if (pickerGridApi) {
+      pickerGridApi.setGridOption('rowData', emps);
+      setTimeout(()=>{
+        pickerGridApi.forEachNode(node=>{
+          if (_selEmps.has(node.data.id)) node.setSelected(true,false);
+        });
+        updatePickerCount();
+      },100);
+    } else {
+      initPickerGrid(emps);
+    }
+    // In 'old' mode only one employee may be picked -> single row selection.
+    if (pickerGridApi) {
+      pickerGridApi.setGridOption('rowSelection', _waMode === 'old' ? 'single' : 'multiple');
+    }
+  });
+  new bootstrap.Modal(document.getElementById('pickerModal')).show();
+}
+
+function initPickerGrid(emps) {
+  const pickerCols = [
+    {headerName:'',field:'_chk',width:50,checkboxSelection:true,headerCheckboxSelection:true,suppressMenu:true,sortable:false,resizable:false,floatingFilter:false},
+    {headerName:IS_AR?'الكود':'Code',field:'employee_code',width:130,filter:'agTextColumnFilter',floatingFilter:true},
+    {headerName:IS_AR?'الاسم':'Name',field:'name',minWidth:160,filter:'agTextColumnFilter',floatingFilter:true},
+    {headerName:IS_AR?'الاسم (AR)':'الاسم',field:'name_ar',minWidth:160,cellStyle:{direction:'rtl',textAlign:'right'},filter:'agTextColumnFilter',floatingFilter:true},
+    {headerName:IS_AR?'المهنة':'Profession',field:'profession',width:130,filter:'agTextColumnFilter',floatingFilter:true},
+    {headerName:IS_AR?'القسم':'Department',field:'department',width:130,filter:'agTextColumnFilter',floatingFilter:true},
+    {headerName:IS_AR?'الجنسية':'Nationality',field:'nationality',width:120,filter:'agTextColumnFilter',floatingFilter:true},
+  ];
+  
+  // Bilingual AG-Grid locale
+  const _agLocale = IS_AR ? {
+    filterOoo:'تصفية...',equals:'يساوي',notEqual:'لا يساوي',contains:'يحتوي على',
+    notContains:'لا يحتوي على',startsWith:'يبدأ بـ',endsWith:'ينتهي بـ',
+    blank:'فارغ',notBlank:'غير فارغ',lessThan:'أقل من',greaterThan:'أكبر من',
+    applyFilter:'تطبيق',clearFilter:'مسح',resetFilter:'إعادة تعيين',
+    addFilterCondition:'+ إضافة قاعدة',matchAll:'يطابق الكل',
+    matchAny:'يطابق أي',andCondition:'و',orCondition:'أو',
+    noRowsToShow:'لا توجد بيانات',loadingOoo:'جاري التحميل...',searchOoo:'بحث...',
+    sortAscending:'تصاعدي',sortDescending:'تنازلي',
+  } : {
+    filterOoo:'Filter...',applyFilter:'Apply',clearFilter:'Clear',
+    resetFilter:'Reset',addFilterCondition:'+ Add Rule',
+    matchAll:'Match All',matchAny:'Match Any',
+    noRowsToShow:'No records found',searchOoo:'Search...',
+  };
+  agGrid.createGrid(document.getElementById('pickerGrid'),{
+    columnDefs:pickerCols, multiSortKey:'ctrl', rowData:emps,
+    rowSelection:'multiple', suppressRowClickSelection:true,
+    animateRows:true, localeText:_agLocale, enableRtl:IS_AR,
+    defaultColDef:{sortable:true,unSortIcon:true,resizable:true,filterParams:{buttons:['apply','reset','clear'],closeOnApply:true,maxNumConditions:10}},
+    onSelectionChanged: updatePickerCount,
+    getRowStyle:p=>p.node.rowIndex%2===0?{background:'#fff'}:{background:'#fafbfc'},
+    onGridReady(p){
+      pickerGridApi=p.api;
+      // Pre-select already selected employees
+      pickerGridApi.forEachNode(node=>{
+        if (_selEmps.has(node.data.id)) node.setSelected(true);
+      });
+      updatePickerCount();
+    },
+  });
+}
+
+function updatePickerCount() {
+  const cnt = pickerGridApi ? pickerGridApi.getSelectedRows().length : 0;
+  const el = document.getElementById('pickerSelCount');
+  if (el) el.textContent = cnt;
+  const btn = document.getElementById('pickerAddBtn');
+  if (btn) btn.textContent = IS_AR?`إضافة المحددين (${cnt})`:`Add Selected (${cnt})`;
+}
+
+function confirmPickedEmps() {
+  if (!pickerGridApi) return;
+  const selected = pickerGridApi.getSelectedRows();
+  selected.forEach(e => _selEmps.set(e.id, e));
+  renderChips();
+  bootstrap.Modal.getInstance(document.getElementById('pickerModal')).hide();
+}
+
+/* ══ Company -> Department -> Location cascade (same as the employee form) ══ */
+function waCompanyChange() {
+  const b = document.getElementById('wa_buyer');
+  waLoadDepartments(b ? b.value : '', null);
+}
+
+function waLoadDepartments(buyerId, _unused, preDeptEn, preDeptAr, preLoc, preLocAr) {
+  const sel = document.getElementById('wa_department_id');
+  if (!sel) return;
+  // clear the dependent fields
+  ['wa_department_en','wa_department_ar','wa_location_en','wa_location_ar']
+    .forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+
+  if (!buyerId) {
+    sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'اختر الشركة أولاً' : 'Select a company first') + ' --</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.innerHTML = '<option value="">' + (IS_AR ? '-- جارٍ التحميل --' : '-- Loading --') + '</option>';
+  sel.disabled = true;
+
+  fetch('/employees/departments-by-buyer?buyer_id=' + encodeURIComponent(buyerId))
+    .then(r => r.json())
+    .then(list => {
+      if (!list.length) {
+        sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'لا توجد أقسام لهذه الشركة' : 'No departments for this company') + ' --</option>';
+        sel.disabled = true;
+        return;
+      }
+      let html = '<option value="">' + (IS_AR ? '-- اختر القسم --' : '-- Select a department --') + '</option>';
+      list.forEach(d => {
+        const isSel = (preDeptEn && d.name === preDeptEn) ? ' selected' : '';
+        html += `<option value="${d.id}" data-en="${d.name}" data-ar="${d.name_ar || ''}"`
+              + ` data-loc="${d.location_name || ''}" data-loc-ar="${d.location_name_ar || ''}"${isSel}>${d.label}</option>`;
+      });
+      sel.innerHTML = html;
+      sel.disabled = false;
+      waDeptChange();
+      // in edit mode, fall back to the saved values if the dept no longer matches
+      if (preDeptEn && !sel.value) {
+        document.getElementById('wa_department_en').value = preDeptEn || '';
+        document.getElementById('wa_department_ar').value = preDeptAr || '';
+        document.getElementById('wa_location_en').value   = preLoc || '';
+        document.getElementById('wa_location_ar').value   = preLocAr || '';
+      }
+    })
+    .catch(() => {
+      sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'تعذر التحميل' : 'Could not load') + ' --</option>';
+      sel.disabled = true;
+    });
+}
+
+function waDeptChange() {
+  const sel = document.getElementById('wa_department_id');
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const real = opt && opt.value;
+  document.getElementById('wa_department_en').value = real ? (opt.dataset.en || '') : '';
+  document.getElementById('wa_department_ar').value = real ? (opt.dataset.ar || '') : '';
+  // Location auto-fills from the department
+  document.getElementById('wa_location_en').value   = real ? (opt.dataset.loc || '') : '';
+  document.getElementById('wa_location_ar').value   = real ? (opt.dataset.locAr || '') : '';
+}
+
+/* ══ Reset WA form ══ */
+function resetWAForm() {
+  _selEmps.clear(); renderChips();
+  ['wa_prev_end','wa_prev_id','wa_joining','wa_end','wa_department_en','wa_department_ar',
+   'wa_location_en','wa_location_ar'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const ph=document.getElementById('wa_prev_hint'); if(ph) ph.textContent='';
+  const pe=document.getElementById('wa_prev_end'); if(pe){ pe.disabled=false; pe.style.borderColor=''; }
+  document.getElementById('wa_buyer').value='';
+  const ds=document.getElementById('wa_department_id');
+  if(ds){ ds.innerHTML='<option value="">-- '+(IS_AR?'اختر الشركة أولاً':'Select a company first')+' --</option>'; ds.disabled=true; }
+  document.getElementById('wa_status').value='active';
+  document.getElementById('wa_shift').value='day';
+  document.getElementById('empRequired').style.display='none';
+}
+
+/* ══ Open Add ══ */
+let _waMode = 'new';   // 'new' = employees without history; 'old' = with history
+function openAddWA(mode) {
+  _waMode = (mode === 'old') ? 'old' : 'new';
+  _isEdit=false; _editId=null;
+  _empCache = null;   // force reload so the filtered picker is fresh
+  const titleTxt = _waMode === 'old'
+    ? (IS_AR?'إضافة موظف قديم':'Add Old Employee')
+    : (IS_AR?'إضافة موظف جديد':'Add New Employee');
+  document.getElementById('waModalTitle').innerHTML='<i class="fas fa-plus-circle me-2"></i>'+titleTxt;
+  document.getElementById('waForm').action=ADD_URL;
+  resetWAForm();
+  fillBuyerDropdown(null);
+  applyModeFieldStates();
+  // Open Employee section, close Work section
+  document.getElementById('sec_work').classList.remove('show');
+  new bootstrap.Modal(document.getElementById('waModal')).show();
+}
+
+/* Field states per mode. End Date is ALWAYS disabled (new record stays active).
+   Previous End Date is editable only in 'old' mode. */
+function applyModeFieldStates() {
+  const endEl  = document.getElementById('wa_end');
+  const prevEl = document.getElementById('wa_prev_end');
+  const hint   = document.getElementById('wa_prev_hint');
+  if (endEl) { endEl.value=''; endEl.disabled=true; endEl.title = IS_AR?'يبقى السجل الجديد نشطاً':'New record stays active'; }
+  if (_waMode === 'old') {
+    if (prevEl) prevEl.disabled = false;   // will be pre-filled on employee select
+  } else {
+    if (prevEl) { prevEl.value=''; prevEl.disabled = true; }
+    if (hint) hint.textContent = IS_AR?'موظف جديد — لا يوجد سجل سابق':'New employee — no previous record';
+  }
+}
+
+/* ══ Open Edit ══ */
+function openEditWA(id) {
+  _isEdit=true; _editId=id;
+  fetch(`/work-allocations/${id}/json`).then(r=>r.json()).then(d=>{
+    document.getElementById('waModalTitle').innerHTML='<i class="fas fa-edit me-2"></i>'+(IS_AR?'تعديل تخصيص العمل':'Edit Work Allocation');
+    document.getElementById('waForm').action=`/work-allocations/${id}/edit`;
+    document.getElementById('waFormId').value=id;
+    // Set selected employee
+    _selEmps.clear();
+    if (_empCache) {
+      const e=_empCache.find(x=>x.id===d.employee_id);
+      if(e) _selEmps.set(e.id,e);
+    } else {
+      loadEmps(emps=>{const e=emps.find(x=>x.id===d.employee_id);if(e){_selEmps.set(e.id,e);renderChips();}});
+    }
+    renderChips();
+    fillBuyerDropdown(d.buyer_id);
+    // Fill work info
+    ['company','department','section'].forEach(f=>{
+      const eEl=document.getElementById('wa_'+f+'_en');const aEl=document.getElementById('wa_'+f+'_ar');
+      if(eEl) eEl.value=d[f]||''; if(aEl) aEl.value=d[f+'_ar']||'';
+    });
+    document.getElementById('wa_joining').value=d.joining_date||'';
+    document.getElementById('wa_end').value=d.end_date||'';
+    document.getElementById('wa_status').value = d.status || 'active';
+    const _sh = (d.shift_type === 'night') ? 'night' : 'day';   // rotating is gone
+    document.getElementById('wa_shift').value = _sh;
+    // rebuild the department cascade for this buyer, preselecting the saved one
+    waLoadDepartments(d.buyer_id || '', null, d.department || '', d.department_ar || '',
+                      d.section || '', d.section_ar || '');
+    document.getElementById('sec_work').classList.add('show');
+    new bootstrap.Modal(document.getElementById('waModal')).show();
+  });
+}
+
+/* ══ Submit WA ══ */
+function submitWA() {
+  // Validate employees
+  if (_selEmps.size===0) {
+    document.getElementById('empRequired').style.display='block';
+    return;
+  }
+  document.getElementById('empRequired').style.display='none';
+
+  // Validate buyer
+  const buyer = document.getElementById('wa_buyer');
+  if (!buyer.value) {
+    buyer.style.borderColor='#dc2626';
+    buyer.style.boxShadow='0 0 0 3px rgba(220,38,38,.1)';
+    buyer.scrollIntoView({behavior:'smooth', block:'center'});
+    buyer.focus();
+    return;
+  }
+  buyer.style.borderColor='';
+  buyer.style.boxShadow='';
+
+  const emps = Array.from(_selEmps.values());
+  const joinEl = document.getElementById('wa_joining');
+
+  if (_waMode === 'old') {
+    // Old mode: exactly one employee, prev-end must be <= joining date.
+    if (emps.length !== 1) {
+      alert(IS_AR?'وضع الموظف القديم: اختر موظفاً واحداً فقط.':'Old Employee mode: pick exactly one employee.');
+      return;
+    }
+    const prevEnd = document.getElementById('wa_prev_end');
+    if (prevEnd && prevEnd.value && joinEl && joinEl.value && prevEnd.value > joinEl.value) {
+      prevEnd.style.borderColor='#dc2626';
+      prevEnd.scrollIntoView({behavior:'smooth', block:'center'});
+      alert(IS_AR
+        ? 'تاريخ انتهاء السجل السابق لا يمكن أن يكون بعد تاريخ الانضمام الجديد.'
+        : 'Previous record end date cannot be later than the new joining date.');
+      return;
+    }
+    if (prevEnd) prevEnd.style.borderColor='';
+  }
+
+  // Send the mode so the server enforces the same rules.
+  let modeInp = document.getElementById('wa_mode_input');
+  if (!modeInp) {
+    modeInp = document.createElement('input');
+    modeInp.type='hidden'; modeInp.name='wa_mode'; modeInp.id='wa_mode_input';
+    document.getElementById('waForm').appendChild(modeInp);
+  }
+  modeInp.value = _waMode;
+
+  // Write employee IDs as hidden inputs
+  document.getElementById('selectedEmpInputs').innerHTML='';
+  _selEmps.forEach((e,id)=>{
+    const inp=document.createElement('input');
+    inp.type='hidden'; inp.name='employee_id[]'; inp.value=id;
+    document.getElementById('selectedEmpInputs').appendChild(inp);
+  });
+  document.getElementById('waForm').submit();
+}
+
+/* ══ View ══ */
+function openViewWA(id) {
+  fetch(`/work-allocations/${id}/json`).then(r=>r.json()).then(d=>{
+    const v=val=>val||'—'; const vr=(en,ar)=>IS_AR&&ar?ar:en||'—';
+    const shifts={day:IS_AR?'نهاري':'Day',night:IS_AR?'ليلي':'Night',rotating:IS_AR?'متناوب':'Rotating'};
+    const statLabel=d.status==='active'?(IS_AR?'نشيط':'Active'):(IS_AR?'غير نشيط':'Inactive');
+    document.getElementById('viewBody').innerHTML=`
+      <div class="vw-sec"><i class="fas fa-user me-1"></i>${IS_AR?'معلومات الموظف':'Employee'}</div>
+      <div class="vw-grid">
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الكود':'Code'}</div><div class="vw-value">${v(d.employee_code)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الاسم':'Name'}</div><div class="vw-value">${vr(d.name,d.name_ar)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الجنسية':'Nationality'}</div><div class="vw-value">${v(d.nationality)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'المهنة':'Profession'}</div><div class="vw-value">${v(d.profession)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'جواز السفر':'Passport'}</div><div class="vw-value">${v(d.passport_number)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الإقامة':'Iqama'}</div><div class="vw-value">${v(d.iqama_number)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الكفيل':'Kafeel'}</div><div class="vw-value">${v(d.kafeel_name)}</div></div>
+      </div>
+      <div class="vw-sec"><i class="fas fa-tasks me-1"></i>${IS_AR?'تفاصيل التوزيع':'Allocation Details'}</div>
+      <div class="vw-grid">
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الحالة':'Status'}</div><div class="vw-value">${statLabel}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'تاريخ الانضمام':'Joining Date'}</div><div class="vw-value">${v(d.joining_date)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'تاريخ الانتهاء':'End Date'}</div><div class="vw-value">${v(d.end_date)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'المشتري':'Buyer/HR'}</div><div class="vw-value">${v(d.buyer_name)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الشركة':'Company'}</div><div class="vw-value">${vr(d.company,d.company_ar)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'القسم':'Department'}</div><div class="vw-value">${vr(d.department,d.department_ar)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'القطاع':'Section'}</div><div class="vw-value">${vr(d.section,d.section_ar)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'الوردية':'Shift'}</div><div class="vw-value">${shifts[d.shift_type]||v(d.shift_type)}</div></div>
+      </div>`;
+    new bootstrap.Modal(document.getElementById('viewModal')).show();
+  });
+}
+
+/* ══ Delete ══ */
+function confDel(url,name){
+  document.getElementById('delForm').action=url;
+  document.getElementById('delTxt').textContent=(IS_AR?'حذف: ':'Delete: ')+name+'?';
+  new bootstrap.Modal(document.getElementById('delModal')).show();
+}
+
+/* ══ Bulk Delete (selected rows in the main grid) ══ */
+function confBulkDelWA(){
+  if(!gridApi) return;
+  const ids = gridApi.getSelectedRows().map(r => r.id);
+  if(!ids.length) return;
+  if(!confirm((IS_AR ? 'حذف السجلات المحددة؟ العدد: ' : 'Delete the selected records? Count: ') + ids.length)) return;
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF);
+  ids.forEach(id => fd.append('ids[]', id));
+  fetch('/work-allocations/bulk-delete', { method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd })
+    .then(r => r.text().then(t => ({ status: r.status, text: t })))
+    .then(({status, text}) => {
+      let d = null;
+      try { d = JSON.parse(text); } catch(e) { /* non-JSON response, handled below */ }
+      if(d && d.ok){
+        loadData();
+      } else {
+        const msg = (d && d.error) || ((IS_AR ? 'فشل الحذف' : 'Delete failed') + ' (' + status + ')');
+        alert(msg);
+      }
+    }).catch(err=>alert((IS_AR ? 'خطأ في الشبكة: ' : 'Network error: ') + err.message));
+}
+
+/* ══ Main AG-Grid Enterprise ══ */
+function rCode(p){return p.value?`<span class="code-badge">${p.value}</span>`:'';}
+function rStatus(p){return p.value==='active'?`<span class="st-active">${IS_AR?'نشيط':'Active'}</span>`:`<span class="st-inactive">${IS_AR?'غير نشيط':'Inactive'}</span>`;}
+
+class ActR {
+  init(p){
+    this.g=document.createElement('div'); this.g.className='ag-act-cell';
+    const d=p.data;
+    const nm=(IS_AR&&d.name_ar?d.name_ar:d.name||'').replace(/'/g,"\\'");
+    this.g.innerHTML=`
+      <button class="ag-ab ag-ab-view" onclick="openViewWA(${d.id})" title="${IS_AR?'عرض':'View'}"><i class="fas fa-eye"></i></button>
+      <button class="ag-ab ag-ab-edit" onclick="openEditWA(${d.id})" title="${IS_AR?'تعديل':'Edit'}"><i class="fas fa-pencil-alt"></i></button>
+      <button class="ag-ab ag-ab-del"  onclick="confDel('/work-allocations/${d.id}/delete','${nm}')" title="${IS_AR?'حذف':'Delete'}"><i class="fas fa-trash"></i></button>`;
+  }
+  getGui(){return this.g;}
+}
+
+const defCol={sortable:true,resizable:true,filter:true,floatingFilter:true,filterParams:{buttons:['apply','reset','clear'],closeOnApply:true,maxNumConditions:10}};
+const mainCols=[
+  {headerName:'',field:'_chk',width:46,checkboxSelection:true,headerCheckboxSelection:true,pinned:IS_AR?'right':'left',suppressMenu:true,sortable:false,resizable:false,floatingFilter:false},
+  {headerName:'#',field:'_idx',width:55,sortable:false,suppressMenu:true,floatingFilter:false,valueGetter:p=>p.node.rowIndex+1,cellStyle:{color:'#6b7280',fontSize:'12px'}},
+  {headerName:IS_AR?'كود الموظف':'Emp Code',field:'employee_code',width:130,cellRenderer:rCode,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الكفيل':'Kafeel',field:'kafeel_name',width:140,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الاسم':'Name',field:'name',minWidth:200,valueGetter:p=>IS_AR&&p.data.name_ar?p.data.name_ar:p.data.name,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الجنسية':'Nationality',field:'nationality',width:110,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'جواز السفر':'Passport',field:'passport_number',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الإقامة':'Iqama',field:'iqama_number',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'المهنة':'Profession',field:'profession',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الانضمام':'Joining Date',field:'joining_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الانتهاء':'End Date',field:'end_date',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الشركة':'Company',field:'company',width:140,valueGetter:p=>IS_AR&&p.data.company_ar?p.data.company_ar:p.data.company,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'القسم':'Department',field:'department',width:120,valueGetter:p=>IS_AR&&p.data.department_ar?p.data.department_ar:p.data.department,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'القطاع':'Section',field:'section',width:120,valueGetter:p=>IS_AR&&p.data.section_ar?p.data.section_ar:p.data.section,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الوردية':'Shift',field:'shift_type',width:90,filter:'agTextColumnFilter'},
+];
+if(ADM) mainCols.push({headerName:IS_AR?'إجراءات':'Actions',field:'_a',width:120,pinned:IS_AR?'left':'right',sortable:false,suppressMenu:true,floatingFilter:false,resizable:false,cellRenderer:ActR,cellStyle:{overflow:'visible',padding:'0 8px'}});
+
+/* ── AG Grid Locale ── */
+const AG_LOCALE = IS_AR ? {
+  filterOoo:'تصفية...',equals:'يساوي',notEqual:'لا يساوي',contains:'يحتوي على',
+  notContains:'لا يحتوي على',startsWith:'يبدأ بـ',endsWith:'ينتهي بـ',
+  blank:'فارغ',notBlank:'غير فارغ',lessThan:'أقل من',greaterThan:'أكبر من',
+  applyFilter:'تطبيق',clearFilter:'مسح',resetFilter:'إعادة تعيين',
+  addFilterCondition:'+ إضافة قاعدة',matchAll:'يطابق الكل',
+  matchAny:'يطابق أي',andCondition:'و',orCondition:'أو',
+  noRowsToShow:'لا توجد بيانات',loadingOoo:'جاري التحميل...',searchOoo:'بحث...',
+  sortAscending:'تصاعدي',sortDescending:'تنازلي',
+} : {
+  filterOoo:'Filter...',applyFilter:'Apply',clearFilter:'Clear',
+  resetFilter:'Reset',addFilterCondition:'+ Add Rule',
+  matchAll:'Match All',matchAny:'Match Any',
+  noRowsToShow:'No records found',searchOoo:'Search...',
+};
+
+let gridApi;
+agGrid.createGrid(document.getElementById('waGrid'),{
+  columnDefs:mainCols, multiSortKey:'ctrl',
+  rowData:[], pagination:true, paginationPageSize:20, paginationPageSizeSelector:[20,50,100],
+  animateRows:true, enableRtl:IS_AR, defaultColDef:defCol,
+  localeText:AG_LOCALE,
+  
+  // ── ENTERPRISE FEATURES (EXACTLY LIKE EMPLOYEES) ──
+  sideBar: {
+    toolPanels: [
+      {
+        id: 'columns',
+        labelDefault: IS_AR ? 'الأعمدة' : 'Columns',
+        labelKey: 'columns',
+        iconKey: 'columns',
+        toolPanel: 'agColumnsToolPanel'
+      },
+      {
+        id: 'filters',
+        labelDefault: IS_AR ? 'الفلاتر' : 'Filters',
+        labelKey: 'filters',
+        iconKey: 'filter',
+        toolPanel: 'agFiltersToolPanel'
+      }
+    ],
+    defaultToolPanel: ''
+  },
+  rowGroupPanelShow: 'always',
+  pivotPanelShow: 'always',
+  groupDisplayType: 'groupRows',
+  
+  rowSelection: 'multiple',
+  suppressRowClickSelection: true,
+  
+  onGridReady(p) {
+    gridApi = p.api;
+    if (window.GridKit) { GridKit.enhance(p, 'waGrid', { storageKey: 'employees_work_allocation', exportName: 'Work Allocations' }); }
+    loadData();
+  },
+  onFilterChanged(){upd();},
+  onPaginationChanged(){upd();},
+  onSelectionChanged(){upd();},
+  getRowStyle(p){return p.node.rowIndex%2===0?{background:'#fff'}:{background:'#fafbfc'};}
+});
+
+function loadData(){
+  var savedFilters = gridApi ? gridApi.getFilterModel() : null;
+  fetch(DATA_URL).then(r=>r.json()).then(d=>{
+    gridApi.setGridOption('rowData', d);
+    if (savedFilters && Object.keys(savedFilters).length) {
+      gridApi.setFilterModel(savedFilters);
+    }
+    upd();
+  }).catch(e=>console.error(e));
+}
+function upd(){
+  if(!gridApi)return;
+  const total = gridApi.getDisplayedRowCount();
+  const selected = gridApi.getSelectedRows().length;
+  const text = selected > 0
+    ? `${selected} ${IS_AR ? 'محدد' : 'selected'}`
+    : `${total} ${IS_AR ? 'سجل' : 'records'}`;
+  document.getElementById('selText').textContent = text;
+  document.getElementById('pageInfo').textContent = `${total} ${IS_AR ? 'توزيعات' : 'allocations'}`;
+  const bulkBtn = document.getElementById('btnBulkDelWA');
+  if(bulkBtn){
+    bulkBtn.style.display = selected > 0 ? '' : 'none';
+    document.getElementById('bulkDelWACount').textContent = selected > 0 ? '('+selected+')' : '';
+  }
+}
+document.getElementById('waForm').addEventListener('submit',()=>setTimeout(loadData,800));
+</script>
+{% endblock %}

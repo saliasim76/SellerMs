@@ -1,0 +1,1144 @@
+{% extends "base.html" %}
+{% set ar = current_locale != 'en' %}
+{% block title %}{{ t('owners') }} – Seller MS{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+/* Colored toolbar buttons */
+.tool-btn{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:38px;padding:0 12px;border:none;border-radius:8px;font-size:14px;cursor:pointer;color:#fff;transition:filter .15s;}
+.tool-btn:hover{filter:brightness(1.1);}
+.tool-btn i{pointer-events:none;}
+.tool-btn-green{background:#16a34a;}
+.tool-btn-blue{background:#2563eb;}
+.tool-btn-teal{background:#0d9488;}
+.tool-btn-purple{background:#7c3aed;}
+.tool-btn-orange{background:#ea580c;}
+.tool-btn-gray{background:#64748b;}
+/* ═══════════════════════════════════════════════════════════
+   OWNER — Accordion Form System v5
+═══════════════════════════════════════════════════════════ */
+:root{
+  --blue:#2563eb; --blue-dk:#1d4ed8; --blue-50:#eff6ff; --blue-100:#dbeafe;
+  --teal:#0d9488; --teal-50:#f0fdfa; --teal-100:#ccfbf1;
+  --navy:#1e3a5f; --green:#16a34a; --green-50:#f0fdf4;
+  --gray-50:#f8fafc; --gray-100:#f1f5f9; --gray-200:#e2e8f0;
+  --gray-300:#d1d5db; --gray-400:#9ca3af; --gray-600:#4b5563; --gray-700:#374151; --gray-900:#111827;
+  --red:#ef4444; --red-50:#fef2f2; --amber:#f59e0b;
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:18px;
+  --shadow-modal:0 25px 80px rgba(0,0,0,.22);
+  --shadow-sm:0 1px 4px rgba(0,0,0,.06);
+}
+.ag-theme-alpine{
+  --ag-font-family:'Segoe UI',system-ui,sans-serif; --ag-font-size:13px;
+  --ag-header-background-color:#e5e7eb; --ag-header-foreground-color:#1e293b;
+  --ag-border-color:var(--gray-200); --ag-row-border-color:var(--gray-100);
+  --ag-row-hover-color:var(--blue-50); --ag-selected-row-background-color:var(--blue-100);
+  --ag-header-height:44px; --ag-row-height:44px; --ag-cell-horizontal-padding:12px;
+}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}
+.ag-theme-alpine .ag-row-even{background:#fff;} .ag-theme-alpine .ag-row-odd{background:#fafbfc;}
+.pl-act{display:flex;align-items:center;gap:4px;}
+.pl-btn{width:28px;height:28px;border-radius:7px;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;transition:transform .12s,box-shadow .12s;}
+.pl-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.18);}
+.pl-view{background:#0ea5e9;color:#fff;} .pl-edit{background:var(--amber);color:#fff;} .pl-del{background:var(--red);color:#fff;}
+.st-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.st-active{background:#dcfce7;color:#15803d;} .st-inactive{background:var(--gray-100);color:var(--gray-400);}
+.code-badge{background:var(--blue-50);color:var(--blue-dk);padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;font-family:monospace;}
+
+.sf-modal .modal-dialog{max-width:980px;}
+.sf-modal .modal-content{border:none;border-radius:var(--r-xl);overflow:hidden;box-shadow:var(--shadow-modal);}
+.sf-hdr{background:linear-gradient(135deg,var(--navy) 0%,#1a56db 60%,var(--teal) 100%);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;}
+.sf-hdr h5{margin:0;color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px;letter-spacing:.1px;}
+.sf-hdr .btn-close{filter:brightness(0) invert(1);opacity:.8;}
+.sf-hdr .btn-close:hover{opacity:1;}
+.sf-body{max-height:72vh;overflow-y:auto;overflow-x:hidden;background:var(--gray-50);padding:0;}
+
+.acc-section{border-bottom:1px solid var(--gray-200);}
+.acc-section:last-child{border-bottom:none;}
+.acc-head{display:flex;align-items:center;justify-content:space-between;padding:15px 24px;cursor:pointer;background:#fff;transition:background .15s;user-select:none;}
+.acc-head:hover{background:#fafbfc;}
+.acc-head-left{display:flex;align-items:center;gap:12px;}
+.acc-head-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.acc-head-icon.basic{background:#eff6ff;color:#2563eb;}
+.acc-head-icon.address{background:#f0fdf4;color:#16a34a;}
+.acc-head-icon.bank{background:#fff7ed;color:#ea580c;}
+.acc-head-icon.docs{background:#faf5ff;color:#7c3aed;}
+.acc-head-icon.warehouse{background:#ecfeff;color:#0891b2;}
+
+.doc-add-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;background:#7c3aed;color:#fff;font-size:12.5px;font-weight:700;transition:all .15s;margin-bottom:16px;}
+.doc-add-btn:hover{background:#6d28d9;transform:translateY(-1px);box-shadow:0 3px 10px rgba(124,58,237,.3);}
+.doc-tbl-wrap{border:1px solid var(--gray-200);border-radius:var(--r-md);overflow:hidden;}
+.doc-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.doc-tbl thead tr{background:#4c1d95;}
+.doc-tbl thead th{padding:10px 12px;color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;}
+.doc-tbl tbody tr{border-bottom:1px solid var(--gray-100);transition:background .1s;}
+.doc-tbl tbody tr:last-child{border-bottom:none;}
+.doc-tbl tbody tr:hover{background:#faf5ff;}
+.doc-tbl td{padding:9px 12px;color:var(--gray-700);vertical-align:middle;}
+.doc-tbl .td-acts{display:flex;gap:4px;justify-content:center;}
+.acc-head-title{font-size:13.5px;font-weight:700;color:var(--gray-900);}
+.acc-head-title span.ar-sub{font-size:11px;color:var(--gray-400);font-weight:500;margin-inline-start:8px;}
+.acc-chevron{font-size:11px;color:var(--gray-400);transition:transform .25s ease;}
+.acc-section.open .acc-chevron{transform:rotate(180deg);}
+.acc-body{max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.4,0,.2,1),padding .25s ease;background:#fff;padding:0 24px;}
+.acc-section.open .acc-body{max-height:2000px;padding:20px 24px 24px;}
+
+.bi-group{margin-bottom:18px;}
+.bi-group:last-child{margin-bottom:0;}
+.bi-labels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:5px;}
+.bi-lbl-en{font-size:11px;font-weight:700;color:var(--gray-700);text-transform:uppercase;letter-spacing:.3px;display:flex;align-items:center;gap:4px;}
+.bi-lbl-ar{font-size:11px;font-weight:700;color:var(--gray-700);text-transform:uppercase;letter-spacing:.3px;display:flex;align-items:center;gap:4px;justify-content:flex-end;direction:rtl;}
+.req{color:var(--red);font-size:14px;line-height:1;}
+.lang-pip{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:.4px;}
+.pip-en{background:#dbeafe;color:#1d4ed8;}
+.pip-ar{background:#fef3c7;color:#92400e;}
+.pip-src{background:#dcfce7;color:#15803d;}
+.pip-auto{background:#f1f5f9;color:#6b7280;}
+.bi-inputs{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.bi-wrap{position:relative;}
+.mono-group{margin-bottom:18px;}
+.mono-group:last-child{margin-bottom:0;}
+.mono-lbl{font-size:11px;font-weight:700;color:var(--gray-700);text-transform:uppercase;letter-spacing:.3px;display:flex;align-items:center;gap:4px;margin-bottom:5px;}
+.fg-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+.fg-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
+.fg-2:last-child,.fg-3:last-child{margin-bottom:0;}
+@media(max-width:680px){.fg-2,.fg-3,.bi-labels,.bi-inputs{grid-template-columns:1fr;}}
+
+.sf-inp{width:100%;padding:9px 12px;font-size:13px;color:var(--gray-900);border:1.5px solid var(--gray-300);border-radius:8px;background:#fff;outline:none;font-family:inherit;box-sizing:border-box;transition:border-color .15s,box-shadow .15s;}
+.sf-inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.sf-inp.secondary{background:#fafbfc;color:var(--gray-600);}
+.sf-inp.secondary:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,148,136,.1);}
+.sf-inp.is-invalid{border-color:var(--red);background:var(--red-50);}
+.sf-inp.is-invalid:focus{box-shadow:0 0 0 3px rgba(239,68,68,.1);}
+.sf-sel{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:16px;padding-right:34px;}
+.sf-spin{position:absolute;top:50%;transform:translateY(-50%);right:10px;pointer-events:none;font-size:11px;color:var(--gray-400);}
+.sf-retrans{position:absolute;top:50%;transform:translateY(-50%);right:9px;width:22px;height:22px;border:none;border-radius:5px;background:var(--blue-100);color:var(--blue);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;opacity:.7;transition:opacity .15s;}
+.sf-retrans:hover{opacity:1;}
+.sf-inp.has-btn{padding-right:38px;}
+{% if is_rtl %}
+.sf-retrans{right:auto;left:9px;}
+.sf-inp.has-btn{padding-right:12px;padding-left:38px;}
+.sf-spin{right:auto;left:10px;}
+{% endif %}
+@keyframes autoFill{0%,100%{border-color:var(--gray-300);}50%{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,148,136,.12);}}
+.sf-inp.auto-filled{animation:autoFill .55s ease;}
+.sf-err{font-size:11px;font-weight:600;color:var(--red);margin-top:4px;display:none;align-items:center;gap:4px;}
+.sf-err.show{display:flex;}
+.sf-err i{font-size:10px;}
+.color-wrap{display:flex;align-items:center;gap:10px;}
+.color-wrap .sf-inp{flex:1;font-family:monospace;}
+input[type=color].c-swatch{width:40px;height:38px;padding:2px;border:1.5px solid var(--gray-300);border-radius:8px;cursor:pointer;flex-shrink:0;}
+.file-lbl{display:flex;align-items:center;gap:10px;cursor:pointer;padding:9px 14px;border:1.5px dashed var(--gray-300);border-radius:8px;background:#fff;transition:border-color .15s;}
+.file-lbl:hover{border-color:var(--blue);background:var(--blue-50);}
+.file-lbl i{color:var(--blue);font-size:14px;}
+.file-name{font-size:12px;color:var(--gray-400);}
+
+.bank-add-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;background:var(--teal);color:#fff;font-size:12.5px;font-weight:700;transition:all .15s;margin-bottom:16px;}
+.bank-add-btn:hover{filter:brightness(.94);transform:translateY(-1px);box-shadow:0 3px 10px rgba(13,148,136,.3);}
+.bank-tbl-wrap{border:1px solid var(--gray-200);border-radius:var(--r-md);overflow:hidden;}
+.bank-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.bank-tbl thead tr{background:var(--navy);}
+.bank-tbl thead th{padding:10px 12px;color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;}
+.bank-tbl tbody tr{border-bottom:1px solid var(--gray-100);transition:background .1s;}
+.bank-tbl tbody tr:last-child{border-bottom:none;}
+.bank-tbl tbody tr:hover{background:var(--blue-50);}
+.bank-tbl tbody tr.is-primary{background:var(--green-50);}
+.bank-tbl td{padding:9px 12px;color:var(--gray-700);vertical-align:middle;}
+.bank-tbl .td-mono{font-family:monospace;font-size:12px;color:var(--gray-600);}
+.bank-tbl .td-acts{display:flex;gap:4px;justify-content:center;}
+.bank-empty{text-align:center;padding:22px;color:var(--gray-400);font-size:12.5px;background:#fafbfc;}
+.bank-empty i{font-size:22px;display:block;margin-bottom:6px;opacity:.3;}
+.primary-check{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#15803d;}
+.primary-check i{color:#16a34a;}
+
+.sf-footer{padding:14px 24px;background:#fff;border-top:1.5px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.sf-btn{padding:9px 22px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:7px;transition:all .15s;}
+.sf-btn:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.15);}
+.sf-btn.save{background:linear-gradient(135deg,var(--green),#15803d);color:#fff;}
+.sf-btn.cancel{background:#fff;color:var(--gray-700);border:1.5px solid var(--gray-300);}
+.sf-btn.reset{background:#fff;color:var(--teal);border:1.5px solid var(--teal-100);}
+.sf-btn.danger{background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;}
+.sf-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none;}
+
+.bm-modal .modal-dialog{max-width:680px;}
+.bm-modal .modal-content{border:none;border-radius:var(--r-lg);overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.28);}
+.bm-hdr{background:linear-gradient(135deg,#ea580c 0%,#f97316 100%);padding:15px 22px;display:flex;align-items:center;justify-content:space-between;}
+.bm-hdr h5{margin:0;color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.bm-hdr .btn-close{filter:brightness(0) invert(1);opacity:.8;}
+.bm-body{padding:22px 22px 0;}
+.bm-footer{padding:16px 22px;background:var(--gray-50);border-top:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;}
+.bm-hint{font-size:11px;color:var(--teal);font-style:italic;}
+.primary-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:16px;padding:11px 14px;background:var(--green-50);border:1.5px solid #bbf7d0;border-radius:8px;font-size:13px;color:var(--gray-700);}
+.primary-toggle input{width:17px;height:17px;accent-color:var(--green);cursor:pointer;}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{{ t('home') }}</a></li>
+<li class="breadcrumb-item active">{{ t('organization') }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{{ t('org_structure') }}</h2>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      {% if current_user.is_admin() %}
+      <button id="addOwnerBtn" class="tool-btn tool-btn-green" onclick="openAddModal()" title="{{ t('add_owner') }}"><i class="fas fa-plus"></i></button>
+      {% endif %}
+      <button class="tool-btn tool-btn-blue" onclick="refreshGrid()" title="{{ t('refresh') }}"><i class="fas fa-sync-alt"></i></button>
+      <a class="tool-btn tool-btn-green" href="/io/bundle/owner-full/export" style="text-decoration:none;" title="{{ t('export_owner_full') }}"><i class="fas fa-file-excel"></i></a>
+      <a class="tool-btn tool-btn-purple" href="/io/bundle/owner-full/template" style="text-decoration:none;" title="{{ t('template') }}"><i class="fas fa-file-download"></i></a>
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-orange" title="{{ t('import') }}" onclick="document.getElementById('selImp').click()"><i class="fas fa-file-import"></i></button>
+      <input type="file" id="selImp" accept=".xlsx,.xlsm" style="display:none;" onchange="ioBundleImport(this,'owner-full')">
+      {% endif %}
+      <button class="tool-btn tool-btn-gray" onclick="clearAllFilters()" title="{{ t('clear_filters') }}"><i class="fas fa-times-circle"></i></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="selText" style="font-size:12px;font-weight:600;color:var(--gray-400);">0 {{ t('records') }}</span>
+      <div style="position:relative;">
+        <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:12px;pointer-events:none;"></i>
+        <input id="globalSearch" type="text" style="padding:8px 12px 8px 32px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:13px;outline:none;width:220px;" placeholder="{{ t('search_placeholder') }}" oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+  <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
+    <div id="ownerGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:520px;"></div>
+  </div>
+  <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
+    <span id="pageInfo" style="font-size:12px;color:var(--gray-400);">–</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;color:var(--gray-400);">{{ t('rows_label') }}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="gridApi&&gridApi.setGridOption('paginationPageSize',+this.value)">
+        <option>5</option><option>10</option><option selected>20</option><option>50</option><option>100</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD / EDIT OWNER — ACCORDION MODAL ══ -->
+<div class="modal fade sf-modal" id="ownerModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="sf-hdr">
+        <h5 id="sfModalTitle"><i class="fas fa-user-tie"></i>{{ dual('add_org_structure') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="sf-body">
+        <form id="ownerForm" method="POST" enctype="multipart/form-data" novalidate>
+          {{ owner_form.hidden_tag() }}
+          <input type="hidden" id="sfOwnerId" name="_owner_id">
+
+          <!-- SECTION 1: BASIC INFORMATION -->
+          <div class="acc-section open" id="sec-basic">
+            <div class="acc-head" onclick="toggleSection('basic')">
+              <div class="acc-head-left">
+                <div class="acc-head-icon basic"><i class="fas fa-user-circle"></i></div>
+                <div><div class="acc-head-title">{{ t('basic_information') }}<span class="ar-sub">{{ t_other('basic_information') }}</span></div></div>
+              </div>
+              <i class="fas fa-chevron-up acc-chevron" id="chev-basic"></i>
+            </div>
+            <div class="acc-body" id="body-basic">
+              <div class="bi-group">
+                <div class="bi-labels">
+                  <div class="bi-lbl-en">{{ t('name_field') }}<span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span><span class="req">*</span></div>
+                  <div class="bi-lbl-ar"><span class="req">*</span><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span>{{ t_other('name_field') }}</div>
+                </div>
+                <div class="bi-inputs">
+                  <div class="bi-wrap">
+                    <input type="text" id="f_name_p" name="{% if ar %}name_ar{% else %}name{% endif %}" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" required autocomplete="off" oninput="scheduleTrans('name')">
+                    <button type="button" class="sf-retrans" onclick="retrans('name')" title="{{ t('retranslate') }}"><i class="fas fa-sync-alt"></i></button>
+                  </div>
+                  <div class="bi-wrap">
+                    <input type="text" id="f_name_s" name="{% if ar %}name{% else %}name_ar{% endif %}" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}" autocomplete="off">
+                    <span class="sf-spin" id="spin_name"></span>
+                  </div>
+                </div>
+                <div class="sf-err" id="err_name"><i class="fas fa-exclamation-circle"></i><span>{{ t('name_required') }}</span></div>
+              </div>
+
+              <div class="fg-3">
+                <div>
+                  <div class="mono-lbl">{{ t('vat_number') }} <span class="req">*</span></div>
+                  <input type="text" name="vat_number" id="f_vat" class="sf-inp" dir="ltr" oninput="clrInv(this,'err_vat')">
+                  <div class="sf-err" id="err_vat"><i class="fas fa-exclamation-circle"></i><span>{{ t('required') }}</span></div>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ t('crn') }} <span class="req">*</span></div>
+                  <input type="text" name="crn" id="f_crn" class="sf-inp" dir="ltr" oninput="clrInv(this,'err_crn')">
+                  <div class="sf-err" id="err_crn"><i class="fas fa-exclamation-circle"></i><span>{{ t('required') }}</span></div>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ t('status') }} <span class="req">*</span></div>
+                  <select name="status" id="f_status" class="sf-inp sf-sel">
+                    <option value="active">{{ t('active') }}</option>
+                    <option value="inactive">{{ t('inactive') }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="fg-2">
+                <div><div class="mono-lbl">{{ dual('phone') }}</div><input type="text" name="phone" id="f_phone" class="sf-inp" dir="ltr" placeholder="e.g., 013 897 0166"></div>
+                <div><div class="mono-lbl">{{ dual('fax') }}</div><input type="text" name="fax" id="f_fax" class="sf-inp" dir="ltr" placeholder="e.g., 013 893 7050"></div>
+              </div>
+
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">{{ dual('email') }} <span class="req">*</span></div>
+                  <input type="email" name="email" id="f_email" class="sf-inp" dir="ltr" placeholder="info@company.com" oninput="validateEmail(this)">
+                  <div class="sf-err" id="err_email"><i class="fas fa-exclamation-circle"></i><span>{{ t('invalid_email') }}</span></div>
+                </div>
+                <div><div class="mono-lbl">{{ dual('website') }}</div><input type="text" name="website" id="f_website" class="sf-inp" dir="ltr" placeholder="www.company.com"></div>
+              </div>
+
+              <div style="font-weight:700;color:#374151;font-size:12px;margin-top:8px;border-top:1px solid #e5e7eb;padding-top:12px;">
+                <i class="fas fa-paper-plane me-1"></i>{{ dual('smtp_config') }}
+              </div>
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">SMTP Host</div>
+                  <input type="text" name="smtp_host" id="f_smtp_host" class="sf-inp" dir="ltr" placeholder="smtp.gmail.com">
+                </div>
+                <div>
+                  <div class="mono-lbl">SMTP Port</div>
+                  <input type="number" name="smtp_port" id="f_smtp_port" class="sf-inp" dir="ltr" placeholder="587" value="587">
+                </div>
+              </div>
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">SMTP {{ t('username') }}</div>
+                  <input type="text" name="smtp_username" id="f_smtp_username" class="sf-inp" dir="ltr" placeholder="info@company.com">
+                </div>
+                <div>
+                  <div class="mono-lbl">SMTP {{ t('password') }}</div>
+                  <input type="password" name="smtp_password" id="f_smtp_password" class="sf-inp" dir="ltr" placeholder="{{ t('leave_blank_pw') }}" autocomplete="new-password">
+                  <div class="sf-hint" id="smtp_pw_hint" style="font-size:11px;color:#6b7280;margin-top:3px;display:none;"><i class="fas fa-check-circle text-success"></i> {{ t('pw_already_set') }}</div>
+                </div>
+              </div>
+              <div class="fg-2">
+                <div style="display:flex;align-items:center;gap:8px;padding-top:6px;">
+                  <input type="checkbox" name="smtp_use_tls" id="f_smtp_use_tls" checked style="width:16px;height:16px;">
+                  <label for="f_smtp_use_tls" class="mono-lbl" style="margin:0;">{{ t('use_tls') }}</label>
+                </div>
+                <div></div>
+              </div>
+
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">{{ dual('report_color') }} <span class="req">*</span></div>
+                  <div class="color-wrap">
+                    <input type="text" name="report_color" id="f_rcolor" class="sf-inp" dir="ltr" value="#16a34a">
+                    <input type="color" id="f_rswatch" class="c-swatch" value="#16a34a" oninput="document.getElementById('f_rcolor').value=this.value">
+                  </div>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('second_language') }} <span class="req">*</span>
+                    {% if not current_user.is_super_admin %}<i class="fas fa-lock ms-1" title="{{ t('second_lang_locked') }}" style="font-size:11px;color:#94a3b8;"></i>{% endif %}
+                  </div>
+                  <select name="second_language" id="f_second_language" class="sf-inp" dir="ltr" {% if not current_user.is_super_admin %}disabled title="{{ t('second_lang_locked') }}"{% endif %}>
+                    <option value="Arabic" selected>Arabic — العربية</option>
+                    <option value="French">French — Français</option>
+                    <option value="Urdu">Urdu — اردو</option>
+                    <option value="Hindi">Hindi — हिन्दी</option>
+                    <option value="Bengali">Bengali — বাংলা</option>
+                  </select>
+                </div>
+              </div>
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">{{ dual('logo') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="logoName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="logo" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'logoName')"></label>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('bg_logo') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="bgLogoName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="bg_logo" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'bgLogoName')"></label>
+                </div>
+              </div>
+              <div class="fg-3">
+                <div>
+                  <div class="mono-lbl">{{ dual('header') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="headerName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="header" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'headerName')"></label>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('footer') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="footerName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="footer" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'footerName')"></label>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('stamp') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="stampName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="stamp" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'stampName')"></label>
+                </div>
+              </div>
+            </div><!-- /body-basic -->
+          </div><!-- /sec-basic -->
+
+          <!-- SECTION 2: WAREHOUSES -->
+          <div class="acc-section" id="sec-warehouse">
+            <div class="acc-head" onclick="toggleSection('warehouse')">
+              <div class="acc-head-left">
+                <div class="acc-head-icon warehouse"><i class="fas fa-warehouse"></i></div>
+                <div class="acc-head-title">{{ t('warehouses') }}<span class="ar-sub">{{ t_other('warehouses') }}</span>
+                  <span id="whCountBadge" style="background:#0891b2;color:#fff;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-inline-start:8px;display:none;">0</span>
+                </div>
+              </div>
+              <i class="fas fa-chevron-down acc-chevron" id="chev-warehouse"></i>
+            </div>
+            <div class="acc-body" id="body-warehouse">
+              <button type="button" class="bank-add-btn" style="background:#0891b2;" onclick="openWhModal()">
+                <i class="fas fa-plus"></i>{{ dual('add_warehouse') }}
+              </button>
+              <div id="whTblWrap" class="bank-tbl-wrap" style="display:none;">
+                <table class="bank-tbl">
+                  <thead><tr>
+                    <th>{{ dual('warehouse_field') }}</th>
+                    <th>{{ dual('location') }}</th>
+                    <th>{{ dual('actions_col') }}</th>
+                  </tr></thead>
+                  <tbody id="whTblBody"></tbody>
+                </table>
+              </div>
+              <div id="whEmptyMsg" class="bank-empty">
+                <i class="fas fa-warehouse"></i>{{ dual('no_warehouses_added') }}
+              </div>
+            </div><!-- /body-warehouse -->
+          </div><!-- /sec-warehouse -->
+
+          <!-- SECTION 3: ADDRESS INFORMATION -->
+          <div class="acc-section" id="sec-address">
+            <div class="acc-head" onclick="toggleSection('address')">
+              <div class="acc-head-left">
+                <div class="acc-head-icon address"><i class="fas fa-map-marker-alt"></i></div>
+                <div class="acc-head-title">{{ t('address_information') }}<span class="ar-sub">{{ t_other('address_information') }}</span></div>
+              </div>
+              <i class="fas fa-chevron-down acc-chevron" id="chev-address"></i>
+            </div>
+            <div class="acc-body" id="body-address">
+              <div class="bi-group">
+                <div class="bi-labels">
+                  <div class="bi-lbl-en">{{ t('country') }} <span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span></div>
+                  <div class="bi-lbl-ar"><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span> {{ t_other('country') }}</div>
+                </div>
+                <div class="bi-inputs">
+                  <div class="bi-wrap"><input type="text" id="f_country_p" name="{% if ar %}country_ar{% else %}country{% endif %}" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" oninput="scheduleTrans('country')"><button type="button" class="sf-retrans" onclick="retrans('country')"><i class="fas fa-sync-alt"></i></button></div>
+                  <div class="bi-wrap"><input type="text" id="f_country_s" name="{% if ar %}country{% else %}country_ar{% endif %}" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}"><span class="sf-spin" id="spin_country"></span></div>
+                </div>
+              </div>
+              <div class="bi-group">
+                <div class="bi-labels">
+                  <div class="bi-lbl-en">{{ t('city') }} <span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span></div>
+                  <div class="bi-lbl-ar"><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span> {{ t_other('city') }}</div>
+                </div>
+                <div class="bi-inputs">
+                  <div class="bi-wrap"><input type="text" id="f_city_p" name="{% if ar %}city_ar{% else %}city{% endif %}" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" oninput="scheduleTrans('city')"><button type="button" class="sf-retrans" onclick="retrans('city')"><i class="fas fa-sync-alt"></i></button></div>
+                  <div class="bi-wrap"><input type="text" id="f_city_s" name="{% if ar %}city{% else %}city_ar{% endif %}" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}"><span class="sf-spin" id="spin_city"></span></div>
+                </div>
+              </div>
+              <div class="bi-group">
+                <div class="bi-labels">
+                  <div class="bi-lbl-en">{{ t('district') }} <span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span></div>
+                  <div class="bi-lbl-ar"><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span> {{ t_other('district') }}</div>
+                </div>
+                <div class="bi-inputs">
+                  <div class="bi-wrap"><input type="text" id="f_district_p" name="{% if ar %}district_ar{% else %}district{% endif %}" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" oninput="scheduleTrans('district')"><button type="button" class="sf-retrans" onclick="retrans('district')"><i class="fas fa-sync-alt"></i></button></div>
+                  <div class="bi-wrap"><input type="text" id="f_district_s" name="{% if ar %}district{% else %}district_ar{% endif %}" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}"><span class="sf-spin" id="spin_district"></span></div>
+                </div>
+              </div>
+              <div class="bi-group">
+                <div class="bi-labels">
+                  <div class="bi-lbl-en">{{ t('street_name') }} <span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span></div>
+                  <div class="bi-lbl-ar"><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span> {{ t_other('street_name') }}</div>
+                </div>
+                <div class="bi-inputs">
+                  <div class="bi-wrap"><input type="text" id="f_street_p" name="{% if ar %}street_name_ar{% else %}street_name{% endif %}" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" oninput="scheduleTrans('street')"><button type="button" class="sf-retrans" onclick="retrans('street')"><i class="fas fa-sync-alt"></i></button></div>
+                  <div class="bi-wrap"><input type="text" id="f_street_s" name="{% if ar %}street_name{% else %}street_name_ar{% endif %}" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}"><span class="sf-spin" id="spin_street"></span></div>
+                </div>
+              </div>
+              <div class="fg-2">
+                <div><div class="mono-lbl">{{ dual('building_no') }}</div><input type="text" name="building_number" id="f_building" class="sf-inp" dir="ltr"></div>
+                <div><div class="mono-lbl">{{ dual('additional_no') }}</div><input type="text" name="additional_number" id="f_additional" class="sf-inp" dir="ltr"></div>
+              </div>
+              <div class="fg-2">
+                <div><div class="mono-lbl">{{ dual('postal_code') }}</div><input type="text" name="postal_code" id="f_postal" class="sf-inp" dir="ltr"></div>
+              </div>
+            </div><!-- /body-address -->
+          </div><!-- /sec-address -->
+
+          <!-- SECTION 4: BANK INFORMATION -->
+          <div class="acc-section" id="sec-bank">
+            <div class="acc-head" onclick="toggleSection('bank')">
+              <div class="acc-head-left">
+                <div class="acc-head-icon bank"><i class="fas fa-university"></i></div>
+                <div class="acc-head-title">{{ t('bank_information') }}<span class="ar-sub">{{ t_other('bank_information') }}</span>
+                  <span id="bankCountBadge" style="background:var(--teal);color:#fff;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-inline-start:8px;display:none;">0</span>
+                </div>
+              </div>
+              <i class="fas fa-chevron-down acc-chevron" id="chev-bank"></i>
+            </div>
+            <div class="acc-body" id="body-bank">
+              <button type="button" class="bank-add-btn" onclick="openBankModal()"><i class="fas fa-plus"></i>{{ dual('add_bank_details') }}</button>
+              <div id="bankTblWrap" class="bank-tbl-wrap" style="display:none;">
+                <table class="bank-tbl">
+                  <thead><tr>
+                    <th>{{ dual('bank_name') }}</th>
+                    <th>{{ dual('branch') }}</th>
+                    <th>{{ dual('account_no') }}</th>
+                    <th>IBAN</th><th>SWIFT Code</th>
+                    <th>{{ dual('primary') }}</th>
+                    <th>{{ dual('actions_col') }}</th>
+                  </tr></thead>
+                  <tbody id="bankTblBody"></tbody>
+                </table>
+              </div>
+              <div id="bankEmptyMsg" class="bank-empty"><i class="fas fa-university"></i>{{ dual('no_bank_details_added') }}</div>
+            </div><!-- /body-bank -->
+          </div><!-- /sec-bank -->
+
+        </form>
+      </div><!-- /sf-body -->
+
+      <div class="sf-footer">
+        <button type="button" class="sf-btn reset" onclick="resetForm()"><i class="fas fa-redo"></i>{{ dual('reset_to_default') }}</button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="sf-btn cancel" data-bs-dismiss="modal"><i class="fas fa-times"></i>{{ dual('cancel') }}</button>
+          <button type="button" class="sf-btn save" onclick="submitOwnerForm()"><i class="fas fa-save"></i>{{ dual('save_word') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content" style="border:none;border-radius:14px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div class="modal-header border-0" style="padding:18px 20px 0;">
+        <h6 class="modal-title text-danger fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>{{ dual('confirm_delete') }}</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:12px 20px;"><p id="deleteText" style="font-size:14px;color:var(--gray-700);margin:0;"></p></div>
+      <div class="modal-footer border-0" style="padding:0 20px 18px;">
+        <button class="sf-btn cancel" data-bs-dismiss="modal" style="padding:7px 16px;font-size:12px;">{{ t('cancel') }}</button>
+        <form id="deleteForm" method="POST" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="sf-btn danger" style="padding:7px 16px;font-size:12px;">{{ t('delete') }}</button></form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BANK DETAIL SUB-MODAL -->
+<div class="modal fade bm-modal" id="bankModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="bm-hdr">
+        <h5 id="bmTitle"><i class="fas fa-university"></i>{{ dual('add_bank_details_modal') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="bm-body" style="padding:20px 22px 4px;">
+        <input type="hidden" id="bm_idx" value="">
+        <style>
+          .bm-section-lbl{display:flex;align-items:center;gap:7px;margin:0 0 12px;color:var(--gray-400);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+          .bm-section-lbl i{font-size:11px;}
+          .bm-section-lbl::after{content:'';flex:1;height:1px;background:var(--gray-200);}
+          .bm-section{margin-bottom:18px;} .bm-section:last-child{margin-bottom:0;}
+        </style>
+        <div class="bm-section">
+          <div class="bm-section-lbl"><i class="fas fa-user-circle"></i>{{ dual('account_holder') }}</div>
+          <div class="bi-group" style="margin-bottom:0;">
+            <div class="bi-labels">
+              <div class="bi-lbl-en">{{ t('bank_name') }}<span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span><span class="req">*</span></div>
+              <div class="bi-lbl-ar"><span class="req">*</span><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span>{{ t_other('bank_name') }}</div>
+            </div>
+            <div class="bi-inputs">
+              <div class="bi-wrap"><input type="text" id="bm_name_p" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" placeholder="{{ t('enter_bank_name') }}" oninput="scheduleBMTrans('bm_name');clearBmErr()"><button type="button" class="sf-retrans" onclick="retransBM('bm_name')" title="{{ t('retranslate') }}"><i class="fas fa-sync-alt"></i></button></div>
+              <div class="bi-wrap"><input type="text" id="bm_name_s" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}" placeholder="{{ t_other('enter_bank_name') }}"><span class="sf-spin" id="bm_name_spin"></span></div>
+            </div>
+            <div class="sf-err" id="err_bm_name"><i class="fas fa-exclamation-circle"></i><span>{{ t('bank_name_required') }}</span></div>
+          </div>
+        </div>
+        <div class="bm-section">
+          <div class="bm-section-lbl"><i class="fas fa-code-branch"></i>{{ dual('branch') }}</div>
+          <div class="bi-group" style="margin-bottom:0;">
+            <div class="bi-labels">
+              <div class="bi-lbl-en">{{ t('branch') }}<span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span><span class="req">*</span></div>
+              <div class="bi-lbl-ar"><span class="req">*</span><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span>{{ t_other('branch') }}</div>
+            </div>
+            <div class="bi-inputs">
+              <div class="bi-wrap"><input type="text" id="bm_branch_p" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" placeholder="{{ t('enter_branch_name') }}" oninput="scheduleBMTrans('bm_branch');clrInv(this,'err_bm_branch')"><button type="button" class="sf-retrans" onclick="retransBM('bm_branch')" title="{{ t('retranslate') }}"><i class="fas fa-sync-alt"></i></button></div>
+              <div class="bi-wrap"><input type="text" id="bm_branch_s" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}" placeholder="{{ t_other('enter_branch_name') }}"><span class="sf-spin" id="bm_branch_spin"></span></div>
+            </div>
+            <div class="sf-err" id="err_bm_branch"><i class="fas fa-exclamation-circle"></i><span>{{ t('branch_required') }}</span></div>
+          </div>
+        </div>
+        <div class="bm-section">
+          <div class="bm-section-lbl"><i class="fas fa-exchange-alt"></i>{{ dual('transfer_details') }}</div>
+          <div class="mono-group" style="margin-bottom:12px;">
+            <div class="mono-lbl">{{ dual('account_number') }}<span class="req">*</span></div>
+            <input type="text" id="bm_account" class="sf-inp" dir="ltr" placeholder="{{ t('enter_account_number') }}" oninput="clrInv(this,'err_bm_account')">
+            <div class="sf-err" id="err_bm_account"><i class="fas fa-exclamation-circle"></i><span>{{ t('required') }}</span></div>
+          </div>
+          <div class="fg-2" style="margin-bottom:0;">
+            <div>
+              <div class="mono-lbl">{{ dual('iban') }}<span class="req">*</span></div>
+              <input type="text" id="bm_iban" class="sf-inp" dir="ltr" style="font-family:monospace;letter-spacing:.03em;" placeholder="e.g. SA0380000000608010167519" oninput="clrInv(this,'err_bm_iban')">
+              <div class="sf-err" id="err_bm_iban"><i class="fas fa-exclamation-circle"></i><span>{{ t('required') }}</span></div>
+            </div>
+            <div>
+              <div class="mono-lbl">{{ dual('swift_code') }}<span class="req">*</span></div>
+              <input type="text" id="bm_swift" class="sf-inp" dir="ltr" style="font-family:monospace;text-transform:uppercase;letter-spacing:.06em;" placeholder="e.g. RJHISARI" oninput="clrInv(this,'err_bm_swift')">
+              <div class="sf-err" id="err_bm_swift"><i class="fas fa-exclamation-circle"></i><span>{{ t('required') }}</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="bm-section" style="margin-bottom:16px;">
+          <label class="primary-toggle" style="margin-top:0;">
+            <input type="checkbox" id="bm_primary">
+            <span><i class="fas fa-star" style="color:var(--amber);font-size:12px;"></i>{{ dual('set_primary_bank') }}</span>
+          </label>
+          <p class="bm-hint" style="margin-top:8px;"><i class="fas fa-info-circle me-1"></i>{{ t('primary_bank_note') }}</p>
+        </div>
+      </div>
+      <div class="bm-footer">
+        <button type="button" class="sf-btn reset" onclick="['bm_name_p','bm_name_s','bm_account','bm_branch_p','bm_branch_s','bm_swift','bm_iban'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('bm_primary').checked=false;clearBmErr();"><i class="fas fa-redo"></i>{{ dual('reset_to_default') }}</button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="sf-btn cancel" data-bs-dismiss="modal"><i class="fas fa-times"></i>{{ dual('cancel') }}</button>
+          <button type="button" class="sf-btn save" onclick="saveBankEntry()"><i class="fas fa-plus"></i>{{ dual('add_bank_detail') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /bankModal -->
+
+<!-- WAREHOUSE DETAIL SUB-MODAL -->
+<div class="modal fade bm-modal" id="whModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="bm-hdr" style="background:linear-gradient(135deg,#0e7490 0%,#0891b2 100%);">
+        <h5 id="whTitle"><i class="fas fa-warehouse"></i>{{ dual('add_warehouse_modal') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="bm-body" style="padding:20px 22px 4px;">
+        <input type="hidden" id="wh_idx" value="">
+        <div class="bi-group">
+          <div class="bi-labels">
+            <div class="bi-lbl-en">{{ t('warehouse_name') }}<span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span><span class="req">*</span></div>
+            <div class="bi-lbl-ar"><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span>{{ t_other('warehouse_name') }}</div>
+          </div>
+          <div class="bi-inputs">
+            <div class="bi-wrap"><input type="text" id="wh_name_p" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" placeholder="{{ t('enter_warehouse_name') }}" oninput="scheduleBMTrans('wh_name');clrInv(this,'err_wh_name')"><button type="button" class="sf-retrans" onclick="retransBM('wh_name')"><i class="fas fa-sync-alt"></i></button></div>
+            <div class="bi-wrap"><input type="text" id="wh_name_s" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}" placeholder="{{ t_other('enter_warehouse_name') }}"><span class="sf-spin" id="wh_name_spin"></span></div>
+          </div>
+          <div class="sf-err" id="err_wh_name"><i class="fas fa-exclamation-circle"></i><span>{{ t('warehouse_name_required') }}</span></div>
+        </div>
+        <div class="bi-group" style="margin-bottom:0;">
+          <div class="bi-labels">
+            <div class="bi-lbl-en">{{ t('location') }}<span class="lang-pip pip-src">{% if ar %}{{ configured_lang|upper }}{% else %}EN{% endif %}</span></div>
+            <div class="bi-lbl-ar"><span class="lang-pip pip-auto">{% if ar %}EN{% else %}{{ configured_lang|upper }}{% endif %}</span>{{ t_other('location') }}</div>
+          </div>
+          <div class="bi-inputs">
+            <div class="bi-wrap"><input type="text" id="wh_loc_p" class="sf-inp has-btn" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" placeholder="{{ t('enter_location') }}" oninput="scheduleBMTrans('wh_loc')"><button type="button" class="sf-retrans" onclick="retransBM('wh_loc')"><i class="fas fa-sync-alt"></i></button></div>
+            <div class="bi-wrap"><input type="text" id="wh_loc_s" class="sf-inp secondary" dir="{% if is_rtl %}ltr{% else %}rtl{% endif %}" placeholder="{{ t_other('enter_location') }}"><span class="sf-spin" id="wh_loc_spin"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bm-footer">
+        <button type="button" class="sf-btn cancel" data-bs-dismiss="modal"><i class="fas fa-times"></i>{{ dual('cancel') }}</button>
+        <button type="button" class="sf-btn save" onclick="saveWhEntry()"><i class="fas fa-plus"></i>{{ dual('save_word') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const TRANSLATE_URL = '{{ url_for("sellers.translate_text") }}';
+const CSRF = '{{ csrf_token() }}';
+const DATA_URL = '{{ url_for("sellers.owners_data") }}';
+const IS_ADMIN = {{ 'true' if current_user.is_admin() else 'false' }};
+const IS_AR = {{ 'true' if ar else 'false' }};
+const SECOND_LANG_CODE = '{{ configured_lang }}';
+const SRC = IS_AR ? SECOND_LANG_CODE : 'en';
+const TGT = IS_AR ? 'en' : SECOND_LANG_CODE;
+const DIR = SRC+'|'+TGT;
+/* Pre-resolved (for current_locale) strings for the grid/modals below --
+   gated the same way as every other caption: only translated when the
+   selected language IS the Owner's configured Second Language. */
+const I18N = {
+  active: {{ t('active')|tojson }}, inactive: {{ t('inactive')|tojson }},
+  view: {{ t('view_action')|tojson }}, edit: {{ t('edit_action')|tojson }}, del: {{ t('delete')|tojson }},
+  name: {{ t('name_field')|tojson }}, nameSecond: {{ (t('name_field') ~ ' (' ~ configured_lang_native ~ ')')|tojson }},
+  code: {{ t('code')|tojson }}, vat: {{ t('vat_short')|tojson }}, crn: {{ t('crn_short')|tojson }},
+  phone: {{ t('phone')|tojson }}, email: {{ t('email')|tojson }}, city: {{ t('city')|tojson }},
+  country: {{ t('country')|tojson }}, status: {{ t('status')|tojson }}, created: {{ t('created')|tojson }},
+  actions: {{ t('actions_col')|tojson }}, columns: {{ t('columns_panel')|tojson }}, filters: {{ t('filters_panel')|tojson }},
+  selectedWord: {{ t('selected_word')|tojson }}, records: {{ t('records')|tojson }}, pageWord: {{ t('page_word')|tojson }},
+  deleteColon: {{ t('delete_colon')|tojson }}, primary: {{ t('primary')|tojson }},
+  editBankDetails: {{ t('edit_bank_details_modal')|tojson }}, addBankDetails: {{ dual('add_bank_details_modal')|tojson }},
+  editBankDetailsDual: {{ dual('edit_bank_details_modal')|tojson }},
+  confirmDeleteBank: {{ t('confirm_delete_bank')|tojson }},
+  editWarehouse: {{ t('edit_warehouse_modal')|tojson }}, editWarehouseDual: {{ dual('edit_warehouse_modal')|tojson }},
+  addWarehouseDual: {{ dual('add_warehouse_modal')|tojson }},
+  confirmDeleteWarehouse: {{ t('confirm_delete_warehouse')|tojson }},
+  chooseFile: {{ t('choose_file')|tojson }},
+  addOrgStructureDual: {{ dual('add_org_structure')|tojson }}, editOwnerDual: {{ dual('edit_owner_modal')|tojson }},
+  fieldRequired: {{ t('field_required')|tojson }}, invalidEmailFormat: {{ t('invalid_email_format')|tojson }},
+  onlyOneOwnerDual: {{ dual('only_one_owner')|tojson }},
+};
+
+function toggleSection(key){
+  const sec = document.getElementById('sec-'+key);
+  const body = document.getElementById('body-'+key);
+  const chev = document.getElementById('chev-'+key);
+  const isOpen = sec.classList.contains('open');
+  sec.classList.toggle('open', !isOpen);
+  chev.className = 'fas acc-chevron ' + (isOpen ? 'fa-chevron-down' : 'fa-chevron-up');
+}
+
+const _T={}, _B={};
+function isNumLike(s){ return /^[\d٠-٩\s\-\+\(\)\.\/\#]+$/.test(s.trim()); }
+function _translate(text, dir, cb){
+  fetch(TRANSLATE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({text,direction:dir})})
+  .then(r=>r.json()).then(d=>cb(d.translated||'')).catch(()=>cb(''));
+}
+function scheduleTrans(key){
+  const p=document.getElementById('f_'+key+'_p'), s=document.getElementById('f_'+key+'_s');
+  const spin=document.getElementById('spin_'+key);
+  if(!p||!s)return;
+  const text=p.value.trim();
+  clearTimeout(_T[key]);
+  if(!text){s.value='';if(spin)spin.innerHTML='';return;}
+  if(isNumLike(text)){s.value=text;return;}
+  if(spin)spin.innerHTML='<i class="fas fa-spinner fa-spin"></i>';
+  _T[key]=setTimeout(()=>{
+    _translate(text,DIR,res=>{
+      if(res&&s&&!_B[key]){_B[key]=true;s.value=res;s.classList.add('auto-filled');setTimeout(()=>{s.classList.remove('auto-filled');_B[key]=false;},600);}
+      if(spin){spin.innerHTML=res?'<i class="fas fa-check-circle" style="color:var(--teal);"></i>':'';setTimeout(()=>{if(spin)spin.innerHTML='';},2000);}
+    });
+  },650);
+}
+function retrans(key){
+  const p=document.getElementById('f_'+key+'_p'), s=document.getElementById('f_'+key+'_s');
+  const spin=document.getElementById('spin_'+key);
+  const text=(p?p.value:'').trim();
+  if(!text){if(s)s.value='';return;}
+  if(isNumLike(text)){if(s)s.value=text;return;}
+  if(spin)spin.innerHTML='<i class="fas fa-spinner fa-spin"></i>';
+  _translate(text,DIR,res=>{if(res&&s){s.value=res;s.classList.add('auto-filled');setTimeout(()=>s.classList.remove('auto-filled'),600);}if(spin)spin.innerHTML='';});
+}
+
+const _BT={}, _BB={};
+function scheduleBMTrans(key){
+  const p=document.getElementById(key+'_p'), s=document.getElementById(key+'_s');
+  const spin=document.getElementById(key+'_spin');
+  if(!p||!s)return;
+  const text=p.value.trim();
+  clearTimeout(_BT[key]);
+  if(!text){s.value='';if(spin)spin.innerHTML='';return;}
+  if(spin)spin.innerHTML='<i class="fas fa-spinner fa-spin"></i>';
+  _BT[key]=setTimeout(()=>{
+    _translate(text,DIR,res=>{
+      if(res&&s&&!_BB[key]){_BB[key]=true;s.value=res;s.classList.add('auto-filled');setTimeout(()=>{s.classList.remove('auto-filled');_BB[key]=false;},600);}
+      if(spin)spin.innerHTML='';
+    });
+  },650);
+}
+function retransBM(key){
+  const p=document.getElementById(key+'_p'), s=document.getElementById(key+'_s');
+  const text=(p?p.value:'').trim();
+  if(!text||!s)return;
+  _translate(text,DIR,res=>{if(res){s.value=res;s.classList.add('auto-filled');setTimeout(()=>s.classList.remove('auto-filled'),600);}});
+}
+
+const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function setInv(el,errId,msg){el.classList.add('is-invalid');const e=document.getElementById(errId);if(e){if(msg)e.querySelector('span').textContent=msg;e.classList.add('show');}}
+function clrInv(el,errId){el.classList.remove('is-invalid');const e=document.getElementById(errId);if(e)e.classList.remove('show');}
+function validateEmail(inp){const v=inp.value.trim();if(!v){clrInv(inp,'err_email');return;}EMAIL_RE.test(v)?clrInv(inp,'err_email'):setInv(inp,'err_email');}
+function clearBmErr(){
+  ['err_bm_name','err_bm_account','err_bm_branch','err_bm_swift','err_bm_iban'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('show');});
+  ['bm_name_p','bm_account','bm_branch_p','bm_swift','bm_iban'].forEach(id=>{document.getElementById(id)?.classList.remove('is-invalid');});
+}
+
+function renderName(p){
+  const c=p.data.report_color||'#16a34a';
+  const n=IS_AR&&p.data.name_ar?p.data.name_ar:(p.value||'');
+  return `<div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:${c};flex-shrink:0;display:inline-block;"></span>${n}</div>`;
+}
+function renderCode(p){return p.value?`<span class="code-badge">${p.value}</span>`:'';}
+function renderStatus(p){
+  const s=(p.value||'active').toLowerCase();
+  const l={active:I18N.active,inactive:I18N.inactive};
+  return `<span class="st-pill st-${s}"><i class="fas fa-circle" style="font-size:6px;"></i>${l[s]||s}</span>`;
+}
+class ActR{
+  init(p){this.el=document.createElement('div');this.el.className='pl-act';
+    const id=p.data.id,nm=(p.data.name||'').replace(/'/g,"\\'");
+    this.el.innerHTML=`<button class="pl-btn pl-view" onclick="window.location.href='/owners/${id}/view'" title="${I18N.view}"><i class="fas fa-eye"></i></button>
+      <button class="pl-btn pl-edit" onclick="openEditModal(${id})"><i class="fas fa-pencil-alt"></i></button>
+      <button class="pl-btn pl-del" onclick="confirmDelete('/owners/${id}/delete','${nm}')"><i class="fas fa-trash"></i></button>`;}
+  getGui(){return this.el;}
+}
+
+let gridApi;
+agGrid.createGrid(document.getElementById('ownerGrid'),{
+  multiSortKey:'ctrl',
+  columnDefs:[
+    {field:'id',width:48,checkboxSelection:true,headerCheckboxSelection:true,sortable:false,suppressMenu:true,resizable:false,filter:false,floatingFilter:false,enableRowGroup:false,enablePivot:false,enableValue:false,suppressColumnsToolPanel:true,pinned:IS_AR?'right':'left'},
+    {headerName:I18N.name,field:'name',minWidth:180,pinned:IS_AR?'right':'left',cellRenderer:renderName,filter:'agTextColumnFilter'},
+    {headerName:I18N.nameSecond,field:'name_ar',width:170,cellStyle:{direction:'rtl',textAlign:'right'},filter:'agTextColumnFilter'},
+    {headerName:I18N.code,field:'owner_code',width:125,cellRenderer:renderCode,filter:'agTextColumnFilter'},
+    {headerName:I18N.vat,field:'vat_number',width:145,filter:'agTextColumnFilter',editable:IS_ADMIN},
+    {headerName:I18N.crn,field:'crn',width:125,filter:'agTextColumnFilter',editable:IS_ADMIN},
+    {headerName:I18N.phone,field:'phone',width:130,filter:'agTextColumnFilter',editable:IS_ADMIN},
+    {headerName:I18N.email,field:'email',width:185,filter:'agTextColumnFilter',editable:IS_ADMIN},
+    {headerName:I18N.city,field:'city',width:115,filter:'agTextColumnFilter',editable:IS_ADMIN},
+    {headerName:I18N.country,field:'country',width:125,filter:'agTextColumnFilter',editable:IS_ADMIN},
+    {headerName:I18N.status,field:'status',width:110,cellRenderer:renderStatus,filter:'agSetColumnFilter'},
+    {headerName:I18N.created,field:'created_at',width:110,filter:'agTextColumnFilter'},
+    ...(IS_ADMIN?[{headerName:I18N.actions,field:'_a',width:110,pinned:IS_AR?'left':'right',sortable:false,suppressMenu:true,resizable:false,filter:false,floatingFilter:false,enableRowGroup:false,enablePivot:false,enableValue:false,suppressColumnsToolPanel:true,cellRenderer:ActR,cellStyle:{overflow:'visible',padding:'0 8px'}}]:[]),
+  ],
+  rowData:[],pagination:true,paginationPageSize:20, paginationPageSizeSelector:[20,50,100],
+  alwaysShowHorizontalScroll:true,alwaysShowVerticalScroll:true,
+  sideBar:{toolPanels:[{id:'columns',labelDefault:I18N.columns,labelKey:'columns',iconKey:'columns',toolPanel:'agColumnsToolPanel'},{id:'filters',labelDefault:I18N.filters,labelKey:'filters',iconKey:'filter',toolPanel:'agFiltersToolPanel'}],defaultToolPanel:''},
+  rowGroupPanelShow:'always',pivotPanelShow:'always',groupDisplayType:'groupRows',
+  rowSelection:'multiple',suppressRowClickSelection:true,animateRows:true,enableRtl:IS_AR,
+  defaultColDef:{sortable:true,unSortIcon:true,resizable:true,filter:true,floatingFilter:true,suppressMenu:false,enableRowGroup:true,enablePivot:true,enableValue:true,editable:function(p){return IS_ADMIN && window.ioFieldEditable && ioFieldEditable(p.colDef.field);},menuTabs:['filterMenuTab','columnsMenuTab','generalMenuTab'],filterParams:{buttons:['apply','reset','clear'],closeOnApply:true}},
+  onGridReady(p) {
+    gridApi = p.api;
+    // Enterprise sidebar (Columns + Filters) + row-group/pivot panels replace
+    // the GridKit toolbar here, so GridKit.enhance is intentionally not called.
+    loadData();
+  },
+  onFilterChanged(){updateBadge();},onPaginationChanged(){updateBadge();},onSelectionChanged(){updateBadge();},
+  onCellValueChanged(e){ ioSaveCell('owners', e); },
+});
+function loadData(preserveFilter){var sf=(preserveFilter&&gridApi)?gridApi.getFilterModel():null;fetch(DATA_URL).then(r=>r.json()).then(d=>{gridApi.setGridOption('rowData',d);if(sf&&Object.keys(sf).length)gridApi.setFilterModel(sf);updateBadge();var btn=document.getElementById('addOwnerBtn');if(btn){var has=Array.isArray(d)&&d.length>0;btn.disabled=has;btn.style.opacity=has?'0.4':'';btn.style.cursor=has?'not-allowed':'';btn.title=has?I18N.onlyOneOwnerDual:'{{ t("add_owner") }}';}});}
+function refreshGrid(){ if(!gridApi){return;} loadData(true); }
+function exportCSV(){ if(gridApi) gridApi.exportDataAsCsv({fileName:'owners.csv'}); }
+function clearAllFilters(){
+  if(!gridApi) return;
+  gridApi.setFilterModel(null);              // column + floating filters
+  gridApi.setGridOption('quickFilterText',''); // quick filter
+  var gs=document.getElementById('globalSearch'); if(gs) gs.value='';
+  gridApi.onFilterChanged();
+  updateBadge();
+}
+function ownerImport(input){
+  var f=input.files[0]; if(!f) return;
+  var name=(f.name||'').toLowerCase();
+  // .xlsx -> multi-sheet bundle (owner + banks + warehouses); .csv -> owner-only
+  if(name.endsWith('.xlsx')||name.endsWith('.xlsm')){ ioBundleImport(input,'owner-full'); }
+  else { ioImport(input,'owners'); }
+}
+function updateBadge(){
+  if(!gridApi)return;
+  const sel=gridApi.getSelectedRows().length,disp=gridApi.getDisplayedRowCount(),total=(gridApi.getGridOption('rowData')||[]).length;
+  document.getElementById('selText').textContent=sel>0?`${sel} ${I18N.selectedWord}`:`${disp} ${I18N.records}`;
+  const pg=gridApi.paginationGetCurrentPage()+1,pgs=gridApi.paginationGetTotalPages();
+  document.getElementById('pageInfo').textContent=`${disp} / ${total} — ${I18N.pageWord} ${pg}/${pgs}`;
+}
+function confirmDelete(url,name){
+  document.getElementById('deleteText').textContent=I18N.deleteColon+name;
+  document.getElementById('deleteForm').action=url;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+/* ══ BANKS ══ */
+let _banks = [];
+let _bankSeq = 0;
+function renderBankTable(){
+  const wrap=document.getElementById('bankTblWrap');
+  const body=document.getElementById('bankTblBody');
+  const empty=document.getElementById('bankEmptyMsg');
+  const badge=document.getElementById('bankCountBadge');
+  if(badge){badge.textContent=_banks.length;badge.style.display=_banks.length?'inline-block':'none';}
+  if(!_banks.length){if(wrap)wrap.style.display='none';if(empty)empty.style.display='block';return;}
+  if(wrap)wrap.style.display='block';if(empty)empty.style.display='none';
+  body.innerHTML=_banks.map((b,i)=>`
+    <tr class="${b.is_primary?'is-primary':''}">
+      <td><strong>${b.bank_name||'—'}</strong>${b.bank_name_ar?`<br><small style="color:var(--gray-400);font-size:11px;">${b.bank_name_ar}</small>`:''}</td>
+      <td>${b.branch||'—'}${b.branch_ar?`<br><small style="color:var(--gray-400);font-size:11px;">${b.branch_ar}</small>`:''}</td>
+      <td class="td-mono">${b.account_number||'—'}</td>
+      <td class="td-mono" style="font-size:11px;">${b.iban||'—'}</td>
+      <td class="td-mono">${b.swift_code||'—'}</td>
+      <td style="text-align:center;">${b.is_primary?'<span class="primary-check"><i class="fas fa-check-circle"></i>'+(' '+I18N.primary)+'</span>':'—'}</td>
+      <td><div class="td-acts">
+        <button type="button" class="pl-btn pl-edit" onclick="editBankEntry(${i})" title="${I18N.edit}"><i class="fas fa-pencil-alt"></i></button>
+        <button type="button" class="pl-btn pl-del" onclick="deleteBankEntry(${i})" title="${I18N.del}"><i class="fas fa-trash"></i></button>
+      </div></td>
+    </tr>`).join('');
+}
+function openBankModal(editIdx){
+  document.getElementById('bm_idx').value = (editIdx!=null) ? editIdx : '';
+  document.getElementById('bmTitle').innerHTML = editIdx!=null
+    ? `<i class="fas fa-edit me-2"></i>${I18N.editBankDetailsDual}`
+    : `<i class="fas fa-university me-2"></i>${I18N.addBankDetails}`;
+  if(editIdx!=null){
+    const b=_banks[editIdx];
+    document.getElementById('bm_name_p').value    = IS_AR ? (b.bank_name_ar||b.bank_name||'') : (b.bank_name||'');
+    document.getElementById('bm_name_s').value    = IS_AR ? (b.bank_name||'')                  : (b.bank_name_ar||'');
+    document.getElementById('bm_account').value   = b.account_number||'';
+    document.getElementById('bm_branch_p').value  = IS_AR ? (b.branch_ar||b.branch||'')        : (b.branch||'');
+    document.getElementById('bm_branch_s').value  = IS_AR ? (b.branch||'')                     : (b.branch_ar||'');
+    document.getElementById('bm_swift').value     = b.swift_code||'';
+    document.getElementById('bm_iban').value      = b.iban||'';
+    document.getElementById('bm_primary').checked = b.is_primary||false;
+  } else {
+    ['bm_name_p','bm_name_s','bm_account','bm_branch_p','bm_branch_s','bm_swift','bm_iban'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('bm_primary').checked=false;
+  }
+  clearBmErr();
+  const sec=document.getElementById('sec-bank');
+  if(!sec.classList.contains('open')) toggleSection('bank');
+  new bootstrap.Modal(document.getElementById('bankModal')).show();
+}
+function saveBankEntry(){
+  const name_p=(document.getElementById('bm_name_p').value||'').trim();
+  const account=(document.getElementById('bm_account').value||'').trim();
+  const branch_p=(document.getElementById('bm_branch_p').value||'').trim();
+  const swift=(document.getElementById('bm_swift').value||'').trim();
+  const iban=(document.getElementById('bm_iban').value||'').trim();
+  let ok = true;
+  if(!name_p){setInv(document.getElementById('bm_name_p'),'err_bm_name');ok=false;}
+  if(!account){setInv(document.getElementById('bm_account'),'err_bm_account');ok=false;}
+  if(!branch_p){setInv(document.getElementById('bm_branch_p'),'err_bm_branch');ok=false;}
+  if(!swift){setInv(document.getElementById('bm_swift'),'err_bm_swift');ok=false;}
+  if(!iban){setInv(document.getElementById('bm_iban'),'err_bm_iban');ok=false;}
+  if(!ok) return;
+  const name_s=(document.getElementById('bm_name_s').value||'').trim();
+  const branch_s=(document.getElementById('bm_branch_s').value||'').trim();
+  const isPrimary=document.getElementById('bm_primary').checked;
+  const idxStr=document.getElementById('bm_idx').value;
+  const editIdx=idxStr!==''?parseInt(idxStr):null;
+  if(isPrimary) _banks.forEach(b => b.is_primary = false);
+  const entry={
+    bank_name:      IS_AR ? name_s   : name_p,
+    bank_name_ar:   IS_AR ? name_p   : name_s,
+    account_number: account,
+    branch:         IS_AR ? branch_s : branch_p,
+    branch_ar:      IS_AR ? branch_p : branch_s,
+    swift_code:     swift, iban: iban, is_primary: isPrimary,
+  };
+  if(editIdx != null){entry._dbId=_banks[editIdx]._dbId;_banks[editIdx]=entry;}
+  else{entry._id=++_bankSeq;_banks.push(entry);}
+  renderBankTable();
+  bootstrap.Modal.getInstance(document.getElementById('bankModal'))?.hide();
+}
+function editBankEntry(idx){ openBankModal(idx); }
+function deleteBankEntry(idx){
+  if(!confirm(I18N.confirmDeleteBank)) return;
+  _banks.splice(idx,1); renderBankTable();
+}
+function injectBankFields(){
+  document.querySelectorAll('#ownerForm .bank-hidden-input').forEach(e=>e.remove());
+  const form=document.getElementById('ownerForm');
+  _banks.forEach((b,i)=>{
+    const fields={
+      [`banks[${i}][bank_name]`]:b.bank_name||'',[`banks[${i}][bank_name_ar]`]:b.bank_name_ar||'',
+      [`banks[${i}][account_number]`]:b.account_number||'',[`banks[${i}][branch]`]:b.branch||'',
+      [`banks[${i}][branch_ar]`]:b.branch_ar||'',[`banks[${i}][swift_code]`]:b.swift_code||'',
+      [`banks[${i}][iban]`]:b.iban||'',[`banks[${i}][is_primary]`]:b.is_primary?'1':'0',[`banks[${i}][_db_id]`]:b._dbId||'',
+    };
+    Object.entries(fields).forEach(([n,v])=>{const h=document.createElement('input');h.type='hidden';h.name=n;h.value=v;h.className='bank-hidden-input';form.appendChild(h);});
+  });
+}
+
+/* ══ WAREHOUSES ══ */
+let _whs = [];
+function renderWhTable(){
+  const wrap=document.getElementById('whTblWrap');
+  const body=document.getElementById('whTblBody');
+  const empty=document.getElementById('whEmptyMsg');
+  const badge=document.getElementById('whCountBadge');
+  if(badge){badge.textContent=_whs.length;badge.style.display=_whs.length?'inline-block':'none';}
+  if(!_whs.length){if(wrap)wrap.style.display='none';if(empty)empty.style.display='block';return;}
+  if(wrap)wrap.style.display='block';if(empty)empty.style.display='none';
+  body.innerHTML=_whs.map((w,i)=>`
+    <tr>
+      <td><strong>${w.warehouse_name||'—'}</strong>${w.warehouse_name_ar?`<br><small style="color:var(--gray-400);font-size:11px;">${w.warehouse_name_ar}</small>`:''}</td>
+      <td>${w.location||'—'}${w.location_ar?`<br><small style="color:var(--gray-400);font-size:11px;">${w.location_ar}</small>`:''}</td>
+      <td><div class="td-acts">
+        <button type="button" class="pl-btn pl-edit" onclick="openWhModal(${i})" title="${I18N.edit}"><i class="fas fa-pencil-alt"></i></button>
+        <button type="button" class="pl-btn pl-del" onclick="deleteWhEntry(${i})" title="${I18N.del}"><i class="fas fa-trash"></i></button>
+      </div></td>
+    </tr>`).join('');
+}
+function openWhModal(editIdx){
+  document.getElementById('wh_idx').value = (editIdx!=null)?editIdx:'';
+  document.getElementById('whTitle').innerHTML = editIdx!=null
+    ? `<i class="fas fa-edit"></i> ${I18N.editWarehouseDual}`
+    : `<i class="fas fa-warehouse"></i> ${I18N.addWarehouseDual}`;
+  if(editIdx!=null){
+    const w=_whs[editIdx];
+    document.getElementById('wh_name_p').value = IS_AR ? (w.warehouse_name_ar||w.warehouse_name||'') : (w.warehouse_name||'');
+    document.getElementById('wh_name_s').value = IS_AR ? (w.warehouse_name||'') : (w.warehouse_name_ar||'');
+    document.getElementById('wh_loc_p').value = IS_AR ? (w.location_ar||w.location||'') : (w.location||'');
+    document.getElementById('wh_loc_s').value = IS_AR ? (w.location||'') : (w.location_ar||'');
+  } else {
+    document.getElementById('wh_name_p').value='';
+    document.getElementById('wh_name_s').value='';
+    document.getElementById('wh_loc_p').value='';
+    document.getElementById('wh_loc_s').value='';
+  }
+  document.getElementById('err_wh_name')?.classList.remove('show');
+  document.getElementById('wh_name_p')?.classList.remove('is-invalid');
+  const sec=document.getElementById('sec-warehouse');
+  if(sec && !sec.classList.contains('open')) toggleSection('warehouse');
+  new bootstrap.Modal(document.getElementById('whModal')).show();
+}
+function saveWhEntry(){
+  const name_p=(document.getElementById('wh_name_p').value||'').trim();
+  if(!name_p){setInv(document.getElementById('wh_name_p'),'err_wh_name');return;}
+  const name_s=(document.getElementById('wh_name_s').value||'').trim();
+  const loc_p=(document.getElementById('wh_loc_p').value||'').trim();
+  const loc_s=(document.getElementById('wh_loc_s').value||'').trim();
+  const idxStr=document.getElementById('wh_idx').value;
+  const editIdx = idxStr!=='' ? parseInt(idxStr) : null;
+  const entry={
+    warehouse_name:    IS_AR ? name_s : name_p,
+    warehouse_name_ar: IS_AR ? name_p : name_s,
+    location:    IS_AR ? loc_s : loc_p,
+    location_ar: IS_AR ? loc_p : loc_s,
+    _dbId: (editIdx!=null && _whs[editIdx]) ? _whs[editIdx]._dbId : null
+  };
+  if(editIdx!=null) _whs[editIdx]=entry; else _whs.push(entry);
+  renderWhTable();
+  bootstrap.Modal.getInstance(document.getElementById('whModal'))?.hide();
+}
+function deleteWhEntry(idx){
+  if(!confirm(I18N.confirmDeleteWarehouse))return;
+  _whs.splice(idx,1); renderWhTable();
+}
+function injectWhFields(){
+  document.querySelectorAll('#ownerForm .wh-hidden-input').forEach(e=>e.remove());
+  const form=document.getElementById('ownerForm');
+  _whs.forEach((w,i)=>{
+    const fields={
+      [`warehouses[${i}][warehouse_name]`]:w.warehouse_name||'',
+      [`warehouses[${i}][warehouse_name_ar]`]:w.warehouse_name_ar||'',
+      [`warehouses[${i}][location]`]:w.location||'',
+      [`warehouses[${i}][location_ar]`]:w.location_ar||'',
+      [`warehouses[${i}][_db_id]`]:w._dbId||'',
+    };
+    Object.entries(fields).forEach(([n,v])=>{const h=document.createElement('input');h.type='hidden';h.name=n;h.value=v;h.className='wh-hidden-input';form.appendChild(h);});
+  });
+  const flag=document.createElement('input');flag.type='hidden';flag.name='warehouses_submitted';flag.value='1';flag.className='wh-hidden-input';form.appendChild(flag);
+}
+
+let currentOwnerId=null;
+function clearAllFields(){
+  const ids=['f_name_p','f_name_s','f_vat','f_crn','f_phone','f_fax','f_email','f_website',
+             'f_country_p','f_country_s','f_city_p','f_city_s','f_district_p','f_district_s',
+             'f_street_p','f_street_s','f_building','f_additional','f_postal',
+             'f_smtp_host','f_smtp_username','f_smtp_password'];
+  ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const sp=document.getElementById('f_smtp_port');if(sp)sp.value='587';
+  const stls=document.getElementById('f_smtp_use_tls');if(stls)stls.checked=true;
+  const pwHint=document.getElementById('smtp_pw_hint');if(pwHint)pwHint.style.display='none';
+  document.querySelectorAll('#ownerForm .sf-inp').forEach(el=>el.classList.remove('is-invalid'));
+  document.querySelectorAll('#ownerForm .sf-err').forEach(el=>el.classList.remove('show'));
+  const rc=document.getElementById('f_rcolor');if(rc)rc.value='#16a34a';
+  const sw=document.getElementById('f_rswatch');if(sw)sw.value='#16a34a';
+  const st=document.getElementById('f_status');if(st)st.value='active';
+  const sl=document.getElementById('f_second_language');if(sl)sl.value='Arabic';
+  ['logoName','bgLogoName','headerName','footerName','stampName'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=I18N.chooseFile;});
+  document.querySelectorAll('.sf-spin').forEach(e=>e.innerHTML='');
+  _banks=[];_bankSeq=0;renderBankTable();
+  _whs=[];renderWhTable();
+  ['basic','warehouse','address','bank'].forEach(k=>{
+    const sec=document.getElementById('sec-'+k);
+    const chev=document.getElementById('chev-'+k);
+    if(k==='basic'){sec.classList.add('open');chev.className='fas acc-chevron fa-chevron-up';}
+    else{sec.classList.remove('open');chev.className='fas acc-chevron fa-chevron-down';}
+  });
+}
+function openAddModal(){
+  var btn=document.getElementById('addOwnerBtn');
+  if(btn && btn.disabled) return;
+  currentOwnerId=null;
+  document.getElementById('sfModalTitle').innerHTML='<i class="fas fa-user-tie"></i> '+I18N.addOrgStructureDual;
+  document.getElementById('ownerForm').action='{{ url_for("sellers.add_owner") }}';
+  document.getElementById('sfOwnerId').value='';
+  clearAllFields();
+  new bootstrap.Modal(document.getElementById('ownerModal')).show();
+}
+function openEditModal(id){
+  currentOwnerId=id;
+  document.getElementById('sfModalTitle').innerHTML='<i class="fas fa-user-edit"></i> '+I18N.editOwnerDual;
+  document.getElementById('ownerForm').action='/owners/'+id+'/edit';
+  document.getElementById('sfOwnerId').value=id;
+  clearAllFields();
+  fetch('/owners/'+id+'/json').then(r=>r.json()).then(d=>{
+    document.getElementById('f_name_p').value  = IS_AR?(d.name_ar||''):(d.name||'');
+    document.getElementById('f_name_s').value  = IS_AR?(d.name||''):(d.name_ar||'');
+    const vm=document.getElementById('f_vat');if(vm)vm.value=d.vat_number||'';
+    const crnEl=document.getElementById('f_crn');if(crnEl)crnEl.value=d.crn||'';
+    ['phone','fax','email','website'].forEach(f=>{const el=document.getElementById('f_'+f);if(el)el.value=d[f]||'';});
+    const shEl=document.getElementById('f_smtp_host');if(shEl)shEl.value=d.smtp_host||'';
+    const spEl=document.getElementById('f_smtp_port');if(spEl)spEl.value=d.smtp_port||587;
+    const suEl=document.getElementById('f_smtp_username');if(suEl)suEl.value=d.smtp_username||'';
+    const stlsEl=document.getElementById('f_smtp_use_tls');if(stlsEl)stlsEl.checked=(d.smtp_use_tls!==false);
+    const pwHintEl=document.getElementById('smtp_pw_hint');if(pwHintEl)pwHintEl.style.display=d.smtp_password_set?'block':'none';
+    const st=document.getElementById('f_status');if(st)st.value=d.status||'active';
+    const rc=document.getElementById('f_rcolor');if(rc)rc.value=d.report_color||'#16a34a';
+    const sw=document.getElementById('f_rswatch');if(sw)sw.value=d.report_color||'#16a34a';
+    document.getElementById('f_country_p').value = IS_AR?(d.country_ar||''):(d.country||'');
+    document.getElementById('f_country_s').value = IS_AR?(d.country||''):(d.country_ar||'');
+    document.getElementById('f_city_p').value = IS_AR?(d.city_ar||''):(d.city||'');
+    document.getElementById('f_city_s').value = IS_AR?(d.city||''):(d.city_ar||'');
+    document.getElementById('f_district_p').value = IS_AR?(d.district_ar||''):(d.district||'');
+    document.getElementById('f_district_s').value = IS_AR?(d.district||''):(d.district_ar||'');
+    document.getElementById('f_street_p').value = IS_AR?(d.street_name_ar||''):(d.street_name||'');
+    document.getElementById('f_street_s').value = IS_AR?(d.street_name||''):(d.street_name_ar||'');
+    document.getElementById('f_building').value   = d.building_number||'';
+    document.getElementById('f_additional').value = d.additional_number||'';
+    document.getElementById('f_postal').value     = d.postal_code||'';
+    const sl=document.getElementById('f_second_language');if(sl)sl.value=d.second_language||'Arabic';
+    _banks=(d.banks||[]).map(b=>({...b,bank_name_ar:b.bank_name_ar||'',_dbId:b.id}));
+    renderBankTable();
+    fetch('/owners/'+id+'/warehouses').then(r=>r.json()).then(list=>{
+      _whs=list.map(w=>({
+        warehouse_name:w.warehouse_name||'',warehouse_name_ar:w.warehouse_name_ar||'',
+        location:w.location||'',location_ar:w.location_ar||'',_dbId:w.id
+      }));
+      renderWhTable();
+    }).catch(()=>{});
+  });
+  new bootstrap.Modal(document.getElementById('ownerModal')).show();
+}
+function resetForm(){ clearAllFields(); }
+function setFName(inp,id){const e=document.getElementById(id);if(e)e.textContent=inp.files[0]?inp.files[0].name:I18N.chooseFile;}
+
+function submitOwnerForm(){
+  let ok = true;
+  const required = [['f_name_p','err_name'],['f_vat','err_vat'],['f_crn','err_crn'],['f_email','err_email']];
+  required.forEach(([elId, errId]) => {
+    const el = document.getElementById(elId);
+    if(!el) return;
+    if(!el.value.trim()){ setInv(el, errId, I18N.fieldRequired); ok = false; }
+    else { clrInv(el, errId); }
+  });
+  const emailEl = document.getElementById('f_email');
+  if(emailEl && emailEl.value.trim() && !EMAIL_RE.test(emailEl.value.trim())){
+    setInv(emailEl, 'err_email', I18N.invalidEmailFormat); ok = false;
+  }
+  if(!ok){
+    const firstErr = document.querySelector('#ownerForm .sf-inp.is-invalid');
+    if(firstErr){
+      const sec = firstErr.closest('.acc-section');
+      if(sec && !sec.classList.contains('open')){ toggleSection(sec.id.replace('sec-','')); }
+      setTimeout(() => firstErr.focus(), 300);
+    }
+    return;
+  }
+  injectBankFields();
+  injectWhFields();
+  document.getElementById('ownerForm').submit();
+}
+
+document.getElementById('ownerForm').addEventListener('submit',()=>setTimeout(loadData,800));
+</script>
+{% endblock %}

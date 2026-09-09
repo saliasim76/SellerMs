@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% set ar = current_locale != 'en' %}
+{% block title %}{{ t('supplier_account') }} – Seller MS{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{{ t('dashboard') }}</a></li>
+<li class="breadcrumb-item active">{{ t('supplier_account') }}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.tool-btn{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:38px;padding:0 12px;border:none;border-radius:8px;font-size:14px;cursor:pointer;color:#fff;transition:filter .15s;}
+.tool-btn:hover{filter:brightness(0.92);}
+.ag-theme-alpine{--ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#eff6ff;--ag-header-height:44px;--ag-row-height:40px;--ag-cell-horizontal-padding:12px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading"><i class="fas fa-book me-2"></i>{{ t('supplier_account') }}</h2>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="tool-btn tool-btn-blue" onclick="refreshGrid()" title="{{ t('refresh') }}"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn tool-btn-green" onclick="exportCSV()" title="{{ t('export_action') }}"><i class="fas fa-file-csv"></i></button>
+      <button class="tool-btn tool-btn-gray" onclick="clearAllFilters()" title="{{ t('clear_filters') }}"><i class="fas fa-times-circle"></i></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="selText" style="font-size:12px;font-weight:600;color:var(--gray-400);">0 {{ t('records') }}</span>
+      <div style="position:relative;">
+        <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:12px;pointer-events:none;"></i>
+        <input id="globalSearch" type="text" style="padding:8px 12px 8px 32px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:13px;outline:none;width:220px;" placeholder="{{ t('search_placeholder') }}" oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+  <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
+    <div id="supAcctGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:520px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const DATA_URL = '/purchase/supplier-account/data';
+
+function money(p){
+  return p.value != null
+    ? `<span style="font-weight:600;font-variant-numeric:tabular-nums;">${parseFloat(p.value).toLocaleString('en-SA',{minimumFractionDigits:2})}</span>`
+    : '';
+}
+function balanceCell(p){
+  const v = parseFloat(p.value)||0;
+  const color = v > 0 ? '#166534' : v < 0 ? '#dc2626' : '#6b7280';
+  return `<span style="font-weight:700;font-variant-numeric:tabular-nums;color:${color};">${v.toLocaleString('en-SA',{minimumFractionDigits:2})}</span>`;
+}
+
+let gridApi;
+agGrid.createGrid(document.getElementById('supAcctGrid'), {
+  columnDefs: [
+    {headerName: IS_AR?'رمز المورد':'Supplier Code', field:'reference_code', minWidth:130, filter:'agTextColumnFilter', enableRowGroup:true},
+    {headerName: IS_AR?'اسم المورد':'Supplier Name', field:'supplier_name', minWidth:180, filter:'agTextColumnFilter', enableRowGroup:true},
+    {headerName: IS_AR?'رقم القيد':'JE No', field:'je_no', minWidth:130, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'المصدر':'Origin', field:'origion', minWidth:130, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'نوع المصدر':'Origin Type', field:'origin_type', width:110, filter:'agTextColumnFilter', enableRowGroup:true},
+    {headerName: IS_AR?'تاريخ الترحيل':'Posting Date', field:'posting_date', width:130, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'الرمز':'Code', field:'code', width:120, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'اسم الحساب':'Account Name', field:'account_name', minWidth:170, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'البيان':'Narration', field:'narration', minWidth:170, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'مدين':'Debit', field:'debit', width:120, filter:'agTextColumnFilter', cellRenderer:money, gkTotal:true},
+    {headerName: IS_AR?'دائن':'Credit', field:'credit', width:120, filter:'agTextColumnFilter', cellRenderer:money, gkTotal:true},
+    {headerName: IS_AR?'الرصيد':'Balance', field:'balance', width:130, filter:'agTextColumnFilter', cellRenderer:balanceCell, gkTotal:true},
+  ],
+  rowData: [], pagination:true, paginationPageSize:25, paginationPageSizeSelector:[25,50,100],
+  sideBar:{toolPanels:[{id:'columns',labelDefault:IS_AR?'الأعمدة':'Columns',toolPanel:'agColumnsToolPanel'},{id:'filters',labelDefault:IS_AR?'الفلاتر':'Filters',toolPanel:'agFiltersToolPanel'}],defaultToolPanel:''},
+  rowGroupPanelShow:'always',
+  animateRows:true, enableRtl:IS_AR,
+  headerHeight:52,
+  defaultColDef:{sortable:true, resizable:true, filter:true, floatingFilter:true, enableRowGroup:true, menuTabs:['filterMenuTab','columnsMenuTab','generalMenuTab']},
+  onGridReady(p){
+    gridApi = p.api;
+    if (window.GridKit) GridKit.enhance(p, 'supAcctGrid', { storageKey: 'purchase_supplier_account', exportName: 'Supplier Account', hidePivot: true });
+    loadData();
+  },
+  onFilterChanged(){ updateBadge(); }, onPaginationChanged(){ updateBadge(); },
+});
+
+function updateBadge(){
+  if(!gridApi) return;
+  let n = 0;
+  gridApi.forEachNodeAfterFilter(node => { if(!node.group) n++; });
+  document.getElementById('selText').textContent = n + ' ' + '{{ t("records") }}';
+}
+function loadData(){
+  fetch(DATA_URL).then(r=>r.json()).then(d=>{ gridApi.setGridOption('rowData', d); updateBadge(); });
+}
+function refreshGrid(){ if(gridApi) loadData(); }
+function exportCSV(){ if(gridApi) gridApi.exportDataAsCsv({fileName:'supplier_account.csv'}); }
+function clearAllFilters(){
+  if(!gridApi) return;
+  gridApi.setFilterModel(null);
+  gridApi.setGridOption('quickFilterText','');
+  const gs = document.getElementById('globalSearch'); if(gs) gs.value='';
+  gridApi.onFilterChanged();
+  updateBadge();
+}
+</script>
+{% endblock %}

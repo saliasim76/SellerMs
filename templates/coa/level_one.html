@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+{% set ar = current_locale != 'en' %}
+{% block title %}{{ t('coa_l1_title') }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{{ t('home') }}</a></li>
+<li class="breadcrumb-item">{{ t('chart_of_accounts') }}</li>
+<li class="breadcrumb-item active">{{ t('level_1') }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{{ t('coa_l1_title') }}</h2>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-blue" data-bs-toggle="modal" data-bs-target="#l1Modal" onclick="openAdd()"><i class="fas fa-plus"></i></button>
+      {% endif %}
+      <a href="{{ url_for('coa.coa_export') }}?fmt=csv&level=1" class="tool-btn" style="text-decoration:none;" title="{{ t('export_action') }}"><i class="fas fa-file-export"></i></a>
+      {% if current_user.is_admin() %}
+      <button type="button" class="tool-btn" title="{{ t('import') }}" onclick="document.getElementById('coaImp1').click()"><i class="fas fa-file-import"></i></button>
+      <input type="file" id="coaImp1" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="coaLevelImport(this,1)">
+      {% endif %}
+      <a href="{{ url_for('coa.level_two_list') }}" class="tool-btn" title="{{ t('level_2') }}"><i class="fas fa-layer-group"></i></a>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" class="search-input" placeholder="{{ t('search_placeholder') }}" oninput="filterRows(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div class="proledg-table-wrap">
+    <div id="coaGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:560px;"></div>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count" id="coaCount"></span>
+  </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal fade" id="l1Modal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="l1ModalTitle">{{ t('add_level1_account') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="l1Form" method="POST" action="{{ url_for('coa.level_one_add') }}" onsubmit="return validateL1();">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="row">
+            <div class="col-4 mb-3">
+              <label class="form-label fw-semibold">{{ t('code_length') }}</label>
+              <input type="text" class="form-control" value="1" readonly style="background:#f1f5f9;">
+              <small class="text-muted">{{ t('fixed_word') }}</small>
+            </div>
+            <div class="col-8 mb-3">
+              <label class="form-label fw-semibold">{{ t('code') }} <span style="color:#ef4444">*</span></label>
+              <div style="position:relative;">
+                <input type="text" name="code" id="l1_code" class="form-control" required maxlength="1"
+                       autocomplete="off" oninput="onCodeInput()"
+                       placeholder="{{ t('single_letter_example') }}"
+                       style="text-transform:uppercase;padding-right:36px;" pattern="[A-Za-z]">
+                <span id="l1_code_icon" style="position:absolute;top:50%;right:12px;transform:translateY(-50%);font-size:15px;display:none;"></span>
+              </div>
+              <small class="text-muted" id="l1_code_hint">{{ t('cannot_edit_after_creation') }}</small>
+              <small id="l1_code_msg" style="display:none;font-size:11.5px;margin-top:3px;"></small>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ t('drawers_word') }} <span style="color:#ef4444">*</span></label>
+            <div style="position:relative;">
+              <input type="text" name="drawers" id="l1_drawers" class="form-control" required maxlength="100"
+                     autocomplete="off" oninput="onDrawersInput();coaTrans('l1_drawers','l1_drawers_ar')" style="padding-right:36px;"
+                     placeholder="{{ t('eg_asset') }}">
+              <span id="l1_dr_icon" style="position:absolute;top:50%;right:12px;transform:translateY(-50%);font-size:15px;display:none;"></span>
+            </div>
+            <small id="l1_dr_msg" style="display:none;font-size:11.5px;margin-top:3px;"></small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ t('drawers_word') }} ({{ configured_lang_native }})</label>
+            <div style="position:relative;">
+              <input type="text" name="drawers_ar" id="l1_drawers_ar" class="form-control" maxlength="100"
+                     dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" autocomplete="off" style="padding-right:40px;"
+                     placeholder="{{ t('auto_translated_placeholder') }}">
+              <button type="button" onclick="coaRetrans('l1_drawers','l1_drawers_ar')" title="{{ t('retranslate') }}"
+                      style="position:absolute;top:50%;right:6px;transform:translateY(-50%);border:none;background:#eff6ff;color:#2563eb;border-radius:6px;width:28px;height:28px;cursor:pointer;">
+                <i class="fas fa-sync-alt"></i></button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ t('description_word') }} <span style="color:#ef4444">*</span></label>
+            <input type="text" name="description" id="l1_desc" class="form-control" required maxlength="255"
+                   value="Elements of Financial Statements" oninput="coaTrans('l1_desc','l1_desc_ar')">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ t('description_word') }} ({{ configured_lang_native }})</label>
+            <div style="position:relative;">
+              <input type="text" name="description_ar" id="l1_desc_ar" class="form-control" maxlength="255"
+                     dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" autocomplete="off" style="padding-right:40px;"
+                     placeholder="{{ t('auto_translated_placeholder') }}">
+              <button type="button" onclick="coaRetrans('l1_desc','l1_desc_ar')" title="{{ t('retranslate') }}"
+                      style="position:absolute;top:50%;right:6px;transform:translateY(-50%);border:none;background:#eff6ff;color:#2563eb;border-radius:6px;width:28px;height:28px;cursor:pointer;">
+                <i class="fas fa-sync-alt"></i></button>
+            </div>
+          </div>
+
+          <div class="mb-1">
+            <label class="form-label fw-semibold">{{ t('status') }}</label>
+            <div style="display:flex;gap:16px;">
+              <label style="cursor:pointer;"><input type="radio" name="status" value="active" id="l1_st_active" checked> {{ t('active') }}</label>
+              <label style="cursor:pointer;"><input type="radio" name="status" value="inactive" id="l1_st_inactive"> {{ t('inactive') }}</label>
+            </div>
+          </div>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{{ t('cancel') }}
+        </button>
+        <button type="submit" class="pl-footer-btn pl-btn-save">
+          <i class="fas fa-save me-1"></i>{{ t('save_word') }}
+        </button>
+      </div>
+        </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+function coaLevelImport(input, level){
+  const f = input.files[0];
+  if(!f) return;
+  const fd = new FormData();
+  fd.set('file', f); fd.set('level', level);
+  const csrf = '{{ csrf_token() }}';
+  fd.set('csrf_token', csrf);
+  fetch('{{ url_for("coa.coa_import") }}', {method:'POST', headers:{'X-CSRFToken':csrf}, body:fd})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        let msg = 'Added: '+d.added+', skipped: '+d.skipped;
+        if(d.errors && d.errors.length) msg += '\n' + d.errors.slice(0,10).join('\n');
+        alert(msg); location.reload();
+      } else { alert(d.error || 'Error'); }
+    }).catch(()=>alert('Network error')).finally(()=>{ input.value=''; });
+}
+</script>
+<script>
+/* Pre-resolved (for current_locale) strings -- gated the same way as every
+   other caption: only translated when the selected language IS the
+   Owner's configured Second Language. Declared outside the IIFEs below so
+   both this grid script and the form-validation script can use it. */
+const I18N = {
+  active: {{ t('active')|tojson }}, inactive: {{ t('inactive')|tojson }},
+  edit: {{ t('edit_action')|tojson }}, del: {{ t('delete')|tojson }},
+  length: {{ t('length_col')|tojson }}, code: {{ t('code')|tojson }},
+  drawers: {{ t('drawers_word')|tojson }}, drawersSecond: {{ (t('drawers_word') ~ ' (' ~ configured_lang_native ~ ')')|tojson }},
+  description: {{ t('description_word')|tojson }}, descriptionSecond: {{ (t('description_word') ~ ' (' ~ configured_lang_native ~ ')')|tojson }},
+  status: {{ t('status')|tojson }}, actions: {{ t('actions_col')|tojson }},
+  noAccountsYet: {{ t('no_accounts_yet')|tojson }}, searchPlaceholder: {{ t('search_placeholder')|tojson }},
+  confirmDeleteAccount: {{ t('confirm_delete_account')|tojson }}, deleteFailedChild: {{ t('delete_failed_child')|tojson }},
+  addLevel1Account: {{ t('add_level1_account')|tojson }}, editLevel1Account: {{ t('edit_level1_account')|tojson }},
+  cannotEditAfterCreation: {{ t('cannot_edit_after_creation')|tojson }}, codeFixedNoEdit: {{ t('code_fixed_no_edit')|tojson }},
+  codeRequired: {{ t('code_required')|tojson }}, drawersRequired: {{ t('drawers_required')|tojson }},
+  fillRequiredFields: {{ t('fill_required_fields')|tojson }}, codeSingleLetter: {{ t('code_single_letter')|tojson }},
+  codeAlreadyTaken: {{ t('code_already_taken')|tojson }}, fixDrawersField: {{ t('fix_drawers_field')|tojson }},
+  accountsWordParen: {{ t('accounts_word_paren')|tojson }},
+};
+</script>
+<script>
+/* ── Level 1 AG-Grid (loads from /coa/level-one/data) ── */
+(function(){
+  const IS_AR_G  = {{ 'true' if ar else 'false' }};
+  const IS_RTL_G = {{ 'true' if is_rtl else 'false' }};
+  const CSRF_G   = '{{ csrf_token() }}';
+  const IS_ADMIN = {{ 'true' if current_user.is_admin() else 'false' }};
+  const DATA_URL = {{ url_for('coa.level_one_data')|tojson }};
+  const DEL_BASE = {{ url_for('coa.level_one_list')|tojson }};
+  function statusBadge(v){ const a=(v||'active')==='active'; return '<span style="background:'+(a?'#dcfce7':'#fee2e2')+';color:'+(a?'#15803d':'#b91c1c')+';padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;">'+(a?I18N.active:I18N.inactive)+'</span>'; }
+  function codeBadge(v){ return '<span class="code-badge">'+(v==null?'':v)+'</span>'; }
+  window.coaDelete1 = function(id){
+    if(!confirm(I18N.confirmDeleteAccount)) return;
+    const fd=new FormData(); fd.set('csrf_token',CSRF_G);
+    fetch(DEL_BASE + '/' + id + '/delete',{method:'POST',body:fd})
+      .then(r=> r.ok?r:Promise.reject()).then(()=>window.coaReload1())
+      .catch(()=>alert(I18N.deleteFailedChild));
+  };
+  class L1Act{
+    init(p){ const d=p.data; this.el=document.createElement('div'); this.el.style.cssText='display:flex;gap:4px;justify-content:center;';
+      this.el.innerHTML='<button type="button" class="action-btn action-btn-edit" title="'+I18N.edit+'"><i class="fas fa-pencil-alt"></i></button><button type="button" class="action-btn action-btn-delete" title="'+I18N.del+'"><i class="fas fa-trash"></i></button>';
+      const b=this.el.querySelectorAll('button');
+      b[0].addEventListener('click',()=>{ if(window.openEdit) window.openEdit(d.id, d.code, d.drawers, d.description, d.status, d.drawers_ar, d.description_ar); });
+      b[1].addEventListener('click',()=> window.coaDelete1(d.id));
+    }
+    getGui(){ return this.el; }
+  }
+  const _cf={ filter:'agTextColumnFilter', filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} };
+  const cols=[
+    { headerName:I18N.length, field:'code_length', width:100, filter:'agNumberColumnFilter' },
+    { headerName:I18N.code, field:'code', width:130, cellRenderer:p=>codeBadge(p.value), pinned:IS_AR_G?'right':'left', ..._cf },
+    { headerName:I18N.drawers, field:'drawers', minWidth:200, flex:2, cellStyle:{fontWeight:600}, ..._cf },
+    { headerName:I18N.drawersSecond, field:'drawers_ar', minWidth:160, flex:1, cellStyle:{direction:IS_RTL_G?'rtl':'ltr'}, ..._cf },
+    { headerName:I18N.description, field:'description', minWidth:200, flex:1, cellStyle:{color:'#6b7280',fontSize:'12px'}, ..._cf },
+    { headerName:I18N.descriptionSecond, field:'description_ar', minWidth:160, flex:1, cellStyle:{color:'#6b7280',fontSize:'12px',direction:IS_RTL_G?'rtl':'ltr'}, ..._cf },
+    { headerName:I18N.status, field:'status', width:120, cellRenderer:p=>statusBadge(p.value), filter:'agTextColumnFilter', filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} },
+  ];
+  if(IS_ADMIN) cols.push({ headerName:I18N.actions, field:'_actions', width:120, pinned:IS_AR_G?'left':'right', sortable:false, filter:false, suppressMenu:true, resizable:false, cellRenderer:L1Act, cellStyle:{overflow:'visible'} });
+  document.addEventListener('DOMContentLoaded',function(){
+    const el=document.getElementById('coaGrid'); if(!el||!window.agGrid) return;
+    const api=agGrid.createGrid(el,{
+      columnDefs:cols, rowData:[], pagination:true, paginationPageSize:25, paginationPageSizeSelector:[25,50,100], rowSelection:'single', animateRows:true, enableRtl:IS_RTL_G,
+      localeText: {noRowsToShow:I18N.noAccountsYet, searchOoo:I18N.searchPlaceholder},
+      multiSortKey:'ctrl',
+      defaultColDef:{ sortable:true, resizable:true, filter:true, floatingFilter:true, unSortIcon:true, menuTabs:['filterMenuTab','generalMenuTab'], filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} },
+      onGridReady(p){ if(window.GridKit) GridKit.enhance(p,'coaGrid',{storageKey:'coa_l1',exportName:'COA_Level1'}); p.api.sizeColumnsToFit(); window.coaReload1(); },
+      onGridSizeChanged(p){ p.api.sizeColumnsToFit(); },
+      onModelUpdated(p){ const c=document.getElementById('coaCount'); if(c) c.textContent=p.api.getDisplayedRowCount()+' '+I18N.accountsWordParen; },
+    });
+    window.__coa1Api=api;
+  });
+  window.coaReload1=function(){ fetch(DATA_URL).then(r=>r.json()).then(d=>{ if(window.__coa1Api) window.__coa1Api.setGridOption('rowData',d||[]); }); };
+})();
+</script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const SECOND_LANG_CODE = '{{ configured_lang }}';
+const ADD_URL  = '{{ url_for("coa.level_one_add") }}';
+const EDIT_URL = '{{ url_for("coa.level_one_list") }}';  // base; replaced per-id below
+
+
+/* ── Live validation: red ✗ / green ✓ ─────────────────────────── */
+let _l1EditId = null;
+let _codeOk = false, _drOk = false;
+let _codeTimer = null, _drTimer = null;
+
+function _mark(inpId, iconId, msgId, state, msg) {
+  const inp = document.getElementById(inpId);
+  const icon = document.getElementById(iconId);
+  const hint = document.getElementById(msgId);
+  inp.style.borderColor = '';
+  icon.style.display = 'none';
+  hint.style.display = 'none';
+  if (state === 'ok') {
+    inp.style.borderColor = '#16a34a';
+    icon.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a;"></i>';
+    icon.style.display = 'inline';
+    if (msg) { hint.textContent = msg; hint.style.color = '#16a34a'; hint.style.display = 'block'; }
+  } else if (state === 'bad') {
+    inp.style.borderColor = '#dc2626';
+    icon.innerHTML = '<i class="fas fa-times-circle" style="color:#dc2626;"></i>';
+    icon.style.display = 'inline';
+    if (msg) { hint.textContent = msg; hint.style.color = '#dc2626'; hint.style.display = 'block'; }
+  }
+}
+
+function checkCode() {
+  const v = document.getElementById('l1_code').value.trim();
+  let url = '/coa/validate/level-one-code?code=' + encodeURIComponent(v);
+  if (_l1EditId) url += '&exclude=' + encodeURIComponent(_l1EditId);
+  fetch(url).then(r => r.json()).then(d => {
+    _codeOk = !!d.ok;
+    _mark('l1_code', 'l1_code_icon', 'l1_code_msg', d.ok ? 'ok' : 'bad', d.msg);
+  }).catch(() => { _codeOk = false; });
+}
+
+function onCodeInput() {
+  const v = document.getElementById('l1_code').value.trim();
+  if (!v) { _codeOk = false; _mark('l1_code','l1_code_icon','l1_code_msg','bad', I18N.codeRequired); return; }
+  clearTimeout(_codeTimer);
+  _codeTimer = setTimeout(checkCode, 300);
+}
+
+function checkDrawers() {
+  const v = document.getElementById('l1_drawers').value.trim();
+  let url = '/coa/validate/level-one/drawers?drawers=' + encodeURIComponent(v);
+  if (_l1EditId) url += '&exclude=' + encodeURIComponent(_l1EditId);
+  fetch(url).then(r => r.json()).then(d => {
+    _drOk = !!d.ok;
+    _mark('l1_drawers', 'l1_dr_icon', 'l1_dr_msg', d.ok ? 'ok' : 'bad', d.msg);
+  }).catch(() => { _drOk = false; });
+}
+
+function onDrawersInput() {
+  const v = document.getElementById('l1_drawers').value.trim();
+  if (!v) { _drOk = false; _mark('l1_drawers','l1_dr_icon','l1_dr_msg','bad', I18N.drawersRequired); return; }
+  clearTimeout(_drTimer);
+  _drTimer = setTimeout(checkDrawers, 300);
+}
+
+function _clearMarks() {
+  _codeOk = false; _drOk = false;
+  ['l1_code_icon','l1_dr_icon'].forEach(i => { const e=document.getElementById(i); if(e) e.style.display='none'; });
+  ['l1_code_msg','l1_dr_msg'].forEach(i => { const e=document.getElementById(i); if(e) e.style.display='none'; });
+  ['l1_code','l1_drawers'].forEach(i => { const e=document.getElementById(i); if(e) e.style.borderColor=''; });
+}
+
+function openAdd() {
+  _l1EditId = null; _clearMarks();
+  document.getElementById('l1ModalTitle').textContent = I18N.addLevel1Account;
+  const f = document.getElementById('l1Form');
+  f.action = ADD_URL;
+  f.reset();
+  const code = document.getElementById('l1_code');
+  code.readOnly = false;
+  code.style.background = '';
+  document.getElementById('l1_desc').value = 'Elements of Financial Statements';
+  document.getElementById('l1_st_active').checked = true;
+  document.getElementById('l1_code_hint').textContent = I18N.cannotEditAfterCreation;
+}
+
+function openEdit(id, code, drawers, description, status, drawers_ar, description_ar) {
+  _l1EditId = id; _clearMarks(); _codeOk = true; _drOk = true;
+  document.getElementById('l1ModalTitle').textContent = I18N.editLevel1Account;
+  const f = document.getElementById('l1Form');
+  f.action = `/coa/level-one/${id}/edit`;
+  // Code is fixed → show but lock it.
+  const code_el = document.getElementById('l1_code');
+  code_el.value = code;
+  code_el.readOnly = true;
+  code_el.style.background = '#f1f5f9';
+  document.getElementById('l1_code_hint').textContent = I18N.codeFixedNoEdit;
+  document.getElementById('l1_drawers').value = drawers;
+  document.getElementById('l1_desc').value = description;
+  document.getElementById('l1_drawers_ar').value = drawers_ar || '';
+  document.getElementById('l1_desc_ar').value = description_ar || '';
+  document.getElementById(status === 'inactive' ? 'l1_st_inactive' : 'l1_st_active').checked = true;
+  new bootstrap.Modal(document.getElementById('l1Modal')).show();
+}
+
+function validateL1() {
+  const isEdit = _l1EditId !== null;
+  const code = document.getElementById('l1_code').value.trim();
+  const drawers = document.getElementById('l1_drawers').value.trim();
+  const desc = document.getElementById('l1_desc').value.trim();
+  if (!code || !drawers || !desc) {
+    alert(I18N.fillRequiredFields);
+    return false;
+  }
+  if (!/^[A-Za-z]$/.test(code)) {
+    alert(I18N.codeSingleLetter);
+    return false;
+  }
+  // On add, the code must have passed the live uniqueness check.
+  if (!isEdit && !_codeOk) {
+    alert(I18N.codeAlreadyTaken);
+    return false;
+  }
+  if (!_drOk) {
+    alert(I18N.fixDrawersField);
+    return false;
+  }
+  return true;
+}
+
+function filterRows(q) {
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('.proledg-table tbody tr.data-row').forEach(tr => {
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ── Auto-translation EN -> Second Language (with refresh button) ──
+let _coaTransT = {};
+function _coaDoTrans(srcId, tgtId){
+  const src = document.getElementById(srcId), tgt = document.getElementById(tgtId);
+  if(!src || !tgt) return;
+  const text = (src.value||'').trim();
+  if(!text) return;
+  fetch('/translate', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':(document.querySelector('input[name=csrf_token]')||{}).value||''},
+    body: JSON.stringify({text: text, direction:'en|'+SECOND_LANG_CODE})})
+    .then(r=>r.json()).then(d=>{ if(d && d.translated) tgt.value = d.translated; })
+    .catch(()=>{});
+}
+function coaTrans(srcId, tgtId){
+  clearTimeout(_coaTransT[srcId]);
+  _coaTransT[srcId] = setTimeout(()=>_coaDoTrans(srcId,tgtId), 600);
+}
+function coaRetrans(srcId, tgtId){ _coaDoTrans(srcId, tgtId); }
+</script>
+{% endblock %}

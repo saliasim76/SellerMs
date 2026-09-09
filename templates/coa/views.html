@@ -1,0 +1,246 @@
+{% extends layout %}
+{% block title %}{% if ar %}عرض دليل الحسابات{% else %}Chart of Accounts — Views{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.min.css">
+<style>
+.page-title{font-size:22px;font-weight:800;color:#1e3a5f;margin-bottom:2px;}
+.page-sub{font-size:13px;color:#9ca3af;margin-bottom:16px;}
+.coa-tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:2px solid #e2e8f0;}
+.coa-tab{padding:9px 20px;font-size:13px;font-weight:600;color:#64748b;cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;}
+.coa-tab.active{color:#2563eb;border-bottom-color:#2563eb;}
+.tab-pane{display:none;} .tab-pane.active{display:block;}
+.grid-wrap{border-radius:10px;overflow:hidden;border:1.5px solid #e2e8f0;background:#fff;}
+#flatGrid{width:100%;height:calc(100vh - 260px);min-height:560px;}
+.ag-theme-alpine{--ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;}
+.ag-theme-alpine .ag-header{background:#e5e7eb!important;}
+.ag-theme-alpine .ag-header-cell-text{color:#1e293b!important;font-weight:700;font-size:11px;letter-spacing:.4px;}
+
+/* Tree */
+.tree-wrap{background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:18px 20px;max-height:640px;overflow:auto;}
+.tree-toolbar{display:flex;gap:8px;margin-bottom:12px;}
+.tree-btn{border:1.5px solid #d1d5db;background:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;color:#374151;cursor:pointer;}
+.tree-btn:hover{background:#f3f4f6;}
+.tree ul{list-style:none;margin:0;padding-left:22px;}
+.tree > ul{padding-left:0;}
+.tree li{position:relative;padding:3px 0;}
+.tree-node{display:inline-flex;align-items:center;gap:7px;cursor:pointer;border-radius:6px;padding:3px 8px;font-size:13px;}
+.tree-node:hover{background:#f1f5f9;}
+.tree-caret{width:14px;display:inline-block;color:#94a3b8;font-size:11px;transition:transform .12s;}
+.tree-caret.open{transform:rotate(90deg);}
+.tree-caret.leaf{visibility:hidden;}
+.tree-code{font-family:monospace;font-size:11.5px;color:#2563eb;font-weight:700;}
+.tree-name{color:#1e293b;}
+.tree-l1 > .tree-node .tree-name{font-weight:800;color:#1e3a5f;}
+.tree-l5 .tree-name{color:#475569;}
+.tree li > ul{display:none;}
+.tree li.open > ul{display:block;}
+.tree-loading{color:#94a3b8;font-size:13px;padding:20px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="padding:24px;">
+  <div class="page-title">{% if ar %}عرض دليل الحسابات{% else %}Chart of Accounts — Views{% endif %}</div>
+  <div class="page-sub">{% if ar %}عرض مسطّح وشجري لكامل هيكل الحسابات{% else %}Flat and tree views of the full account hierarchy{% endif %}</div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
+    <a href="{{ url_for('coa.coa_export') }}?fmt=xlsx" class="tree-btn" style="text-decoration:none;background:#16a34a;color:#fff;border-color:#16a34a;">
+      <i class="fas fa-file-excel"></i> {% if ar %}تصدير Excel{% else %}Export Excel{% endif %}
+    </a>
+    <button class="tree-btn" onclick="document.getElementById('coaImportModal').style.display='flex'">
+      <i class="fas fa-file-import"></i> {% if ar %}استيراد{% else %}Import{% endif %}
+    </button>
+    <div class="dropdown" style="position:relative;">
+      <button class="tree-btn" onclick="var m=document.getElementById('csvMenu');m.style.display=m.style.display==='block'?'none':'block';">
+        <i class="fas fa-file-csv"></i> {% if ar %}تصدير CSV{% else %}Export CSV{% endif %} <i class="fas fa-caret-down"></i>
+      </button>
+      <div id="csvMenu" style="display:none;position:absolute;top:100%;inset-inline-start:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.1);z-index:50;min-width:150px;">
+        {% for n in [1,2,3,4,5] %}
+        <a href="{{ url_for('coa.coa_export') }}?fmt=csv&level={{ n }}" style="display:block;padding:8px 14px;text-decoration:none;color:#374151;font-size:12.5px;border-bottom:1px solid #f1f5f9;">{% if ar %}المستوى {{ n }}{% else %}Level {{ n }}{% endif %}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ══ IMPORT MODAL ══ #}
+  <div id="coaImportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1050;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;width:min(560px,92vw);overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:15px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <h5 style="margin:0;color:#fff;font-weight:700;font-size:15px;"><i class="fas fa-file-import me-2"></i>{% if ar %}استيراد دليل الحسابات{% else %}Import Chart of Accounts{% endif %}</h5>
+        <button onclick="document.getElementById('coaImportModal').style.display='none'" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;">&times;</button>
+      </div>
+      <div style="padding:20px;">
+        <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px;">
+          <i class="fas fa-info-circle me-1"></i>{% if ar %}ملف Excel (‏‎.xlsx‏، 5 أوراق) أو CSV لمستوى واحد. تتم إضافة الأكواد الجديدة فقط؛ يتم تخطي الأكواد الموجودة.{% else %}Excel (.xlsx, 5 sheets) or a CSV for one level. Only new codes are added; existing codes are skipped.{% endif %}
+        </p>
+        <div style="margin-bottom:12px;">
+          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">{% if ar %}الملف{% else %}File{% endif %}</label>
+          <input type="file" id="coaImportFile" accept=".xlsx,.xlsm,.csv" onchange="coaImportFileChange()" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:7px;">
+        </div>
+        <div id="coaCsvLevelWrap" style="display:none;margin-bottom:12px;">
+          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">{% if ar %}مستوى ملف CSV{% else %}CSV file's level{% endif %}</label>
+          <select id="coaCsvLevel" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:7px;">
+            <option value="1">{% if ar %}المستوى 1{% else %}Level 1{% endif %}</option>
+            <option value="2">{% if ar %}المستوى 2{% else %}Level 2{% endif %}</option>
+            <option value="3">{% if ar %}المستوى 3{% else %}Level 3{% endif %}</option>
+            <option value="4">{% if ar %}المستوى 4{% else %}Level 4{% endif %}</option>
+            <option value="5">{% if ar %}المستوى 5{% else %}Level 5{% endif %}</option>
+          </select>
+        </div>
+        <div id="coaImportResult" style="display:none;font-size:12.5px;margin-bottom:12px;padding:10px;border-radius:7px;"></div>
+      </div>
+      <div style="padding:14px 20px;background:#f8fafc;border-top:1.5px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;">
+        <button class="tree-btn" onclick="document.getElementById('coaImportModal').style.display='none'">{% if ar %}إغلاق{% else %}Close{% endif %}</button>
+        <button class="tree-btn" id="coaImportBtn" style="background:#2563eb;color:#fff;border-color:#2563eb;" onclick="coaDoImport()"><i class="fas fa-upload me-1"></i>{% if ar %}استيراد{% else %}Import{% endif %}</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="coa-tabs">
+    <button class="coa-tab active" id="tabFlatBtn" onclick="showTab('flat')">{% if ar %}عرض مسطّح{% else %}Flat View{% endif %}</button>
+    <button class="coa-tab" id="tabTreeBtn" onclick="showTab('tree')">{% if ar %}عرض شجري{% else %}Tree View{% endif %}</button>
+  </div>
+
+  <!-- FLAT -->
+  <div class="tab-pane active" id="pane-flat">
+    <div class="grid-wrap ag-theme-alpine"><div id="flatGrid"></div></div>
+  </div>
+
+  <!-- TREE -->
+  <div class="tab-pane" id="pane-tree">
+    <div class="tree-toolbar">
+      <button class="tree-btn" onclick="expandAll(true)"><i class="fas fa-plus-square"></i> {% if ar %}توسيع الكل{% else %}Expand All{% endif %}</button>
+      <button class="tree-btn" onclick="expandAll(false)"><i class="fas fa-minus-square"></i> {% if ar %}طيّ الكل{% else %}Collapse All{% endif %}</button>
+    </div>
+    <div class="tree-wrap"><div class="tree" id="treeRoot"><div class="tree-loading">{% if ar %}جارٍ التحميل...{% else %}Loading...{% endif %}</div></div></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const COA_CSRF = '{{ csrf_token() }}';
+
+function coaImportFileChange(){
+  const f = document.getElementById('coaImportFile').files[0];
+  const isCsv = f && f.name.toLowerCase().endsWith('.csv');
+  document.getElementById('coaCsvLevelWrap').style.display = isCsv ? 'block' : 'none';
+}
+function coaDoImport(){
+  const fileEl = document.getElementById('coaImportFile');
+  const f = fileEl.files[0];
+  const res = document.getElementById('coaImportResult');
+  if(!f){ alert(IS_AR?'اختر ملفاً':'Choose a file'); return; }
+  const fd = new FormData();
+  fd.set('file', f);
+  fd.set('csrf_token', COA_CSRF);
+  if(f.name.toLowerCase().endsWith('.csv')) fd.set('level', document.getElementById('coaCsvLevel').value);
+  const btn = document.getElementById('coaImportBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>'+(IS_AR?'جارٍ...':'Importing...');
+  fetch('{{ url_for("coa.coa_import") }}', {method:'POST', headers:{'X-CSRFToken':COA_CSRF}, body:fd})
+    .then(r=>r.json()).then(d=>{
+      res.style.display='block';
+      if(d.ok){
+        res.style.background='#f0fdf4'; res.style.color='#15803d';
+        let html = '<b>'+(IS_AR?'تم':'Done')+':</b> '+(IS_AR?'أُضيف':'added')+' '+d.added+'، '+(IS_AR?'تم تخطّي':'skipped')+' '+d.skipped;
+        if(d.errors && d.errors.length){
+          html += '<div style="margin-top:8px;color:#b45309;font-size:11.5px;max-height:120px;overflow:auto;">'+d.errors.map(e=>'• '+e).join('<br>')+'</div>';
+        }
+        res.innerHTML = html;
+        if(typeof loadFlat==='function') loadFlat();
+        treeLoaded=false; if(document.getElementById('pane-tree').classList.contains('active') && typeof loadTree==='function') loadTree();
+      } else {
+        res.style.background='#fef2f2'; res.style.color='#dc2626';
+        res.textContent = d.error || 'Error';
+      }
+    })
+    .catch(()=>{ res.style.display='block'; res.style.background='#fef2f2'; res.style.color='#dc2626'; res.textContent='Network error'; })
+    .finally(()=>{ btn.disabled=false; btn.innerHTML='<i class="fas fa-upload me-1"></i>'+(IS_AR?'استيراد':'Import'); });
+}
+let treeLoaded = false;
+
+function showTab(which){
+  document.getElementById('pane-flat').classList.toggle('active', which==='flat');
+  document.getElementById('pane-tree').classList.toggle('active', which==='tree');
+  document.getElementById('tabFlatBtn').classList.toggle('active', which==='flat');
+  document.getElementById('tabTreeBtn').classList.toggle('active', which==='tree');
+  if(which==='tree' && !treeLoaded){ loadTree(); }
+}
+
+/* ── FLAT VIEW (enterprise grid) ── */
+const defCol = { sortable:true, unSortIcon:true, resizable:true, filter:true, floatingFilter:true, enableRowGroup:true, enablePivot:true, enableValue:true, menuTabs:['filterMenuTab','columnsMenuTab','generalMenuTab'], filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} };
+const cols = [
+  {headerName:IS_AR?'كود الحساب':'Account Code', field:'account_code', width:150, cellStyle:{fontFamily:'monospace',fontWeight:'700',color:'#2563eb'}},
+  {headerName:IS_AR?'المستوى 1':'Level 1 Drawer', field:'level1_drawer', width:150},
+  {headerName:IS_AR?'المستوى 1 (ع)':'Level 1 (AR)', field:'level1_drawer_ar', width:140, cellStyle:{direction:'rtl'}},
+  {headerName:IS_AR?'المستوى 2':'Level 2 Drawer', field:'level2_drawer', width:160},
+  {headerName:IS_AR?'المستوى 2 (ع)':'Level 2 (AR)', field:'level2_drawer_ar', width:140, cellStyle:{direction:'rtl'}},
+  {headerName:IS_AR?'المستوى 3':'Level 3 Drawer', field:'level3_drawer', width:180},
+  {headerName:IS_AR?'المستوى 3 (ع)':'Level 3 (AR)', field:'level3_drawer_ar', width:150, cellStyle:{direction:'rtl'}},
+  {headerName:IS_AR?'المستوى 4':'Level 4 Drawer', field:'level4_drawer', width:180},
+  {headerName:IS_AR?'المستوى 4 (ع)':'Level 4 (AR)', field:'level4_drawer_ar', width:150, cellStyle:{direction:'rtl'}},
+  {headerName:IS_AR?'المستوى 5':'Level 5 Drawer', field:'level5_drawer', width:180},
+  {headerName:IS_AR?'المستوى 5 (ع)':'Level 5 (AR)', field:'level5_drawer_ar', width:150, cellStyle:{direction:'rtl'}},
+  {headerName:IS_AR?'حساب تحكم':'Control Account', field:'control_account', width:130,
+   cellRenderer:p=>{const y=(p.value==='Yes');return `<span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${y?'#dcfce7':'#f1f5f9'};color:${y?'#15803d':'#6b7280'};">${p.value||'No'}</span>`;}},
+];
+let flatApi;
+agGrid.createGrid(document.getElementById('flatGrid'), {
+  columnDefs:cols, rowData:[], pagination:true, paginationPageSize:20, paginationPageSizeSelector:[20,50,100],
+  alwaysShowHorizontalScroll:true, alwaysShowVerticalScroll:true,
+  sideBar:{toolPanels:[{id:'columns',labelDefault:IS_AR?'الأعمدة':'Columns',labelKey:'columns',iconKey:'columns',toolPanel:'agColumnsToolPanel'},{id:'filters',labelDefault:IS_AR?'الفلاتر':'Filters',labelKey:'filters',iconKey:'filter',toolPanel:'agFiltersToolPanel'}],defaultToolPanel:''},
+  rowGroupPanelShow:'always', pivotPanelShow:'always', groupDisplayType:'groupRows',
+  animateRows:true, enableRtl:IS_AR, defaultColDef:defCol,
+  localeText: IS_AR ? {noRowsToShow:'لا توجد بيانات'} : {noRowsToShow:'No records found'},
+  onGridReady(p){ flatApi=p.api; if(window.GridKit){GridKit.enhance(p,'flatGrid',{storageKey:'coa_views_flat',exportName:'Chart of Accounts'});} loadFlat(); },
+  getRowStyle(p){ return p.node.rowIndex%2===0?{background:'#fff'}:{background:'#fafbfc'}; }
+});
+function loadFlat(){ if(flatApi) fetch('/coa/views/flat').then(r=>r.json()).then(d=>flatApi.setGridOption('rowData',d)); }
+
+/* ── TREE VIEW ── */
+function loadTree(){
+  fetch('/coa/views/tree').then(r=>r.json()).then(data=>{
+    treeLoaded=true;
+    const root=document.getElementById('treeRoot');
+    root.innerHTML='';
+    const ul=document.createElement('ul');
+    data.forEach((n,i)=>ul.appendChild(buildNode(n, 1)));
+    root.appendChild(ul);
+  }).catch(e=>{ document.getElementById('treeRoot').innerHTML='<div class="tree-loading">Error loading tree.</div>'; });
+}
+function buildNode(n, level){
+  const li=document.createElement('li');
+  li.className='tree-l'+level;
+  const hasKids=n.children && n.children.length>0;
+  const node=document.createElement('div');
+  node.className='tree-node';
+  node.innerHTML = `<span class="tree-caret ${hasKids?'':'leaf'}">▶</span>`+
+                   `<span class="tree-code">${n.code||''}</span>`+
+                   `<span class="tree-name">${n.name||''}</span>`+
+                   (n.name_ar?`<span class="tree-name" style="direction:rtl;color:#6b7280;margin-inline-start:8px;">${n.name_ar}</span>`:'')+
+                   (n.control_account==='Yes'?`<span style="margin-inline-start:8px;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#dcfce7;color:#15803d;">${IS_AR?'حساب تحكم':'Control'}</span>`:'');
+  node.onclick=()=>{ if(hasKids){ li.classList.toggle('open'); node.querySelector('.tree-caret').classList.toggle('open'); } };
+  li.appendChild(node);
+  if(hasKids){
+    const ul=document.createElement('ul');
+    n.children.forEach(ch=>ul.appendChild(buildNode(ch, level+1)));
+    li.appendChild(ul);
+  }
+  return li;
+}
+function expandAll(open){
+  document.querySelectorAll('#treeRoot li').forEach(li=>{
+    const hasKids=li.querySelector('ul');
+    if(hasKids){
+      li.classList.toggle('open', open);
+      const c=li.querySelector(':scope > .tree-node .tree-caret');
+      if(c) c.classList.toggle('open', open);
+    }
+  });
+}
+</script>
+{% endblock %}

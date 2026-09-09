@@ -1,0 +1,247 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+{% from "proledg/_components.html" import checklist, faq, cta_banner %}
+
+{% block title %}Pricing — Proledge{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-center">
+      <div class="breadcrumb"><a href="{{ url_for('proledg.home') }}">Home</a> &rarr; Pricing</div>
+      <h1>Simple pricing that scales with you</h1>
+      <p class="hero-sub">Start with a 14-day free trial. Add companies as you grow — no long-term contracts, no upgrade surprises.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight">
+  <div class="container">
+    <div class="module-picker">
+      <div class="module-picker-list">
+        <div class="module-picker-header">
+          <h3>Pick the modules you need</h3>
+          <div class="billing-toggle">
+            <button type="button" class="toggle-btn active" data-cycle="monthly">Monthly</button>
+            <button type="button" class="toggle-btn" data-cycle="yearly">Yearly <span class="toggle-save">save ~17%</span></button>
+          </div>
+        </div>
+        <div class="module-list">
+          {% for m in saas_modules %}
+          <label class="module-row">
+            <input type="checkbox" class="module-check" data-monthly="{{ '%.2f'|format(m.monthly_price or 0) }}" data-yearly="{{ '%.2f'|format(m.yearly_price or 0) }}" data-code="{{ m.module_code }}">
+            <span class="module-row-main">
+              <span class="module-row-name">{{ m.module_name_en }}{% if not m.trial_available %}<span class="module-badge">No trial</span>{% endif %}</span>
+              <span class="module-row-desc">{{ m.description_en or '' }}</span>
+            </span>
+            <span class="module-row-price">
+              <span class="amt amt-monthly">${{ '%.0f'|format(m.monthly_price or 0) }}<span>/mo</span></span>
+              <span class="amt amt-yearly" style="display:none;">${{ '%.0f'|format(m.yearly_price or 0) }}<span>/yr</span></span>
+            </span>
+          </label>
+          {% else %}
+          <p class="price-desc">No modules are available right now — please check back shortly.</p>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="module-picker-summary">
+        <h3>Your plan</h3>
+        <div class="summary-line"><span>Selected modules</span><span id="summary-count">0</span></div>
+        <div class="summary-total">
+          <span>Total</span>
+          <span><span id="summary-total">$0</span><span id="summary-cycle">/mo</span></span>
+        </div>
+        <a href="{{ url_for('proledg.trial_signup') }}" id="start-trial-btn" class="btn btn-primary btn-block">Start free trial</a>
+        <p class="form-note">14 days free &middot; no credit card required</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  const checks = Array.from(document.querySelectorAll('.module-check'));
+  const toggleBtns = Array.from(document.querySelectorAll('.toggle-btn'));
+  const startBtn = document.getElementById('start-trial-btn');
+  let cycle = 'monthly';
+
+  function recalc() {
+    const selected = checks.filter(c => c.checked);
+    const total = selected.reduce((sum, c) => sum + parseFloat(c.dataset[cycle] || '0'), 0);
+    document.getElementById('summary-count').textContent = selected.length;
+    document.getElementById('summary-total').textContent = '$' + total.toFixed(0);
+    document.getElementById('summary-cycle').textContent = cycle === 'monthly' ? '/mo' : '/yr';
+    const codes = selected.map(c => c.dataset.code).join(',');
+    const base = "{{ url_for('proledg.trial_signup') }}";
+    startBtn.href = codes ? (base + '?modules=' + encodeURIComponent(codes)) : base;
+  }
+
+  checks.forEach(c => c.addEventListener('change', recalc));
+
+  toggleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      toggleBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      cycle = btn.dataset.cycle;
+      document.querySelectorAll('.amt-monthly').forEach(el => el.style.display = cycle === 'monthly' ? '' : 'none');
+      document.querySelectorAll('.amt-yearly').forEach(el => el.style.display = cycle === 'yearly' ? '' : 'none');
+      recalc();
+    });
+  });
+
+  recalc();
+})();
+</script>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('building') }} MULTI-ENTITY &amp; ACCOUNTING FIRMS</div>
+      <h2>Running more than one set of books</h2>
+      <p>Two tiers for people who keep more than one set of books at once — a group of related companies, or a practice keeping books for clients.</p>
+    </div>
+    <div class="plan-pair">
+      <div class="price-card">
+        <h3>Corporate</h3>
+        <p class="price-desc">For a group of related companies under common ownership, with consolidated group reporting.</p>
+        <div class="price-amount">$250<span>/mo</span></div>
+        <div class="price-per">up to 10 companies included</div>
+        {{ checklist(["Consolidated group reporting", "Unlimited users across the group", "Dedicated account manager", "Free 15-user seat per company"]) }}
+        <a href="{{ url_for('proledg.contact') }}" class="btn btn-outline btn-block">Start free trial</a>
+      </div>
+      <div class="price-card">
+        <h3>Professional</h3>
+        <p class="price-desc">For accounting or bookkeeping firms managing books for multiple clients under one login.</p>
+        <div class="price-amount">$400<span>/mo</span></div>
+        <div class="price-per">25 client companies included</div>
+        {{ checklist(["Client workspace switching, one login", "$20/mo per additional client company", "Unlimited users per client", "Registered e-invoicing per client, where supported"]) }}
+        <a href="{{ url_for('proledg.contact') }}" class="btn btn-outline btn-block">Talk to us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('bar-chart') }} COMPARED IN DETAIL</div>
+      <h2>Every capability, side by side</h2>
+      <p>See exactly what each plan includes. Need something from a higher tier? Upgrade anytime — no contracts.</p>
+    </div>
+    <div class="table-scroll">
+      <table class="compare">
+        <thead>
+          <tr><th>Capability</th><th>Starter</th><th>Business</th><th>Enterprise</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Double-entry accounting &amp; reports</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Inventory &amp; stock control</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Branded PDF invoicing</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Two-factor authentication</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Multi-warehouse inventory</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Bank reconciliation</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Manufacturing &amp; BOMs</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Multi-currency &amp; FX conversion</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Project costing</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Budgeting — budget vs actual</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Payroll &amp; employees</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Approval workflows (N-of-M)</td><td class="no">✕</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Commission agent</td><td class="no">✕</td><td class="muted">Add-on</td><td class="yes">✓</td></tr>
+          <tr><td>Landed cost &amp; letters of credit</td><td class="no">✕</td><td class="no">✕</td><td class="yes">✓</td></tr>
+          <tr><td>Fixed assets &amp; depreciation</td><td class="no">✕</td><td class="muted">Add-on</td><td class="yes">✓</td></tr>
+          <tr><td>Single sign-on (Microsoft Entra)</td><td class="no">✕</td><td class="no">✕</td><td class="yes">✓</td></tr>
+          <tr><td>Users included</td><td>3</td><td>15</td><td>Unlimited</td></tr>
+          <tr><td>Support</td><td>Email</td><td>Priority email &amp; chat</td><td>Dedicated account manager</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('briefcase') }} MULTI-ENTITY PLANS</div>
+      <h2>Enterprise, Corporate &amp; Professional in detail</h2>
+      <p>How the three top-tier plans differ, and what's still in development you get and cannot be bought — we'd rather tell you than oversell.</p>
+    </div>
+    <div class="table-scroll">
+      <table class="compare">
+        <thead>
+          <tr><th>Plan</th><th>Enterprise</th><th>Corporate</th><th>Professional</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Monthly price</td><td>Custom quote</td><td>From $250/mo</td><td>From $400/mo</td></tr>
+          <tr><td>Companies included</td><td>Unlimited, one group</td><td>Up to 10 companies</td><td>25 client companies</td></tr>
+          <tr><td>Users included</td><td>Unlimited</td><td>Unlimited across group</td><td>Unlimited per client</td></tr>
+          <tr><td>Consolidated group reporting</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✕</td></tr>
+          <tr><td>Client workspace switching</td><td class="no">✕</td><td class="no">✕</td><td class="yes">✓</td></tr>
+          <tr><td>Dedicated account manager</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Custom integrations</td><td class="yes">✓</td><td class="muted">On request</td><td class="muted">On request</td></tr>
+          <tr><td>Guided migration &amp; onboarding</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Support SLA</td><td>24/7 priority</td><td>Business hours priority</td><td>Business hours priority</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('settings') }} OPTIONAL ADD-ONS</div>
+      <h2>Tailor any plan with the extras you need</h2>
+      <p>The Commission Agent add-on and extra seats attach to any plan — everything scoped to how your team actually works.</p>
+    </div>
+    <div class="grid grid-4">
+      <div class="addon-card">
+        <div class="addon-head"><h3>Commission Agent</h3><span class="addon-price">$10/mo</span></div>
+        <p>Track sales agent commissions automatically on every sale, purchase or rental — calculated and settled without a spreadsheet.</p>
+      </div>
+      <div class="addon-card">
+        <div class="addon-head"><h3>Fixed Assets</h3><span class="addon-price">$20/mo</span></div>
+        <p>For businesses tracking depreciation on equipment or property — schedules and postings handled automatically each period.</p>
+      </div>
+      <div class="addon-card">
+        <div class="addon-head"><h3>Additional users</h3><span class="addon-price">$5/mo</span></div>
+        <p>Per-seat pricing for teams that outgrow the users included in their plan — add as many as you need, whenever you need them.</p>
+      </div>
+      <div class="addon-card">
+        <div class="addon-head"><h3>Registered e-Invoicing</h3><span class="addon-price">Custom</span></div>
+        <p>Connect directly to your country's e-invoicing authority for instant, compliant submission wherever your country supports it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('file') }} YOUR QUESTIONS ANSWERED</div>
+      <h2>Frequently asked</h2>
+    </div>
+    {{ faq([
+      ("Is there a free trial?", "Yes — every plan includes a free 14-day trial with no credit card required, so you can try the modules you need before you pay."),
+      ('What counts as a "company"?', "A company is one legal entity with its own books, chart of accounts and base currency. Related entities each count as a separate company."),
+      ("Can I change plans later?", "Yes, upgrade or downgrade at any time — your next invoice is prorated automatically, with no penalty for switching."),
+      ("How are plans billed?", "Plans are billed monthly per company by default, with annual billing available at a discount. Add-ons are billed alongside your plan."),
+      ("Can I get FBR / registered e-invoicing?", "Yes, where your country supports it. Talk to us and we'll confirm coverage for your region and turn it on for your account."),
+      ("Can I export my data?", "Yes — you can export your full ledger, reports and master data at any time. Your data is always yours."),
+      ("I'm an accountant with many clients — which plan?", "The Professional plan is built for accounting and bookkeeping firms managing books for multiple clients under one login."),
+    ]) }}
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    {{ cta_banner(
+      "Start free, then pay only for what you use",
+      "Spin up your free trial in minutes and pay only for the companies and modules you actually use. No setup fees, no long-term contracts.",
+      "Start free trial", url_for('proledg.trial_signup'),
+      "Contact us", url_for('proledg.contact')
+    ) }}
+  </div>
+</section>
+
+{% endblock %}

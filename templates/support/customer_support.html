@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}دعم العملاء{% else %}Customer Support{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}دعم العملاء{% else %}Customer Support{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.cs-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;}
+.cs-title{font-size:18px;font-weight:700;color:#111827;margin:0 0 2px;display:flex;align-items:center;gap:8px;}
+.cs-sub{font-size:12.5px;color:#6b7280;margin:0 0 16px;}
+.cs-lbl{font-size:12px;font-weight:700;color:#374151;margin-bottom:5px;display:block;}
+.cs-inp{width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13.5px;box-sizing:border-box;}
+.cs-inp:focus{outline:none;border-color:var(--cs-primary,#10b981);box-shadow:0 0 0 3px rgba(16,185,129,.12);}
+.cs-btn-submit{background:var(--cs-primary,#10b981);border:none;color:#fff;padding:10px 20px;border-radius:8px;font-weight:700;font-size:13.5px;cursor:pointer;}
+.cs-btn-submit:hover{opacity:.92;}
+.cs-btn-clear{background:#fff;border:1.5px solid #d1d5db;color:#374151;padding:10px 18px;border-radius:8px;font-weight:600;font-size:13.5px;cursor:pointer;}
+.cs-side-block{margin-bottom:18px;}
+.cs-side-title{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.cs-side-row{font-size:13px;color:#374151;margin-bottom:6px;}
+.cs-side-row a{color:var(--cs-primary,#10b981);text-decoration:none;}
+.cs-sla-row{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px dashed #eef2f7;}
+.cs-sla-badge{padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+.cs-sla-urgent{background:#fee2e2;color:#dc2626;}
+.cs-sla-high{background:#fef3c7;color:#b45309;}
+.cs-sla-medium{background:#dcfce7;color:#15803d;}
+.cs-sla-low{background:#e0f2fe;color:#0369a1;}
+.cs-tip{font-size:12.5px;color:#4b5563;margin-bottom:6px;display:flex;gap:6px;}
+.cs-tip i{color:var(--cs-primary,#10b981);margin-top:2px;}
+.prio-badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.prio-low{background:#e0f2fe;color:#0369a1;}
+.prio-medium{background:#dcfce7;color:#15803d;}
+.prio-high{background:#fef3c7;color:#b45309;}
+.prio-urgent{background:#fee2e2;color:#dc2626;}
+.status-badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.status-open{background:#dbeafe;color:#1e40af;}
+.status-in_progress{background:#fef3c7;color:#b45309;}
+.status-resolved{background:#dcfce7;color:#15803d;}
+.status-closed{background:#f1f5f9;color:#64748b;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page" style="--cs-primary:#10b981;">
+  <h2 class="page-heading"><i class="fas fa-headset" style="color:#10b981;margin-right:8px;"></i>{% if ar %}دعم العملاء{% else %}Customer Support{% endif %}</h2>
+  <p style="color:#6b7280;font-size:13px;margin-top:-8px;margin-bottom:16px;">
+    {% if ar %}نحن هنا للمساعدة. أرسل طلبك وسيقوم فريقنا بالرد في أقرب وقت.{% else %}We're here to help. Submit your request and our team will respond promptly.{% endif %}
+  </p>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="cs-card">
+        <div class="cs-title"><i class="fas fa-paper-plane" style="color:#10b981;"></i>{% if ar %}إرسال تذكرة دعم{% else %}Submit a Support Ticket{% endif %}</div>
+        <p class="cs-sub">{% if ar %}املأ التفاصيل أدناه وسنرد بأسرع وقت ممكن.{% else %}Fill in the details below and we'll respond as soon as possible.{% endif %}</p>
+
+        {% if not customer %}
+        <div class="alert alert-warning" style="font-size:13px;">
+          {% if ar %}تذاكر الدعم متاحة فقط لحساب SaaS تم تزويده.{% else %}Support tickets are only available for a provisioned SaaS account.{% endif %}
+        </div>
+        {% endif %}
+
+        <form id="csForm">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="cs-lbl">{% if ar %}الاسم الكامل{% else %}Full Name{% endif %} *</label>
+              <input type="text" id="cs_full_name" class="cs-inp" required value="{{ current_user.username if current_user.is_authenticated else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="cs-lbl">{% if ar %}البريد الإلكتروني{% else %}Email Address{% endif %} *</label>
+              <input type="email" id="cs_email" class="cs-inp" required placeholder="example@company.com" value="{{ current_user.email if current_user.is_authenticated and current_user.email else '' }}">
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="cs-lbl">{% if ar %}رقم الهاتف (اختياري){% else %}Phone Number (Optional){% endif %}</label>
+              <input type="text" id="cs_phone" class="cs-inp" placeholder="+966 5X XXX XXXX">
+            </div>
+            <div class="col-md-6">
+              <label class="cs-lbl">{% if ar %}الفئة{% else %}Category{% endif %} *</label>
+              <select id="cs_category" class="cs-inp" required>
+                <option value="">{% if ar %}اختر فئة{% else %}Select a category{% endif %}</option>
+                {% for c in categories %}
+                <option value="{{ c }}">{{ category_labels[c][1] if ar else category_labels[c][0] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="cs-lbl">{% if ar %}الأولوية{% else %}Priority{% endif %} *</label>
+              <select id="cs_priority" class="cs-inp">
+                {% for p in ['low','medium','high','urgent'] %}
+                <option value="{{ p }}" {% if p=='medium' %}selected{% endif %}>{{ priority_labels[p][1] if ar else priority_labels[p][0] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="cs-lbl">{% if ar %}الرسالة{% else %}Message{% endif %} *</label>
+            <textarea id="cs_message" class="cs-inp" rows="7" required></textarea>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button type="button" class="cs-btn-submit" onclick="submitTicket()"><i class="fas fa-paper-plane me-1"></i>{% if ar %}إرسال التذكرة{% else %}Submit Ticket{% endif %}</button>
+            <button type="button" class="cs-btn-clear" onclick="document.getElementById('csForm').reset()"><i class="fas fa-undo me-1"></i>{% if ar %}مسح النموذج{% else %}Clear Form{% endif %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cs-card">
+        <div class="cs-side-block">
+          <div class="cs-side-title"><i class="fas fa-address-card"></i>{% if ar %}تواصل معنا{% else %}Contact Us{% endif %}</div>
+          <div class="cs-side-row"><i class="fas fa-envelope me-1"></i>{% if ar %}دعم البريد{% else %}Email Support{% endif %}<br><a href="mailto:info@proledg.com">info@proledg.com</a></div>
+          <div class="cs-side-row"><i class="fas fa-phone me-1"></i>{% if ar %}دعم هاتفي{% else %}Phone Support{% endif %}<br>+966 5X XXX XXXX</div>
+          <div class="cs-side-row"><i class="fab fa-whatsapp me-1"></i>WhatsApp<br>+966 5X XXX XXXX</div>
+        </div>
+        <div class="cs-side-block">
+          <div class="cs-side-title"><i class="fas fa-clock"></i>{% if ar %}ساعات العمل{% else %}Business Hours{% endif %}</div>
+          <div class="cs-side-row">{% if ar %}الأحد - الخميس{% else %}Sun - Thu{% endif %}</div>
+          <div class="cs-side-row">{% if ar %}السبت{% else %}Saturday{% endif %}</div>
+          <div class="cs-side-row">{% if ar %}الجمعة{% else %}Friday{% endif %}</div>
+        </div>
+        <div class="cs-side-block">
+          <div class="cs-side-title"><i class="fas fa-bolt"></i>{% if ar %}اتفاقية زمن الاستجابة{% else %}Response SLA{% endif %}</div>
+          <div class="cs-sla-row"><span class="cs-sla-badge cs-sla-urgent">{% if ar %}عاجلة{% else %}Urgent{% endif %}</span><span>&le; 4h</span></div>
+          <div class="cs-sla-row"><span class="cs-sla-badge cs-sla-high">{% if ar %}عالية{% else %}High{% endif %}</span><span>&le; 8h</span></div>
+          <div class="cs-sla-row"><span class="cs-sla-badge cs-sla-medium">{% if ar %}متوسطة{% else %}Medium{% endif %}</span><span>&le; 24h</span></div>
+          <div class="cs-sla-row"><span class="cs-sla-badge cs-sla-low">{% if ar %}منخفضة{% else %}Low{% endif %}</span><span>&le; 48h</span></div>
+        </div>
+        <div class="cs-side-block" style="margin-bottom:0;">
+          <div class="cs-side-title"><i class="fas fa-lightbulb"></i>{% if ar %}نصائح لمساعدة أسرع{% else %}Tips for Faster Help{% endif %}</div>
+          <div class="cs-tip"><i class="fas fa-check"></i>{% if ar %}أرفق رقم الفاتورة أو السجل إن أمكن.{% else %}Include the invoice or record number if possible.{% endif %}</div>
+          <div class="cs-tip"><i class="fas fa-check"></i>{% if ar %}أرفق لقطة شاشة إن أمكن.{% else %}Attach a screenshot if possible.{% endif %}</div>
+          <div class="cs-tip"><i class="fas fa-check"></i>{% if ar %}حدد الأولوية الصحيحة لتسريع المعالجة.{% else %}Set the right priority to speed up handling.{% endif %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cs-card mt-3">
+    <div class="cs-title"><i class="fas fa-inbox" style="color:#10b981;"></i>{% if ar %}تذاكري{% else %}My Tickets{% endif %}</div>
+    <p class="cs-sub">{% if ar %}جميع التذاكر التي أرسلتها شركتك سابقاً.{% else %}All tickets your company has previously submitted.{% endif %}</p>
+    <div class="toolbar" style="margin-bottom:10px;">
+      <div class="toolbar-right" style="margin-left:0;">
+        <div class="search-form">
+          <i class="fas fa-search search-icon"></i>
+          <input type="text" class="search-input" id="csSearch" placeholder="{% if ar %}بحث في التذاكر...{% else %}Search tickets...{% endif %}" oninput="renderTickets()">
+        </div>
+      </div>
+    </div>
+    <div class="proledg-table-wrap">
+      <table class="proledg-table">
+        <thead>
+          <tr>
+            <th>{% if ar %}رقم التذكرة{% else %}Ticket #{% endif %}</th>
+            <th>{% if ar %}الفئة{% else %}Category{% endif %}</th>
+            <th>{% if ar %}الأولوية{% else %}Priority{% endif %}</th>
+            <th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
+            <th>{% if ar %}التاريخ{% else %}Date{% endif %}</th>
+            <th style="width:70px" class="text-center">{% if ar %}عرض{% else %}View{% endif %}</th>
+          </tr>
+        </thead>
+        <tbody id="csTicketsBody">
+          <tr><td colspan="6" class="empty-row"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>{% if ar %}لا توجد تذاكر{% else %}No tickets found.{% endif %}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Ticket Conversation Modal -->
+<div class="modal fade" id="csThreadModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#022c22,#10b981);">
+        <h5 class="modal-title text-white" id="csThreadTitle"><i class="fas fa-comments me-2"></i>{% if ar %}المحادثة{% else %}Conversation{% endif %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="csThreadBody" style="max-height:50vh;overflow-y:auto;padding:4px 2px;"></div>
+        <hr>
+        <div class="d-flex gap-2">
+          <textarea id="csThreadReply" class="cs-inp" rows="2" placeholder="{% if ar %}اكتب رسالة...{% else %}Write a message...{% endif %}"></textarea>
+          <button class="cs-btn-submit" style="white-space:nowrap;" onclick="sendThreadReply()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const CS_CSRF = '{{ csrf_token() }}';
+const CATEGORY_LABELS = {{ category_labels|tojson }};
+let TICKETS = [];
+
+function catLabel(c){ const l = CATEGORY_LABELS[c]; return l ? (IS_AR ? l[1] : l[0]) : c; }
+
+function loadTickets(){
+  fetch('/support/tickets/data').then(r=>r.json()).then(d=>{ TICKETS = d || []; renderTickets(); });
+}
+
+function renderTickets(){
+  const q = (document.getElementById('csSearch')?.value || '').toLowerCase();
+  const body = document.getElementById('csTicketsBody');
+  const rows = TICKETS.filter(t => !q || JSON.stringify(t).toLowerCase().includes(q));
+  if(!rows.length){
+    body.innerHTML = '<tr><td colspan="6" class="empty-row"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>'+(IS_AR?'لا توجد تذاكر':'No tickets found.')+'</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(t => `
+    <tr>
+      <td class="fw-semibold">${t.ticket_no}</td>
+      <td>${catLabel(t.category)}</td>
+      <td><span class="prio-badge prio-${t.priority}">${t.priority}</span></td>
+      <td><span class="status-badge status-${t.status}">${t.status.replace('_',' ')}</span></td>
+      <td>${t.created_at}</td>
+      <td class="text-center"><button class="action-btn action-btn-edit" onclick="openThread(${t.id},'${t.ticket_no}')"><i class="fas fa-comments"></i></button></td>
+    </tr>
+  `).join('');
+}
+
+function submitTicket(){
+  const full_name = document.getElementById('cs_full_name').value.trim();
+  const email = document.getElementById('cs_email').value.trim();
+  const category = document.getElementById('cs_category').value;
+  const message = document.getElementById('cs_message').value.trim();
+  if(!full_name || !email || !category || !message){
+    alert(IS_AR ? 'يرجى تعبئة جميع الحقول المطلوبة.' : 'Please fill in all required fields.');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('full_name', full_name);
+  fd.append('email', email);
+  fd.append('phone', document.getElementById('cs_phone').value.trim());
+  fd.append('category', category);
+  fd.append('priority', document.getElementById('cs_priority').value);
+  fd.append('message', message);
+  fetch('/support/tickets/add', { method:'POST', headers:{'X-CSRFToken':CS_CSRF}, body:fd })
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        alert((IS_AR ? 'تم إرسال التذكرة: ' : 'Ticket submitted: ') + d.ticket_no);
+        document.getElementById('csForm').reset();
+        loadTickets();
+      } else {
+        alert(d.error || (IS_AR ? 'فشل الإرسال' : 'Submit failed'));
+      }
+    }).catch(()=>alert(IS_AR ? 'خطأ في الشبكة' : 'Network error'));
+}
+
+let CURRENT_THREAD_ID = null;
+
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function openThread(id, ticketNo){
+  CURRENT_THREAD_ID = id;
+  document.getElementById('csThreadTitle').innerHTML = '<i class="fas fa-comments me-2"></i>' + ticketNo;
+  document.getElementById('csThreadReply').value = '';
+  loadThread();
+  new bootstrap.Modal(document.getElementById('csThreadModal')).show();
+}
+
+function threadBubble(name, when, text, mine){
+  return `<div style="display:flex;flex-direction:column;align-items:${mine?'flex-end':'flex-start'};margin-bottom:10px;">
+      <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">${escapeHtml(name)} &middot; ${when}</div>
+      <div style="max-width:80%;padding:9px 13px;border-radius:12px;font-size:13px;white-space:pre-wrap;
+                  background:${mine?'#10b981':'#f1f5f9'};color:${mine?'#fff':'#111827'};">${escapeHtml(text)}</div>
+    </div>`;
+}
+
+function loadThread(){
+  const ticket = TICKETS.find(t => t.id === CURRENT_THREAD_ID);
+  const box = document.getElementById('csThreadBody');
+  box.innerHTML = '';
+  if(ticket) box.innerHTML += threadBubble(ticket.full_name, ticket.created_at, ticket.message, true);
+  fetch('/support/tickets/' + CURRENT_THREAD_ID + '/messages').then(r=>r.json()).then(msgs=>{
+    (msgs||[]).forEach(m => {
+      box.innerHTML += threadBubble(m.sender_name || (m.sender_type==='proledg' ? 'Proledg' : ''), m.created_at, m.message, m.sender_type==='customer');
+    });
+    box.scrollTop = box.scrollHeight;
+  });
+}
+
+function sendThreadReply(){
+  const text = document.getElementById('csThreadReply').value.trim();
+  if(!text || !CURRENT_THREAD_ID) return;
+  const fd = new FormData();
+  fd.append('message', text);
+  fetch('/support/tickets/' + CURRENT_THREAD_ID + '/messages/add', { method:'POST', headers:{'X-CSRFToken':CS_CSRF}, body:fd })
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        document.getElementById('csThreadReply').value = '';
+        loadThread();
+      } else {
+        alert(d.error || (IS_AR ? 'فشل الإرسال' : 'Send failed'));
+      }
+    }).catch(()=>alert(IS_AR ? 'خطأ في الشبكة' : 'Network error'));
+}
+
+document.addEventListener('DOMContentLoaded', loadTickets);
+</script>
+{% endblock %}

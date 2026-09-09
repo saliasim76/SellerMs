@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}رصيد دليل الحسابات{% else %}Chart of Account Balance{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}رصيد دليل الحسابات{% else %}Chart of Account Balance{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.ag-theme-alpine{--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-row-hover-color:#eff6ff;--ag-selected-row-background-color:#dbeafe;--ag-header-height:44px;--ag-row-height:42px;}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11.5px;text-transform:uppercase;}
+.je-page{padding:4px 2px;}
+.je-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.je-title{font-size:20px;font-weight:800;color:#1e3a5f;margin:0;}
+.je-toolbar{display:flex;gap:8px;margin-inline-start:auto;flex-wrap:wrap;}
+.jbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #d1d5db;background:#fff;color:#374151;}
+.jbtn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+.grid-wrap{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;}
+.je-act{width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin:0 2px;}
+.je-act-view{background:#eff6ff;color:#2563eb;}
+.je-modal-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.je-modal-hdr h5{margin:0;color:#fff;font-weight:700;font-size:15px;}
+.modal-content{border-radius:12px;overflow:hidden;}
+.je-body{padding:18px 22px;max-height:70vh;overflow-y:auto;}
+.je-fld{margin-bottom:10px;}
+.je-fld label{display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:3px;}
+.je-fld .val{font-size:14px;color:#111827;font-weight:600;}
+.je-table{width:100%;border-collapse:collapse;font-size:12px;min-width:820px;margin-top:8px;}
+.je-table th{background:#1e3a5f;color:#fff;padding:8px 7px;font-size:10.5px;text-transform:uppercase;text-align:left;}
+.je-table td{padding:7px 8px;border-bottom:1px solid #f1f5f9;}
+.je-table tfoot td{background:#f1f5f9;font-weight:700;}
+.bal-pos{color:#15803d;}
+.bal-neg{color:#dc2626;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="je-page">
+  <div class="je-head">
+    <h2 class="je-title">{% if ar %}رصيد دليل الحسابات{% else %}Chart of Account Balance{% endif %}</h2>
+    <div class="je-toolbar">
+      <input type="text" id="balSearch" class="jbtn" style="cursor:text;" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="balSearch()">
+      <button class="jbtn" onclick="loadBalance()"><i class="fas fa-sync-alt"></i>{% if ar %}تحديث{% else %}Refresh{% endif %}</button>
+    </div>
+  </div>
+  <div class="grid-wrap"><div id="balGrid" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:580px;"></div></div>
+</div>
+
+{# ══ VIEW-ONLY TRANSACTIONS DETAIL MODAL ══ #}
+<div class="modal fade" id="balAcctModal" tabindex="-1">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <div class="je-modal-hdr">
+      <h5 id="balAcctModalTitle"><i class="fas fa-book me-2"></i>{% if ar %}معاملات الحساب{% else %}Account Transactions{% endif %}</h5>
+      <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="je-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+        <div class="je-fld"><label>{% if ar %}كود المستوى الخامس{% else %}Level Five Code{% endif %}</label><div class="val" id="v_code">—</div></div>
+        <div class="je-fld"><label>{% if ar %}الرصيد الحالي{% else %}Current Balance{% endif %}</label><div class="val" id="v_balance">—</div></div>
+        <div class="je-fld"></div>
+      </div>
+
+      <table class="je-table">
+        <thead><tr>
+          <th>{% if ar %}رقم القيد{% else %}Je No{% endif %}</th>
+          <th>{% if ar %}المصدر{% else %}Origion{% endif %}</th>
+          <th>{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</th>
+          <th>{% if ar %}مدين{% else %}Debit{% endif %}</th>
+          <th>{% if ar %}دائن{% else %}Credit{% endif %}</th>
+          <th>{% if ar %}الرصيد الجاري{% else %}Running Balance{% endif %}</th>
+          <th>{% if ar %}البيان{% else %}Narration{% endif %}</th>
+        </tr></thead>
+        <tbody id="balDetailBody"></tbody>
+        <tfoot><tr>
+          <td colspan="3" style="text-align:right;">{% if ar %}الإجمالي{% else %}Total{% endif %}</td>
+          <td id="v_totDebit">0.00</td><td id="v_totCredit">0.00</td><td id="v_totBalance">0.00</td><td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div style="padding:14px 22px;background:#f8fafc;border-top:1.5px solid #e2e8f0;display:flex;justify-content:flex-end;">
+      <button class="jbtn" data-bs-dismiss="modal">{% if ar %}إغلاق{% else %}Close{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+let balApi;
+
+function fmtBalance(v){
+  const n = Number(v||0);
+  const cls = n < 0 ? 'bal-neg' : 'bal-pos';
+  return '<span class="'+cls+'">'+n.toFixed(2)+'</span>';
+}
+
+function balActions(p){
+  const code=(p.data||{}).code;
+  return '<button class="je-act je-act-view" title="'+(IS_AR?'عرض المعاملات':'View Transactions')+'" onclick="viewBalAcct(\''+code+'\')"><i class="fas fa-eye"></i></button>';
+}
+
+const COLS=[
+  {headerName:IS_AR?'دروج المستوى الأول':'Level One Drawer', field:'level_one_drawer', width:180, pinned:IS_AR?'right':'left'},
+  {headerName:IS_AR?'كود المستوى الخامس':'Level Five Code', field:'code', width:160, pinned:IS_AR?'right':'left'},
+  {headerName:IS_AR?'الدروج':'Drawers', field:'drawers', flex:1, minWidth:160},
+  {headerName:IS_AR?'الوصف':'Description', field:'description', flex:1, minWidth:160},
+  {headerName:IS_AR?'الحالة':'Status', field:'status', width:110},
+  {headerName:IS_AR?'حساب التحكم':'Control Account', field:'control_account', width:140},
+  {headerName:IS_AR?'الرصيد الحالي':'Current Balance', field:'current_balance', width:160,
+    valueFormatter:p=>Number(p.value||0).toFixed(2), cellRenderer:p=>fmtBalance(p.value)},
+  {headerName:IS_AR?'عرض':'View', width:80, cellRenderer:balActions, sortable:false, filter:false, pinned:IS_AR?'left':'right'},
+];
+
+/* ══ Manual collapse/expand grouping by Level One Drawer ══
+   AG-Grid Community has no built-in Row Grouping (that's an Enterprise
+   feature); this builds it by hand: a synthetic full-width "group row" per
+   Level One drawer, with its Level Five children shown/hidden depending on
+   whether that group key is in _collapsedGroups. */
+let _balRows = [];
+const _collapsedGroups = new Set();
+
+function buildGroupedRows(){
+  const out = [];
+  let curKey = undefined, groupRow = null;
+  _balRows.forEach(r=>{
+    const key = r.level_one_code || '';
+    if (key !== curKey){
+      curKey = key;
+      groupRow = {_group:true, level_one_code:key, level_one_drawer:r.level_one_drawer||'', _count:0, _balance:0};
+      out.push(groupRow);
+    }
+    groupRow._count++;
+    groupRow._balance += Number(r.current_balance)||0;
+    if (!_collapsedGroups.has(key)) out.push(r);
+  });
+  return out;
+}
+
+function toggleGroup(key){
+  if (_collapsedGroups.has(key)) _collapsedGroups.delete(key); else _collapsedGroups.add(key);
+  if (balApi) balApi.setGridOption('rowData', buildGroupedRows());
+}
+
+function groupRowRenderer(p){
+  const d = p.data;
+  const collapsed = _collapsedGroups.has(d.level_one_code);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:10px;padding:0 14px;height:100%;background:#f1f5f9;font-weight:700;color:#1e3a5f;cursor:pointer;';
+  wrap.innerHTML =
+    '<i class="fas '+(collapsed?'fa-caret-right':'fa-caret-down')+'" style="width:14px;"></i>'+
+    '<span>'+(d.level_one_drawer || (IS_AR?'(بدون تصنيف)':'(Unassigned)'))+'</span>'+
+    '<span style="font-weight:500;color:#64748b;font-size:12px;">('+d._count+')</span>'+
+    '<span style="margin-inline-start:auto;font-weight:700;">'+fmtBalance(d._balance)+'</span>';
+  wrap.addEventListener('click', ()=>toggleGroup(d.level_one_code));
+  return wrap;
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  agGrid.createGrid(document.getElementById('balGrid'), {
+    columnDefs:COLS, rowData:[], pagination:true, paginationPageSize:25, paginationPageSizeSelector:[25,50,100],
+    defaultColDef:{sortable:true,resizable:true,filter:true}, enableRtl:IS_AR,
+    localeText: IS_AR ? {noRowsToShow:'لا توجد حسابات'} : {noRowsToShow:'No accounts'},
+    isFullWidthRow:p=>!!(p.rowNode.data && p.rowNode.data._group),
+    fullWidthCellRenderer:groupRowRenderer,
+    getRowId:p=>p.data._group ? 'g_'+p.data.level_one_code : 'a_'+p.data.code,
+    onGridReady:p=>{ balApi=p.api; if(window.GridKit){GridKit.enhance(p,'balGrid',{storageKey:'coa_balance',exportName:'Chart of Account Balance'});} loadBalance(); },
+  });
+});
+function loadBalance(){
+  if(!balApi) return;
+  fetch('/coa/balance/data').then(r=>r.json()).then(d=>{
+    _balRows = d;
+    balApi.setGridOption('rowData', buildGroupedRows());
+  });
+}
+function balSearch(){ if(balApi) balApi.setGridOption('quickFilterText', document.getElementById('balSearch').value); }
+
+function _set(id,v){ document.getElementById(id).textContent = (v===''||v==null)?'—':v; }
+function viewBalAcct(code){
+  fetch('/coa/balance/'+encodeURIComponent(code)+'/transactions').then(r=>r.json()).then(d=>{
+    _set('v_code', code);
+    document.getElementById('v_balance').innerHTML = fmtBalance(d.balance);
+    const tb=document.getElementById('balDetailBody'); tb.innerHTML='';
+    let td=0,tc=0;
+    (d.transactions||[]).forEach(x=>{
+      td+=Number(x.debit)||0; tc+=Number(x.credit)||0;
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td>'+(x.je_no||'')+'</td><td>'+(x.origion||'')+'</td><td>'+(x.posting_date||'')+'</td>'+
+        '<td>'+Number(x.debit||0).toFixed(2)+'</td><td>'+Number(x.credit||0).toFixed(2)+'</td>'+
+        '<td>'+Number(x.running_balance||0).toFixed(2)+'</td><td>'+(x.narration||'')+'</td>';
+      tb.appendChild(tr);
+    });
+    if(!(d.transactions||[]).length) tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:14px;">'+(IS_AR?'لا توجد معاملات':'No transactions')+'</td></tr>';
+    document.getElementById('v_totDebit').textContent=td.toFixed(2);
+    document.getElementById('v_totCredit').textContent=tc.toFixed(2);
+    document.getElementById('v_totBalance').textContent=Number(d.balance||0).toFixed(2);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('balAcctModal')).show();
+  });
+}
+</script>
+{% endblock %}

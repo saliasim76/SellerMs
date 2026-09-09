@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}404{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+  <h1 class="display-1 text-muted">404</h1>
+  <h3>{% if ar %}الصفحة غير موجودة{% else %}Page Not Found{% endif %}</h3>
+  <p class="text-muted">{% if ar %}الصفحة التي تبحث عنها غير موجودة{% else %}The page you are looking for does not exist{% endif %}</p>
+  <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary mt-3">
+    <i class="fas fa-home me-2"></i>{% if ar %}الرئيسية{% else %}Go Home{% endif %}
+  </a>
+</div>
+{% endblock %}

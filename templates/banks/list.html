@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}إدارة البنوك{% else %}Bank Master{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}إدارة البنوك{% else %}Bank Master{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}إدارة البنوك{% else %}Bank Master{% endif %}</h2>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-green" data-bs-toggle="modal" data-bs-target="#bankModal" onclick="openAddBankModal()">
+        <i class="fas fa-plus"></i>
+      </button>
+      {% endif %}
+      <a href="{{ url_for('dashboard.index') }}" class="tool-btn" title="{% if ar %}الرئيسية{% else %}Dashboard{% endif %}">
+        <i class="fas fa-home"></i>
+      </a>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="bankSearch" class="search-input" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="filterBanks(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="proledg-table-wrap">
+    <table class="proledg-table" id="banksTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{% if ar %}اسم البنك بالإنجليزية{% else %}Bank Name (English){% endif %}</th>
+          <th>{% if ar %}اسم البنك بالعربية{% else %}Bank Name (Arabic){% endif %}</th>
+          <th>SWIFT</th>
+          <th>{% if ar %}الدولة{% else %}Country{% endif %}</th>
+          <th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
+          {% if current_user.is_admin() %}
+          <th class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody id="banksTbody">
+        {% for bank in banks %}
+        <tr class="bank-row">
+          <td>{{ loop.index }}</td>
+          <td class="fw-semibold">{{ bank.bank_name_en }}</td>
+          <td dir="rtl" style="text-align:right">{{ bank.bank_name_ar or '—' }}</td>
+          <td><code>{{ bank.swift_code or '—' }}</code></td>
+          <td>{{ bank.country or '—' }}</td>
+          <td>
+            {% if bank.is_active %}
+            <span class="badge status-active">{% if ar %}نشط{% else %}Active{% endif %}</span>
+            {% else %}
+            <span class="badge status-inactive">{% if ar %}غير نشط{% else %}Inactive{% endif %}</span>
+            {% endif %}
+          </td>
+          {% if current_user.is_admin() %}
+          <td class="text-center">
+            <button class="action-btn action-btn-edit" onclick="openEditBankModal({{ bank.id }},'{{ bank.bank_name_en|e }}','{{ bank.bank_name_ar|e }}','{{ bank.swift_code or '' }}','{{ bank.country or '' }}',{{ 'true' if bank.is_active else 'false' }})">
+              <i class="fas fa-pencil-alt"></i>
+            </button>
+            <form method="POST" action="{{ url_for('banks.delete_bank_master', id=bank.id) }}" class="d-inline"
+                  onsubmit="return confirm('{% if ar %}حذف هذا البنك؟{% else %}Delete this bank?{% endif %}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="action-btn action-btn-delete"><i class="fas fa-trash"></i></button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-row">
+          <i class="fas fa-university fa-2x mb-2 d-block"></i>
+          {% if ar %}لا توجد بنوك مضافة{% else %}No banks added yet{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="proledg-pagination">
+    <span class="page-count">{{ banks|length }} {% if ar %}بنك{% else %}bank(s){% endif %}</span>
+  </div>
+</div>
+
+<!-- Add/Edit Bank Modal -->
+<div class="modal fade" id="bankModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="bankModalTitle">
+          {% if ar %}إضافة بنك{% else %}Add Bank{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="bankForm" method="POST" action="{{ url_for('banks.add_bank') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <!-- Bank Name EN/AR — two rows matching owner form style -->
+          <div class="pl-row mb-1">
+            <div class="pl-field-wrap">
+              <div class="pl-labels"><span class="pl-label-en">{% if ar %}اسم البنك بالإنجليزية{% else %}Bank Name (English){% endif %}<span class="pl-req">*</span></span></div>
+              <div class="pl-en-wrap">
+                <input type="text" name="bank_name_en" id="bm_name_en" class="pl-input pl-input-en"
+                       required placeholder="e.g. Saudi National Bank"
+                       oninput="bmTranslate(this,'bm_name_ar','en')">
+                <button type="button" class="pl-retranslate pl-retranslate-en" onclick="bmRetranslate('en')" title="{% if ar %}إعادة ترجمة للإنجليزية{% else %}Re-translate to EN{% endif %}"><i class="fas fa-sync-alt"></i></button>
+              </div>
+            </div>
+            <div class="pl-field-wrap">
+              <div class="pl-labels pl-labels-ar"><span class="pl-label-ar">{% if ar %}Bank Name (English){% else %}اسم البنك بالعربية{% endif %}</span></div>
+              <div class="pl-ar-wrap">
+                <input type="text" name="bank_name_ar" id="bm_name_ar" class="pl-input pl-input-ar"
+                       dir="rtl" placeholder="{% if ar %}Bank Name (English){% else %}مثال: البنك الأهلي السعودي{% endif %}"
+                       oninput="bmTranslate(this,'bm_name_en','ar')">
+                <span class="pl-spin" id="bm_spin"></span>
+                <button type="button" class="pl-retranslate pl-retranslate-ar" onclick="bmRetranslate('ar')" title="{% if ar %}إعادة ترجمة للعربية{% else %}Re-translate to AR{% endif %}"><i class="fas fa-sync-alt"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">SWIFT Code</label>
+              <input type="text" name="swift_code" id="bm_swift" class="pl-input pl-input-en w-100" placeholder="e.g. NCBKSAJE">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">{% if ar %}الدولة{% else %}Country{% endif %}</label>
+              <input type="text" name="country" id="bm_country" class="pl-input pl-input-en w-100" value="Saudi Arabia">
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input type="checkbox" name="is_active" id="bm_active" class="form-check-input" checked>
+                <label for="bm_active" class="form-check-label">{% if ar %}بنك نشط{% else %}Active Bank{% endif %}</label>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" class="pl-footer-btn pl-btn-save" onclick="submitBankForm()">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TRANSLATE_URL = '{{ url_for("sellers.translate_text") }}';
+const CSRF = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if ar else 'false' }};
+
+// ── Translate helpers ──
+let _bmTimer = null;
+function bmTranslate(srcEl, targetId, srcLang) {
+  clearTimeout(_bmTimer);
+  const text = srcEl.value.trim();
+  const target = document.getElementById(targetId);
+  if (!text) { if(target)target.value=''; return; }
+  const spin = document.getElementById('bm_spin');
+  if(spin) spin.innerHTML='<i class="fas fa-spinner fa-spin" style="font-size:11px;color:#9ca3af"></i>';
+  _bmTimer = setTimeout(()=>{
+    fetch(TRANSLATE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body:JSON.stringify({text,direction:`${srcLang}|${srcLang==='en'?'ar':'en'}`})})
+    .then(r=>r.json()).then(d=>{
+      if(d.translated&&target){target.value=d.translated;target.classList.add('pl-translated');setTimeout(()=>target.classList.remove('pl-translated'),900);}
+      if(spin)spin.innerHTML='';
+    }).catch(()=>{if(spin)spin.innerHTML='';});
+  },700);
+}
+
+function bmRetranslate(srcLang) {
+  const srcEl = document.getElementById(srcLang==='en'?'bm_name_en':'bm_name_ar');
+  const tgtEl = document.getElementById(srcLang==='en'?'bm_name_ar':'bm_name_en');
+  const text = srcEl?srcEl.value.trim():'';
+  if(!text||!tgtEl)return;
+  const spin=document.getElementById('bm_spin');
+  if(spin)spin.innerHTML='<i class="fas fa-spinner fa-spin" style="font-size:11px;color:#9ca3af"></i>';
+  fetch(TRANSLATE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+  body:JSON.stringify({text,direction:`${srcLang}|${srcLang==='en'?'ar':'en'}`})})
+  .then(r=>r.json()).then(d=>{if(d.translated)tgtEl.value=d.translated;if(spin)spin.innerHTML='';})
+  .catch(()=>{if(spin)spin.innerHTML='';});
+}
+
+// ── Modal ──
+function openAddBankModal() {
+  document.getElementById('bankModalTitle').textContent = IS_AR ? 'إضافة بنك' : 'Add Bank';
+  document.getElementById('bankForm').action = '{{ url_for("banks.add_bank") }}';
+  ['bm_name_en','bm_name_ar','bm_swift'].forEach(id=>{ const el=document.getElementById(id); if(el)el.value=''; });
+  document.getElementById('bm_country').value='Saudi Arabia';
+  document.getElementById('bm_active').checked=true;
+}
+
+function openEditBankModal(id, nameEn, nameAr, swift, country, isActive) {
+  document.getElementById('bankModalTitle').textContent = IS_AR ? 'تعديل بنك' : 'Edit Bank';
+  document.getElementById('bankForm').action = `/banks/${id}/edit`;
+  document.getElementById('bm_name_en').value = nameEn;
+  document.getElementById('bm_name_ar').value = nameAr;
+  document.getElementById('bm_swift').value   = swift;
+  document.getElementById('bm_country').value = country || 'Saudi Arabia';
+  document.getElementById('bm_active').checked= isActive;
+  new bootstrap.Modal(document.getElementById('bankModal')).show();
+}
+
+function submitBankForm() { document.getElementById('bankForm').submit(); }
+
+// ── Search ──
+function filterBanks(q) {
+  const rows = document.querySelectorAll('.bank-row');
+  const lq = q.toLowerCase();
+  rows.forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(lq) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

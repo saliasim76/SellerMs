@@ -1,0 +1,1228 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}طلبات الشراء{% else %}Sales Requests{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+.ag-theme-alpine{--ag-font-family:'Segoe UI',Tahoma,sans-serif;--ag-font-size:13px;--ag-header-background-color:#1e3a5f;--ag-header-foreground-color:#fff;--ag-border-color:#e2e8f0;--ag-row-hover-color:#f0f7ff;--ag-header-height:44px;--ag-row-height:44px;}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:12px;text-transform:uppercase;}
+.ag-theme-alpine .ag-filter{border-radius:10px!important;box-shadow:0 6px 24px rgba(0,0,0,.14)!important;border:1px solid #e2e8f0!important;overflow:hidden;min-width:255px;background:white;}
+.ag-theme-alpine .ag-filter-apply-panel{padding:8px 10px!important;background:#f8fafc!important;border-top:1px solid #e2e8f0!important;display:flex!important;gap:6px!important;justify-content:space-between!important;}
+.ag-theme-alpine .ag-filter-apply-panel-button{padding:5px 14px!important;border-radius:7px!important;font-size:12px!important;font-weight:600!important;border:none!important;cursor:pointer!important;}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="applyFilterButton"]{background:linear-gradient(135deg,#16a34a,#15803d)!important;color:white!important;}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="clearFilterButton"]{background:white!important;color:#374151!important;border:1.5px solid #d1d5db!important;}
+.ag-theme-alpine .ag-filter-apply-panel-button[ref="resetFilterButton"]{background:white!important;color:#374151!important;border:1.5px solid #d1d5db!important;}
+.ag-theme-alpine .ag-add-filter-condition{padding:4px 10px!important;}
+.ag-theme-alpine .ag-add-filter-condition .ag-button{color:#2563eb!important;font-size:12px!important;font-weight:600!important;background:none!important;border:none!important;cursor:pointer!important;}
+.ag-theme-alpine .ag-simple-filter-body-wrapper .ag-input-field-input{border:1.5px solid #d1d5db!important;border-radius:7px!important;padding:6px 10px!important;font-size:12px!important;width:100%!important;}
+.ag-theme-alpine .ag-floating-filter-input input{border:1px solid #e2e8f0!important;border-radius:5px!important;padding:3px 7px!important;font-size:11px!important;}
+.ag-ab{width:28px;height:28px;border-radius:7px;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;transition:all .12s;}
+.ag-ab-view{background:#0ea5e9;color:white;}.ag-ab-edit{background:#f59e0b;color:white;}.ag-ab-del{background:#ef4444;color:white;}
+/* Modal */
+.pur-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+.pur-hdr h5{margin:0;color:white;font-weight:700;font-size:15px;}
+.pur-badge{background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;margin-left:8px;}
+/* Tabs */
+.pur-tabs{display:flex;border-bottom:2px solid #e2e8f0;padding:0 18px;background:white;}
+.pur-tab{padding:10px 18px;border:none;background:none;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.pur-tab:hover{color:#2563eb;}
+.pur-tab.active{color:#2563eb;border-bottom-color:#2563eb;}
+.pur-tab-pane{display:none!important;padding:0;}
+.pur-tab-pane.active{display:block!important;}
+/* Collapsible sections */
+.pur-section{border:1.5px solid #e2e8f0;border-radius:10px;margin:14px 18px 0;overflow:hidden;}
+.pur-section-hdr{width:100%;background:white;border:none;padding:12px 16px;text-align:left;font-weight:700;font-size:13px;color:#1e3a5f;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:background .1s;}
+.pur-section-hdr:hover{background:#f8fafc;}
+.pur-section-hdr.open{background:#f0f7ff;border-bottom:1.5px solid #e2e8f0;}
+.pur-sec-icon{width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;margin-right:8px;font-size:11px;background:#e0f2fe;color:#0284c7;flex-shrink:0;}
+.pur-section-hdr.open .pur-sec-icon{background:#2563eb;color:white;}
+.pur-section-body{padding:16px 18px;display:none;background:white;}
+.pur-section-body.open{display:block;}
+/* Field grids */
+.f-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.f-item{display:flex;flex-direction:column;}
+.f-lbl{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+.f-inp{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;transition:border-color .15s;}
+.f-inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.f-inp[readonly]{background:#f8fafc;color:#374151;}
+select.f-inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
+/* Line items table */
+.li-wrap{overflow-x:auto;border-radius:8px;border:1.5px solid #e2e8f0;}
+.li-table{width:100%;border-collapse:collapse;font-size:11.5px;min-width:1150px;}
+.li-table thead tr{background:#1e3a5f;}
+.li-table th{padding:9px 7px;font-weight:600;color:white;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;}
+.li-table td{padding:5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+.li-table tbody tr:hover td{background:#f0f7ff;}
+.li-table tbody tr:nth-child(even) td{background:#fafbfc;}
+.li-inp{border:1.5px solid #e5e7eb;border-radius:6px;padding:5px 7px;font-size:11.5px;width:100%;font-family:inherit;}
+.li-inp:focus{outline:none;border-color:#2563eb;}
+.li-inp[readonly]{background:#f3f4f6;color:#374151;}
+select.li-inp{appearance:none;padding-right:16px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;}
+/* Summary */
+.pur-summary{background:linear-gradient(135deg,#f8fafc,#f0f7ff);border:1.5px solid #bfdbfe;border-radius:10px;padding:16px 18px;}
+.sum-line{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #e2e8f0;font-size:13px;}
+.sum-line:last-child{border-bottom:none;}
+.sum-total-row{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:10px 14px;border-radius:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;}
+.sum-total-row span{color:white;}
+.sum-doc-row{margin-top:8px;padding-top:8px;border-top:1px dashed #bfdbfe;display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+/* Attachment */
+.att-drop{border:2px dashed #bfdbfe;border-radius:10px;padding:24px;text-align:center;background:#f0f9ff;cursor:pointer;}
+.att-drop:hover{border-color:#2563eb;background:#eff6ff;}
+.att-drop i{font-size:28px;color:#60a5fa;margin-bottom:8px;display:block;}
+.att-list{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.att-item{display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid #e2e8f0;border-radius:7px;padding:7px 12px;font-size:12px;}
+.att-rm{cursor:pointer;color:#ef4444;background:none;border:none;padding:0;}
+/* Footer */
+.pur-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#f8fafc;border-top:2px solid #e2e8f0;}
+.btn-f{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+.btn-save{background:linear-gradient(135deg,#16a34a,#15803d);color:white;box-shadow:0 2px 8px rgba(22,163,74,.3);}
+.btn-cancel{background:white;color:#374151;border:1.5px solid #d1d5db;}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}طلبات الشراء{% else %}Sales Requests{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}طلبات الشراء{% else %}Sales Requests{% endif %}</h2>
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="tool-btn tool-btn-green" onclick="openAdd()"><i class="fas fa-plus"></i></button>
+      <button class="tool-btn tool-btn-blue" onclick="loadData()"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn" onclick="gridApi&&gridApi.setFilterModel(null);document.getElementById('qs').value='';gridApi.setGridOption('quickFilterText','')"><i class="fas fa-times-circle"></i></button>
+    </div>
+    <div class="toolbar-right d-flex align-items-center gap-3">
+      <span id="selText" style="font-size:12px;font-weight:600;color:#6b7280;">–</span>
+      <div class="search-form"><i class="fas fa-search search-icon"></i>
+        <input type="text" id="qs" class="search-input" style="width:200px"
+               placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}"
+               oninput="gridApi&&gridApi.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+  <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;overflow:hidden;">
+    <div id="srGrid" class="ag-theme-alpine" style="height:calc(100vh - 260px);min-height:480px;width:100%;"></div>
+  </div>
+  <div class="proledg-pagination"><span class="page-count" id="pageInfo">–</span></div>
+</div>
+
+{# ══ ADD / EDIT MODAL ══ #}
+<div class="modal fade" id="srModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width:1060px;">
+    <div class="modal-content" style="border:none;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+
+      <div class="pur-hdr">
+        <div style="display:flex;align-items:center;">
+          <h5 id="srTitle"><i class="fas fa-file-alt me-2"></i>{% if ar %}إضافة طلب بيع{% else %}Add Sales Request{% endif %}</h5>
+          <span class="pur-badge" id="srDocBadge">NEW</span>
+        </div>
+        <button class="btn-close" style="filter:brightness(0) invert(1);" data-bs-dismiss="modal"></button>
+      </div>
+
+      {# Tabs #}
+      <div class="pur-tabs">
+        <button class="pur-tab active" onclick="switchTab('tab_content',this)">
+          <i class="fas fa-file-alt me-1"></i>{% if ar %}المحتوى{% else %}Content{% endif %}
+        </button>
+        <button class="pur-tab" onclick="switchTab('tab_attach',this)">
+          <i class="fas fa-paperclip me-1"></i>{% if ar %}المرفقات{% else %}Attachments{% endif %}
+          <span id="attBadge" style="background:#eff6ff;color:#2563eb;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-left:4px;">0</span>
+        </button>
+      </div>
+
+      <div class="modal-body p-0" style="overflow-y:auto;background:#f8fafc;min-height:420px;">
+        <form id="prForm" onsubmit="event.preventDefault(); savePR();">
+        <input type="hidden" id="sr_id">
+
+        {# ══ TAB 1: CONTENT ══ #}
+        <div class="pur-tab-pane active" id="tab_content">
+
+          {# ── Section 1: Request Info ── #}
+          <div class="pur-section">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-info-circle"></i>
+                {% if ar %}معلومات الطلب / Request Information{% else %}Request Information / معلومات الطلب{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+                        <div class="pur-section-body open">
+              <div class="f-grid3">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
+                  <select id="sr_kind" class="f-inp" onchange="onSrKindChange()">
+                    <option value="Goods">Goods / بضائع</option>
+                    <option value="Services">Services / خدمات</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رقم المستند{% else %}Document No{% endif %}</div>
+                  <input type="text" id="sr_doc_no" class="f-inp" readonly
+                         style="background:#f0fdf4;color:#15803d;font-weight:700;font-size:14px;letter-spacing:.5px;"
+                         placeholder="{% if ar %}يتم توليده تلقائياً{% else %}Auto-generated{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div>
+                  <select id="sr_status" class="f-inp" onchange="onPrStatusChange()">
+                    <option value="Open">Open</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Closed">Closed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+              <div class="f-grid3">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}المستخدم{% else %}Requester{% endif %}</div>
+                  <input type="text" id="sr_requester" class="f-inp" value="{{ current_user.username }}" readonly
+                         title="{% if ar %}اسم المستخدم الحالي{% else %}Current username{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}اسم مقدم الطلب{% else %}Requester Name{% endif %}</div>
+                  <input type="text" id="sr_req_name" class="f-inp" value="{{ current_user.username }}" readonly
+                         title="{% if ar %}اسم المستخدم الحالي{% else %}Current username{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}اعتمد بواسطة{% else %}Approved By{% endif %}</div>
+                  <input type="text" id="sr_approved_by" class="f-inp">
+                </div>
+              </div>
+              <div class="f-grid3">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}صالح حتى{% else %}Valid Until{% endif %}</div>
+                  <input type="date" id="sr_valid_until" class="f-inp" dir="ltr" onchange="validatePrDates()">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</div>
+                  <input type="date" id="sr_doc_date" class="f-inp" dir="ltr" readonly
+                         style="background:#f8fafc;color:#374151;"
+                         title="{% if ar %}دائماً تاريخ اليوم{% else %}Always today's date{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}التاريخ المطلوب{% else %}Required Date{% endif %}</div>
+                  <input type="date" id="sr_req_date" class="f-inp" dir="ltr" onchange="validatePrDates()">
+                </div>
+              </div>
+              <div class="f-grid3">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}المالك{% else %}Owner{% endif %}</div>
+                  <select id="sr_owner" class="f-inp" onchange="onSrOwnerChange()" title="{% if ar %}المالك{% else %}Owner{% endif %}">
+                    <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
+                    {% for s in owners %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
+                  <select id="sr_account_code" class="f-inp" onchange="onSrAccountCodeChange()" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                    <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
+                  </select>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</div>
+                  <input type="date" id="sr_posting_date" class="f-inp" dir="ltr" disabled
+                         title="{% if ar %}يُفعّل عندما لا تكون الحالة مفتوحة{% else %}Enabled when status is not Open{% endif %}">
+                </div>
+              </div>
+              <div id="prDateErr" style="display:none;background:#fee2e2;color:#dc2626;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;"></div>
+              <div class="f-item">
+                <div class="f-lbl">{% if ar %}ملاحظات{% else %}Remarks{% endif %}</div>
+                <textarea id="sr_remarks" class="f-inp" rows="2" style="resize:vertical;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section 2: Line Items ── #}
+          <div class="pur-section" style="margin-top:10px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-list-ul"></i>
+                {% if ar %}بنود الطلب / Line Items{% else %}Line Items / بنود الطلب{% endif %}
+                <span id="liCount" style="background:#eff6ff;color:#2563eb;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:8px;">0</span>
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <button type="button" onclick="addLiRow()"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:#2563eb;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">
+                  <i class="fas fa-plus"></i>{% if ar %}إضافة صنف{% else %}Add Item{% endif %}
+                </button>
+                <span style="font-size:11px;color:#6b7280;">
+                  <i class="fas fa-info-circle me-1"></i>
+                  {% if ar %}المبلغ الخاضع = الكمية × السعر — الخصم{% else %}Taxable = Qty × Rate − Discount{% endif %}
+                </span>
+              </div>
+              <div class="li-wrap">
+                <table class="li-table">
+                  <thead><tr>
+                    <th style="width:30px;">#</th>
+                    <th style="min-width:85px;">{% if ar %}الكود{% else %}Item Code{% endif %}</th>
+                    <th style="min-width:150px;">{% if ar %}الاسم{% else %}Name{% endif %}</th>
+                    <th style="min-width:100px;">{% if ar %}المستودع{% else %}Warehouse{% endif %}</th>
+                    <th style="width:95px;">UoM</th>
+                    <th style="width:65px;">{% if ar %}الكمية{% else %}QTY{% endif %}</th>
+                    <th style="width:65px;">{% if ar %}السعر{% else %}Rate{% endif %}</th>
+                    <th style="width:60px;">{% if ar %}الخصم{% else %}Disc.{% endif %}</th>
+                    <th style="width:60px;">{% if ar %}الشحن{% else %}Freight{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}الخاضع{% else %}Taxable{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}كود الضريبة{% else %}Tax Code{% endif %}</th>
+                    <th style="width:65px;">{% if ar %}الضريبة{% else %}Tax Amt{% endif %}</th>
+                    <th style="width:80px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+                    <th style="width:28px;"></th>
+                  </tr></thead>
+                  <tbody id="liBody"></tbody>
+                  <tfoot>
+                    <tr style="background:#f1f5f9;">
+                      <td colspan="12" style="text-align:right;padding:7px 10px;font-weight:600;font-size:12px;color:#374151;">
+                        {% if ar %}المجموع الإجمالي{% else %}Grand Total{% endif %}
+                      </td>
+                      <td style="padding:7px 8px;font-weight:700;color:#1e3a5f;font-size:13px;" id="li_grand_total">SAR 0.00</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section 3: Summary ── #}
+          <div class="pur-section" style="margin-top:10px;margin-bottom:16px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-calculator"></i>
+                {% if ar %}ملخص طلب البيع / Sales Request Summary{% else %}Sales Request Summary / ملخص طلب البيع{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div class="pur-summary">
+                <div class="sum-line">
+                  <span>{% if ar %}الإجمالي قبل الخصم{% else %}Total before discount{% endif %}</span>
+                  <span id="s_total_bd" style="font-weight:600;">SAR 0.00</span>
+                </div>
+                <div class="sum-line">
+                  <span>{% if ar %}إجمالي الخصم{% else %}Total discount{% endif %}</span>
+                  <span id="s_total_disc" style="font-weight:600;">SAR 0.00</span>
+                </div>
+                <div class="sum-line">
+                  <span>{% if ar %}الشحن{% else %}Freight{% endif %}</span>
+                  <span id="s_total_fr" style="font-weight:600;">SAR 0.00</span>
+                </div>
+                <div class="sum-line">
+                  <span>{% if ar %}الإجمالي بدون ضريبة{% else %}Total Excl. VAT (SAR){% endif %}</span>
+                  <span id="s_excl_vat" style="font-weight:600;">SAR 0.00</span>
+                </div>
+                <div class="sum-line">
+                  <span>{% if ar %}مبلغ ضريبة القيمة المضافة{% else %}VAT Amount (SAR){% endif %}</span>
+                  <span id="s_vat_amt" style="font-weight:600;">SAR 0.00</span>
+                </div>
+                <div class="sum-total-row">
+                  <span style="font-weight:700;font-size:14px;">{% if ar %}الإجمالي شامل الضريبة{% else %}Total Incl. VAT (SAR){% endif %}</span>
+                  <span id="s_incl_vat" style="font-size:18px;font-weight:800;">SAR 0.00</span>
+                </div>
+                <div class="sum-doc-row">
+                  <span style="color:#374151;">{% if ar %}المرفقات{% else %}Documents Attached{% endif %}</span>
+                  <span id="s_doc_count"
+                        style="background:#eff6ff;color:#2563eb;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>{# end tab_content #}
+
+        {# ══ TAB 2: ATTACHMENTS ══ #}
+        <div class="pur-tab-pane" id="tab_attach">
+          <div style="padding:16px 18px;">
+            <div class="att-drop" id="attDrop" onclick="document.getElementById('attInput').click()"
+                 ondragover="event.preventDefault();this.style.borderColor='#2563eb'"
+                 ondragleave="this.style.borderColor='#bfdbfe'"
+                 ondrop="event.preventDefault();this.style.borderColor='#bfdbfe';handleFiles(event.dataTransfer.files)">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px;">
+                {% if ar %}اسحب الملفات هنا أو انقر للاختيار{% else %}Drag & drop files here or click to browse{% endif %}
+              </div>
+              <div style="font-size:12px;color:#9ca3af;">PDF, Word, Excel, Images (max 20MB each)</div>
+              <input type="file" id="attInput" multiple
+                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+                     style="display:none;" onchange="handleFiles(this.files)">
+            </div>
+            <div class="att-list" id="attList"></div>
+
+            {# Existing attachments (edit mode) #}
+            <div id="existAttList" style="margin-top:10px;"></div>
+          </div>
+        </div>
+
+        </form>
+      </div>
+
+      <div class="pur-footer">
+        <button class="btn-f btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء / Cancel{% else %}Cancel / إلغاء{% endif %}
+        </button>
+        <button class="btn-f btn-save" onclick="savePR()">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ طلب البيع / Save{% else %}Save Sales Request / حفظ{% endif %}
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# Delete Confirm #}
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog modal-sm"><div class="modal-content" style="border-radius:10px;overflow:hidden;">
+    <div class="modal-header border-0"><h6 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>{% if ar %}تأكيد الحذف{% else %}Confirm Delete{% endif %}</h6>
+    <button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><p id="delTxt" class="fw-semibold mb-0"></p></div>
+    <div class="modal-footer border-0">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+      <button class="btn btn-sm btn-danger" id="delBtn">{% if ar %}حذف{% else %}Delete{% endif %}</button>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const CURRENT_USERNAME = {{ current_user.username | tojson }};
+const CSRF  = '{{ csrf_token() }}';
+let _liIdx = 0;
+let _attachments = [];
+let _srModal = null;  // Store modal instance
+let _itemMaster = [];   // Item Master rows, loaded once per modal-open
+let _itemMasterLoaded = false;
+let _levelFive = [];
+let _levelFiveLoaded = false;
+
+async function loadItemMaster() {
+  try {
+    const res = await fetch('/items/data');
+    const all = await res.json();
+    _itemMaster = (all || []).filter(it => it.is_active === undefined || it.is_active);
+    _itemMasterLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Item Master:', e);
+    _itemMaster = [];
+  }
+}
+
+/* Kind = Services: line items pick a Chart-of-Accounts (Level Five) code
+   directly instead of an Item Master item. Kind = Goods keeps the existing
+   Item Master mechanism untouched. */
+async function loadLevelFive() {
+  try {
+    const res = await fetch('/coa/level-five/data');
+    const all = await res.json();
+    _levelFive = (all || []).filter(a => (a.status || 'active') === 'active');
+    _levelFiveLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Level Five accounts:', e);
+    _levelFive = [];
+  }
+}
+
+function _isServicesKind() {
+  const el = document.getElementById('sr_kind');
+  return !!el && el.value === 'Services';
+}
+
+/* ══ Posting Date: empty + disabled until status = Approved ══ */
+function onPrStatusChange() {
+  const statusEl = document.getElementById('sr_status');
+  const postEl   = document.getElementById('sr_posting_date');
+  if (!statusEl || !postEl) return;
+  if (statusEl.value !== 'Open') {
+    postEl.disabled = false;
+    if (!postEl.value) postEl.value = new Date().toISOString().split('T')[0];
+  } else {
+    postEl.disabled = true;
+    postEl.value = '';
+  }
+}
+
+/* ══ Date validation: valid_until >= today, required_date <= valid_until ══ */
+function validatePrDates() {
+  const errEl = document.getElementById('prDateErr');
+  const vu = document.getElementById('sr_valid_until').value;
+  const rd = document.getElementById('sr_req_date').value;
+  const pdt = document.getElementById('sr_posting_date').value;
+  const today = new Date().toISOString().split('T')[0];
+  let msg = '';
+  if (vu && vu < today) msg = IS_AR ? 'يجب أن يكون "صالح حتى" بتاريخ اليوم أو بعده' : 'Valid Until must be today or later';
+  else if (rd && vu && rd > vu) msg = IS_AR ? 'يجب أن يكون "التاريخ المطلوب" قبل أو يساوي "صالح حتى"' : 'Required Date must be on/before Valid Until';
+  else if (pdt && rd && pdt > rd) msg = IS_AR ? 'يجب أن يكون "تاريخ الترحيل" في أو قبل "التاريخ المطلوب"' : 'Posting Date must be on or before the Required Date';
+  errEl.style.display = msg ? 'block' : 'none';
+  errEl.textContent = msg;
+  const postEl = document.getElementById('sr_posting_date');
+  if (postEl && rd) postEl.max = rd;
+  return !msg;
+}
+
+// Initialize modal on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const modalEl = document.getElementById('srModal');
+    if (modalEl) {
+        _srModal = new bootstrap.Modal(modalEl);
+    }
+const urlParams = new URLSearchParams(window.location.search);
+    const editId = urlParams.get('edit');
+    if (editId) {
+        // Wait a moment for grid to initialize, then open edit
+        setTimeout(() => {
+            openEdit(parseInt(editId));
+            // Clean up the URL without reloading
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }, 500);
+    }
+});
+/* ══ Section toggle ══ */
+function togSec(btn) {
+  const body = btn.nextElementSibling;
+  const ch   = btn.querySelector('.fa-chevron-up, .fa-chevron-down');
+  const open = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  btn.classList.toggle('open', !open);
+  if (ch) ch.className = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+  if (ch) ch.style.cssText = open ? 'color:#9ca3af;font-size:11px;' : 'color:#2563eb;font-size:11px;';
+}
+
+/* ══ Tab switch ══ */
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.pur-tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.pur-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ══ Doc No fetch ══ */
+async function fetchDocNo() {
+  try {
+    const res = await fetch('/sales/next-doc-no?type=SR');
+    const d   = await res.json();
+    document.getElementById('sr_doc_no').value = d.doc_no;
+    document.getElementById('srDocBadge').textContent = d.doc_no;
+  } catch(e) {
+    console.error('Error fetching doc no:', e);
+  }
+}
+
+/* ══ Item Master dropdown helpers ══ */
+function _itemCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    return `<option value="${it.item_code}"${sel}>${it.item_code}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _itemNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    const label = it.name_en + (it.name_ar ? ' / ' + it.name_ar : '');
+    return `<option value="${it.item_code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown item'})</option>`;
+  }
+  return html;
+}
+
+/* Services-kind counterparts of _itemCodeOptionsHtml/_itemNameOptionsHtml
+   above -- same shape, sourced from Level Five (Chart of Accounts) instead
+   of Item Master. */
+function _glCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    return `<option value="${a.code}"${sel}>${a.code}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _glNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    const label = a.drawers + (a.drawers_ar ? ' / ' + a.drawers_ar : '');
+    return `<option value="${a.code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown account'})</option>`;
+  }
+  return html;
+}
+
+function _defaultDescFor(code, servicesKind, item) {
+  if (servicesKind) {
+    const acc = _levelFive.find(a => a.code === code);
+    return acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+  }
+  return item ? (item.name_en + (item.name_ar ? ' / ' + item.name_ar : '')) : '';
+}
+
+function _uomOptionsHtml(item, selectedUom) {
+  const list = (item && item.uoms && item.uoms.length) ? item.uoms : null;
+  if (!list) {
+    const fallback = selectedUom || 'unit';
+    return `<option value="${fallback}" selected>${fallback}</option>`;
+  }
+  return list.map(u => {
+    const val = u.unit_name;
+    const sel = (selectedUom ? selectedUom === val : u.is_default) ? ' selected' : '';
+    return `<option value="${val}"${sel}>${val}</option>`;
+  }).join('');
+}
+
+/* ══ Owner → Warehouse cascade ══ */
+let _ownerWarehouses = [];
+function _warehouseOptionsHtml(selected) {
+  const sel = selected || (_ownerWarehouses.length ? _ownerWarehouses[0].warehouse_name : '');
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += _ownerWarehouses.map(w => {
+    const label = (IS_AR && w.warehouse_name_ar) ? w.warehouse_name_ar : w.warehouse_name;
+    const optSel = w.warehouse_name === sel ? ' selected' : '';
+    return `<option value="${w.warehouse_name}"${optSel}>${label}</option>`;
+  }).join('');
+  if (sel && !_ownerWarehouses.some(w => w.warehouse_name === sel)) {
+    html += `<option value="${sel}" selected>${sel}</option>`;
+  }
+  return html;
+}
+async function loadOwnerWarehouses(ownerId) {
+  document.querySelectorAll('select[name="li_warehouse[]"]').forEach(sel => { sel.value = ''; });
+  if (!ownerId) {
+    _ownerWarehouses = [];
+  } else {
+    try {
+      const res = await fetch('/owners/' + ownerId + '/warehouses');
+      _ownerWarehouses = await res.json();
+    } catch (e) {
+      _ownerWarehouses = [];
+    }
+  }
+  document.querySelectorAll('select[name="li_warehouse[]"]').forEach(sel => {
+    sel.innerHTML = _warehouseOptionsHtml('');
+  });
+}
+function onSrOwnerChange() {
+  loadOwnerWarehouses(document.getElementById('sr_owner').value);
+}
+
+/* ══ Account Code → line-item Tax Code cascade ══ */
+function accountCodeOptionsHtml(selected) {
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += TAX_CODES.map(t =>
+    `<option value="${t.account_code}"${t.account_code === selected ? ' selected' : ''}>${taxCodeLabel(t)}</option>`
+  ).join('');
+  return html;
+}
+function onSrAccountCodeChange() {
+  const val = document.getElementById('sr_account_code').value;
+  if (!val) return;
+  document.querySelectorAll('select[name="li_tax_code[]"]').forEach(sel => { sel.value = val; });
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const m = (row.id || '').match(/plr_(\d+)/);
+    if (m) recalcLi(parseInt(m[1]));
+  });
+}
+
+function onLiItemChange(idx, source) {
+  const codeSel = document.getElementById('plic_' + idx);
+  const nameSel = document.getElementById('plname_' + idx);
+  const code = source === 'name' ? (nameSel ? nameSel.value : '') : (codeSel ? codeSel.value : '');
+
+  if (codeSel && codeSel.value !== code) codeSel.value = code;
+  if (nameSel && nameSel.value !== code) nameSel.value = code;
+
+  const descEl = document.getElementById('plid_' + idx); // hidden field, holds the name text actually submitted
+  const uomEl  = document.getElementById('pluom_' + idx);
+  const rateEl = document.getElementById('plrt_' + idx);
+
+  if (_isServicesKind()) {
+    const acc = _levelFive.find(a => a.code === code);
+    if (descEl) descEl.value = acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+    if (uomEl)  uomEl.innerHTML = _uomOptionsHtml(null, 'unit');
+    if (rateEl) rateEl.value = (0).toFixed(2);
+    recalcLi(idx);
+    return;
+  }
+
+  const item = _itemMaster.find(it => it.item_code === code);
+  if (item) {
+    if (descEl) descEl.value = item.name_en + (item.name_ar ? ' / ' + item.name_ar : '');
+    if (uomEl)  uomEl.innerHTML = _uomOptionsHtml(item, null);
+    if (rateEl) rateEl.value = (item.main_rate || 0).toFixed(2);
+  } else {
+    if (descEl) descEl.value = '';
+    if (uomEl)  uomEl.innerHTML = _uomOptionsHtml(null, 'unit');
+  }
+  recalcLi(idx);
+}
+
+function onSrKindChange() {
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const m = (row.id || '').match(/^plr_(\d+)$/);
+    if (!m) return;
+    const idx = parseInt(m[1]);
+    const codeSel = document.getElementById('plic_' + idx);
+    const nameSel = document.getElementById('plname_' + idx);
+    if (!codeSel || !nameSel) return;
+    const servicesKind = _isServicesKind();
+    codeSel.innerHTML = servicesKind ? _glCodeOptionsHtml('') : _itemCodeOptionsHtml('');
+    nameSel.innerHTML = servicesKind ? _glNameOptionsHtml('') : _itemNameOptionsHtml('');
+    onLiItemChange(idx, 'code');
+  });
+}
+
+/* ══ Line Items ══ */
+function addLiRow(d) {
+  const idx = _liIdx++;
+  d = d || {};
+  const servicesKind = _isServicesKind();
+  const item = (!servicesKind && d.item_code) ? _itemMaster.find(it => it.item_code === d.item_code) : null;
+  const codeOptsHtml = servicesKind ? _glCodeOptionsHtml(d.item_code||'') : _itemCodeOptionsHtml(d.item_code||'');
+  const nameOptsHtml = servicesKind ? _glNameOptionsHtml(d.item_code||'') : _itemNameOptionsHtml(d.item_code||'');
+  const row = `<tr id="plr_${idx}">
+    <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
+    <td><select class="li-inp" name="li_item_code[]" id="plic_${idx}" onchange="onLiItemChange(${idx},'code')" style="width:110px;">${codeOptsHtml}</select></td>
+    <td>
+      <select class="li-inp" id="plname_${idx}" onchange="onLiItemChange(${idx},'name')" style="min-width:160px;">${nameOptsHtml}</select>
+      <input type="hidden" name="li_item_desc[]" id="plid_${idx}" value="${d.item_desc||_defaultDescFor(d.item_code||'', servicesKind, item)}">
+    </td>
+    <td><select class="li-inp" name="li_warehouse[]" id="plwh_${idx}" style="min-width:100px;">${_warehouseOptionsHtml(d.warehouse||'')}</select></td>
+    <td><select class="li-inp" name="li_uom[]" id="pluom_${idx}" style="width:90px;">${_uomOptionsHtml(item, d.uom)}</select></td>
+    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||(item?item.main_rate:0)||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" id="plt_${idx}"  name="li_taxable_disp[]" value="${d.taxable||0}" readonly
+         style="width:76px;background:#fffbeb;color:#92400e;font-weight:600;" title="Qty × Rate − Discount"></td>
+    <td><select class="li-inp" name="li_tax_code[]" id="pltc_${idx}" onchange="recalcLi(${idx})" style="width:78px;">${taxOptionsHtml(d.tax_code)}
+    </select></td>
+    <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${d.tax_amount||0}" readonly style="width:62px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${d.total||0}" readonly style="width:76px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+    <td><button type="button" onclick="removeLi(${idx})"
+                style="width:22px;height:22px;border-radius:5px;border:none;background:#fee2e2;color:#b91c1c;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">
+      <i class="fas fa-times" style="font-size:9px;"></i></button></td>
+  </tr>`;
+  document.getElementById('liBody').insertAdjacentHTML('beforeend', row);
+  recalcLi(idx);
+  updLiCount();
+}
+
+function removeLi(idx) {
+  const r = document.getElementById('plr_'+idx);
+  if (r) r.remove();
+  recalcSummary();
+  updLiCount();
+}
+
+function recalcLi(idx) {
+  const g = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
+  const qty  = g('plq_'+idx);
+  const rate = g('plrt_'+idx);
+  const disc = g('pld_'+idx);
+  const fr   = g('plf_'+idx);
+  const tcEl = document.getElementById('pltc_'+idx);
+  const taxRate = tcEl ? taxRateOf(tcEl.value) : 0;
+  // Taxable = (Qty × Rate − Discount) + Freight
+  const taxable = Math.max(0, (qty * rate - disc) + fr);
+  // Tax = Taxable × Tax%
+  const taxAmt  = Math.round(taxable * taxRate / 100 * 100) / 100;
+  // Total = Taxable + Tax
+  const total   = taxable + taxAmt;
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = v.toFixed(2); };
+  set('plt_'+idx,   taxable);
+  set('plta_'+idx,  taxAmt);
+  set('pltot_'+idx, total);
+  recalcSummary();
+}
+
+function recalcSummary() {
+  let bd=0, disc=0, fr=0, vat=0;
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const g = n => parseFloat(row.querySelector(`[name="${n}[]"]`)?.value || 0) || 0;
+    bd   += g('li_qty') * g('li_rate');
+    disc += g('li_discount');
+    fr   += g('li_freight');
+    vat  += parseFloat(row.querySelector('[name="li_tax_amount_disp[]"]')?.value || 0) || 0;
+  });
+  const excl = (bd - disc) + fr;
+  const incl = excl + vat;
+  const fmt  = n => 'SAR ' + n.toLocaleString('en-SA', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const s    = id => document.getElementById(id);
+  if (s('s_total_bd'))   s('s_total_bd').textContent   = fmt(bd);
+  if (s('s_total_disc')) s('s_total_disc').textContent = fmt(disc);
+  if (s('s_total_fr'))   s('s_total_fr').textContent   = fmt(fr);
+  if (s('s_excl_vat'))   s('s_excl_vat').textContent   = fmt(excl);
+  if (s('s_vat_amt'))    s('s_vat_amt').textContent     = fmt(vat);
+  if (s('s_incl_vat'))   s('s_incl_vat').textContent   = fmt(incl);
+  if (s('li_grand_total')) s('li_grand_total').textContent = fmt(incl);
+}
+
+function updLiCount() {
+  const n = document.querySelectorAll('#liBody tr').length;
+  const el = document.getElementById('liCount');
+  if (el) el.textContent = n;
+}
+
+/* ══ Attachments ══ */
+function handleFiles(files) {
+  for (const f of files) {
+    if (_attachments.find(x => x.name === f.name)) continue;
+    _attachments.push(f);
+    const div = document.createElement('div');
+    div.className = 'att-item';
+    div.id = 'att_' + f.name.replace(/[^a-z0-9]/gi,'_');
+    div.innerHTML = `<span><i class="fas fa-file me-2" style="color:#60a5fa;"></i><strong>${f.name}</strong>
+      <span style="color:#9ca3af;margin-left:8px;font-size:11px;">${(f.size/1024).toFixed(1)} KB</span></span>
+      <button type="button" class="att-rm" onclick="removeAtt('${f.name}')"><i class="fas fa-times"></i></button>`;
+    document.getElementById('attList').appendChild(div);
+  }
+  updDocCount();
+}
+
+function removeAtt(name) {
+  _attachments = _attachments.filter(f => f.name !== name);
+  const el = document.getElementById('att_' + name.replace(/[^a-z0-9]/gi,'_'));
+  if (el) el.remove();
+  updDocCount();
+}
+
+function updDocCount() {
+  const total = _attachments.length +
+    document.querySelectorAll('#existAttList .att-item').length;
+  const el = document.getElementById('s_doc_count');
+  const badge = document.getElementById('attBadge');
+  if (el) el.textContent = total;
+  if (badge) badge.textContent = total;
+}
+
+/* ══ Open Add ══ */
+async function openAdd() {
+  console.log('openAdd() called');
+  _liIdx = 0; _attachments = [];
+  document.getElementById('sr_id').value = '';
+  document.getElementById('srTitle').innerHTML =
+    '<i class="fas fa-plus-circle me-2"></i>' + (IS_AR ? 'إضافة طلب بيع' : 'Add Sales Request');
+  // Clear fields (requester / requester name always stay as logged-in username)
+  ['sr_approved_by','sr_remarks'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  document.getElementById('sr_requester').value = CURRENT_USERNAME;
+  document.getElementById('sr_req_name').value  = CURRENT_USERNAME;
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('sr_posting_date').value = '';
+  document.getElementById('sr_posting_date').disabled = true;
+  document.getElementById('sr_valid_until').value = today;
+  document.getElementById('sr_doc_date').value = today;   // always today, readonly
+  document.getElementById('sr_req_date').value = today;
+  document.getElementById('prDateErr').style.display = 'none';
+  document.getElementById('sr_status').value = 'Open';
+  document.getElementById('sr_kind').value = 'Goods';
+  document.getElementById('sr_doc_no').value = '';
+  document.getElementById('srDocBadge').textContent = 'NEW';
+  const ownerSel = document.getElementById('sr_owner');
+  ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
+  const accSel = document.getElementById('sr_account_code');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  await loadOwnerWarehouses(ownerSel.value);
+  document.getElementById('liBody').innerHTML = '';
+  document.getElementById('attList').innerHTML = '';
+  document.getElementById('existAttList').innerHTML = '';
+  recalcSummary(); updLiCount(); updDocCount();
+  // Switch to content tab, open all sections
+  switchTab('tab_content', document.querySelector('.pur-tab'));
+  // Auto-open sections
+  document.querySelectorAll('.pur-section-hdr').forEach(btn => {
+    btn.classList.add('open');
+    btn.nextElementSibling.classList.add('open');
+    const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
+    if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
+  });
+  // Fetch doc no from server
+  fetchDocNo();
+  // Load Item Master, then add first empty line item
+  await loadItemMaster();
+  await loadLevelFive();
+  addLiRow();
+
+  // Show modal
+  if (!_srModal) {
+    const modalEl = document.getElementById('srModal');
+    if (modalEl) {
+      _srModal = new bootstrap.Modal(modalEl);
+    }
+  }
+  if (_srModal) {
+    _srModal.show();
+  }
+}
+
+/* ══ Open Edit ══ */
+function openEdit(id) {
+  console.log('openEdit() called with id:', id);
+  fetch('/sales/requests/' + id + '/json')
+    .then(r => {
+      if (!r.ok) throw new Error('Network response was not ok');
+      return r.json();
+    })
+    .then(async d => {
+      _liIdx = 0; _attachments = [];
+      document.getElementById('sr_id').value = id;
+      document.getElementById('srTitle').innerHTML =
+        '<i class="fas fa-edit me-2"></i>' + (IS_AR ? 'تعديل طلب البيع' : 'Edit Sales Request');
+      document.getElementById('sr_doc_no').value = d.doc_no || '';
+      document.getElementById('srDocBadge').textContent = d.doc_no || '';
+      document.getElementById('sr_status').value = d.status || 'Open';
+    document.getElementById('sr_kind').value = d.kind || 'Goods';
+      document.getElementById('sr_requester').value = d.requester || CURRENT_USERNAME;
+      document.getElementById('sr_req_name').value = d.requester_name || CURRENT_USERNAME;
+      document.getElementById('sr_approved_by').value = d.approved_by || '';
+      document.getElementById('sr_remarks').value = d.remarks || '';
+      document.getElementById('sr_posting_date').disabled = (d.status === 'Open');
+      document.getElementById('sr_posting_date').value = d.posting_date || '';
+      document.getElementById('sr_valid_until').value  = d.valid_until  || '';
+      document.getElementById('sr_doc_date').value     = new Date().toISOString().split('T')[0]; // re-stamped on every save
+      document.getElementById('sr_req_date').value     = d.required_date || '';
+      document.getElementById('prDateErr').style.display = 'none';
+      onPrStatusChange(); // re-apply gating in case status forces an auto-fill
+      if (d.posting_date) document.getElementById('sr_posting_date').value = d.posting_date;
+      const ownerSel = document.getElementById('sr_owner');
+      ownerSel.value = d.owner_id || '';
+      if (!ownerSel.value && ownerSel.options.length > 1) ownerSel.selectedIndex = 1;
+      const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
+      document.getElementById('sr_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+      await loadOwnerWarehouses(ownerSel.value);
+      // Line items
+      await loadItemMaster();
+      await loadLevelFive();
+      document.getElementById('liBody').innerHTML = '';
+      (d.items || []).forEach(li => addLiRow(li));
+      if (!d.items?.length) addLiRow();
+      // Existing attachments
+      document.getElementById('attList').innerHTML = '';
+      document.getElementById('existAttList').innerHTML = '';
+      (d.attachments || []).forEach(a => {
+        const div = document.createElement('div'); div.className = 'att-item';
+        div.innerHTML = `<span><i class="fas fa-file me-2" style="color:#60a5fa;"></i><strong>${a.filename}</strong>
+          <span style="color:#9ca3af;margin-left:8px;font-size:11px;">existing</span></span>`;
+        document.getElementById('existAttList').appendChild(div);
+      });
+      recalcSummary(); updLiCount(); updDocCount();
+      switchTab('tab_content', document.querySelector('.pur-tab'));
+      document.querySelectorAll('.pur-section-hdr').forEach(btn => {
+        btn.classList.add('open'); btn.nextElementSibling.classList.add('open');
+        const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
+        if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
+      });
+      
+      // Show modal
+      if (!_srModal) {
+        const modalEl = document.getElementById('srModal');
+        if (modalEl) {
+          _srModal = new bootstrap.Modal(modalEl);
+        }
+      }
+      if (_srModal) {
+        _srModal.show();
+      }
+    })
+    .catch(err => {
+      console.error('Error loading PR:', err);
+      alert(IS_AR ? 'خطأ في تحميل الطلب' : 'Error loading request');
+    });
+}
+
+/* ══ Save ══ */
+async function savePR() {
+  console.log('savePR() called');
+  if (!validatePrDates()) { return; }
+  
+  try {
+    const id  = document.getElementById('sr_id').value;
+    const url = id ? `/sales/requests/${id}/edit` : '/sales/requests/add';
+    console.log('Save URL:', url);
+    console.log('CSRF Token:', CSRF);
+    
+    const fd  = new FormData();
+    fd.set('csrf_token', CSRF);
+    fd.set('status',         document.getElementById('sr_status').value);
+  fd.set('kind', document.getElementById('sr_kind').value);
+    fd.set('requester',      document.getElementById('sr_requester').value);
+    fd.set('requester_name', document.getElementById('sr_req_name').value);
+    fd.set('approved_by',    document.getElementById('sr_approved_by').value);
+    fd.set('remarks',        document.getElementById('sr_remarks').value);
+    fd.set('posting_date',   document.getElementById('sr_posting_date').value);
+    fd.set('valid_until',    document.getElementById('sr_valid_until').value);
+    fd.set('document_date',  document.getElementById('sr_doc_date').value);
+    fd.set('required_date',  document.getElementById('sr_req_date').value);
+    fd.set('owner_id',      document.getElementById('sr_owner').value);
+    fd.set('account_code',   document.getElementById('sr_account_code').value);
+
+    // Line items
+    document.querySelectorAll('#liBody tr').forEach(row => {
+      const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+      fd.append('li_item_code[]',      g('li_item_code'));
+      fd.append('li_item_desc[]',      g('li_item_desc'));
+      fd.append('li_warehouse[]',      g('li_warehouse'));
+      fd.append('li_uom[]',            g('li_uom'));
+      fd.append('li_qty[]',            g('li_qty'));
+      fd.append('li_rate[]',           g('li_rate'));
+      fd.append('li_discount[]',       g('li_discount'));
+      fd.append('li_freight[]',        g('li_freight'));
+      fd.append('li_tax_code[]',       g('li_tax_code'));
+    });
+    
+    _attachments.forEach(f => fd.append('attachments', f));
+    
+    console.log('Sending request to:', url);
+    
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': CSRF
+        // Don't set Content-Type for FormData - browser sets it automatically with boundary
+      },
+      body: fd
+    });
+    
+    console.log('Response status:', res.status);
+    console.log('Response headers:', res.headers);
+    
+    // Check if response is JSON
+    const contentType = res.headers.get('content-type');
+    console.log('Content-Type:', contentType);
+    
+    if (contentType && contentType.includes('application/json')) {
+      const data = await res.json();
+      console.log('Response data:', data);
+      
+      if (data.ok) {
+        // Close modal and refresh grid
+        if (_srModal) {
+          _srModal.hide();
+        }
+        loadData();
+        alert(IS_AR ? 'تم الحفظ بنجاح' : 'Saved successfully');
+      } else {
+        alert(data.error || (IS_AR ? 'حدث خطأ' : 'An error occurred'));
+      }
+    } else {
+      const text = await res.text();
+      console.error('Non-JSON response:', text.substring(0, 500));
+      alert('Server returned non-JSON response. Check console for details.');
+    }
+  } catch (error) {
+    console.error('Save error:', error);
+    alert('Error saving: ' + error.message);
+  }
+}
+
+/* ══ Delete ══ */
+function confDel(id, docNo) {
+  document.getElementById('delTxt').textContent = (IS_AR ? 'حذف: ' : 'Delete: ') + docNo + '?';
+  document.getElementById('delBtn').onclick = () => {
+    fetch('/sales/requests/' + id + '/delete', {
+      method:'POST', headers:{'X-CSRFToken':CSRF, 'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({csrf_token:CSRF})
+    }).then(r => r.json()).then(d => {
+      if (d.ok) { 
+        bootstrap.Modal.getInstance(document.getElementById('delModal'))?.hide(); 
+        loadData(); 
+      }
+    });
+  };
+  new bootstrap.Modal(document.getElementById('delModal')).show();
+}
+
+/* ══ AG-Grid ══ */
+const AG_LOCALE = IS_AR ? {
+  addFilterCondition:'+ إضافة قاعدة / Add Rule', matchAll:'يطابق الكل / Match All',
+  applyFilter:'تطبيق / Apply', clearFilter:'مسح / Clear', resetFilter:'إعادة تعيين',
+  noRowsToShow:'لا توجد بيانات', filterOoo:'تصفية...',
+} : {
+  addFilterCondition:'+ Add Rule / إضافة قاعدة', matchAll:'Match All / بتطابق مع الكل',
+  applyFilter:'Apply / تطبيق', clearFilter:'Clear / مسح', resetFilter:'Reset',
+  noRowsToShow:'No records found',
+};
+
+function rStatus(p) {
+  const cfg = { Open:'#dbeafe:#2563eb', Pending:'#fef3c7:#d97706',
+    Approved:'#dcfce7:#15803d', Closed:'#f1f5f9:#6b7280', Cancelled:'#fee2e2:#dc2626' };
+  const [bg,fg] = (cfg[p.value] || cfg.Open).split(':');
+  return `<span style="background:${bg};color:${fg};padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;">${p.value||'Open'}</span>`;
+}
+function rSAR(p) {
+  return p.value!=null
+    ? `<span style="font-weight:600;font-variant-numeric:tabular-nums;">${parseFloat(p.value).toLocaleString('en-SA',{minimumFractionDigits:2})}</span>` : '';
+}
+
+class ActR {
+  init(p) {
+    this.g = document.createElement('div');
+    this.g.style.cssText = 'display:flex;align-items:center;gap:3px;';
+    const d = p.data;
+    // Use purchase_request_id instead of id
+    const docId = d.id || d.sales_request_id;
+    this.g.innerHTML = `
+      <button class="ag-ab ag-ab-view" onclick="window.location.href='/sales/requests/${docId}/view'" title="${IS_AR?'عرض':'View'}"><i class="fas fa-eye"></i></button>
+      <button class="ag-ab ag-ab-edit" onclick="openEdit(${docId})" title="${IS_AR?'تعديل':'Edit'}"><i class="fas fa-pencil-alt"></i></button>
+      <button class="ag-ab ag-ab-del"  onclick="confDel(${docId},'${(d.doc_no||'').replace(/'/g,"\\'")}') " title="${IS_AR?'حذف':'Delete'}"><i class="fas fa-trash"></i></button>`;
+  }
+  getGui() { return this.g; }
+}
+
+const defCol = {
+  sortable:true, unSortIcon:true, resizable:true, filter:true, floatingFilter:true,
+  filterParams:{buttons:['apply','reset','clear'], closeOnApply:true, maxNumConditions:10}
+};
+const cols = [
+  {headerName:'#',field:'id',width:65,floatingFilter:false,suppressMenu:true,checkboxSelection:true,headerCheckboxSelection:true,pinned:IS_AR?'right':'left',sortable:false,resizable:false},
+  {headerName:IS_AR?'رقم المستند':'Doc No',field:'doc_no',width:125,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'النوع':'Kind',field:'kind',width:100,filter:'agSetColumnFilter',filterParams:{values:['Goods','Services'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'المستخدم':'Requester',field:'requester',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'اسم مقدم الطلب':'Requester Name',field:'requester_name',minWidth:160,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'صالح حتى':'Valid Until',field:'valid_until',width:115,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الشحن':'Freight',field:'total_freight',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الإجمالي بدون ضريبة':'Total Excl. VAT',field:'total_excl_vat',width:140,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'ضريبة القيمة المضافة':'VAT',field:'vat_amount',width:120,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'الإجمالي شامل الضريبة':'Total Incl. VAT',field:'total_incl_vat',width:145,cellRenderer:rSAR,floatingFilter:false},
+  {headerName:IS_AR?'ملاحظات':'Remarks',field:'remarks',minWidth:150,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'اعتمد بواسطة':'Approved By',field:'approved_by',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الإنشاء':'Created At',field:'created_at',width:150,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'أنشئ بواسطة':'Created By',field:'created_by_name',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'إجراءات':'Actions الإجراءات',field:'_a',width:110,pinned:IS_AR?'left':'right',
+   sortable:false,suppressMenu:true,floatingFilter:false,resizable:false,
+   cellRenderer:ActR,cellStyle:{overflow:'visible',padding:'0 6px'}},
+];
+let gridApi;
+agGrid.createGrid(document.getElementById('srGrid'), {
+  columnDefs:cols, multiSortKey:'ctrl', rowData:[], pagination:true, paginationPageSize:10, paginationPageSizeSelector:[10,50,100],
+  animateRows:true, enableRtl:IS_AR, defaultColDef:defCol, localeText:AG_LOCALE,
+  onGridReady(p) {
+    gridApi = p.api;
+    // Pass the whole event: AG-Grid v31 keeps column operations on
+    // p.columnApi, which GridKit needs for show/hide, pin and sizing.
+    if (window.GridKit) {
+      GridKit.enhance(p, 'srGrid', { storageKey: 'sales_sr', exportName: 'Sales Requests' });
+    }
+    loadData();
+  },
+  onPaginationChanged() { upd(); },
+  getRowStyle(p) { return p.node.rowIndex%2===0?{background:'#fff'}:{background:'#fafbfc'}; }
+});
+
+function loadData() {
+  fetch('/sales/requests/data')
+    .then(r=>r.json())
+    .then(d => { gridApi.setGridOption('rowData',d); upd(); })
+    .catch(err => console.error('Error loading data:', err));
+}
+
+function upd() {
+  if (!gridApi) return;
+  const c = gridApi.getDisplayedRowCount();
+  document.getElementById('selText').textContent = c + ' ' + (IS_AR ? 'طلب' : 'requests');
+  document.getElementById('pageInfo').textContent = `${c} entries`;
+}
+
+// ── Tax codes loaded from the sales tax code master ──────────
+// TAX_CODES: [{tax_code, account_code, section}]  — account_code holds the
+// short code (S1, S0, ...), tax_code holds the rate text ("VAT 15%", ...).
+let TAX_CODES = [];
+const TAX_DEFAULT_CODE = 'S1';
+function taxRateOf(code) {
+  const t = TAX_CODES.find(x => x.account_code === code);
+  if (t) {
+    // tax_code holds the rate, e.g. "VAT 15%", "15%", "Exempt", "Out of Scope"
+    const m = String(t.tax_code || '').match(/(\d+(?:\.\d+)?)\s*%/);
+    return m ? parseFloat(m[1]) : 0;
+  }
+  // Already-resolved display value (e.g. "15%") carried over from a saved
+  // line item whose tax_code isn't a live account_code -- extract the rate
+  // directly instead of showing a misleading 0.00 preview.
+  const m2 = String(code || '').match(/(\d+(?:\.\d+)?)\s*%/);
+  return m2 ? parseFloat(m2[1]) : 0;
+}
+function taxCodeLabel(t) {
+  return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
+}
+// Line-item Tax Code column: show only the rate/text ("15%", "Exempt", ...).
+function taxRateText(t) {
+  return t.tax_code || t.account_code;
+}
+function taxOptionsHtml(selected) {
+  const sel = selected || (document.getElementById('sr_account_code')?.value) || TAX_DEFAULT_CODE;
+  if (!TAX_CODES.length) {
+    return `<option value="${sel}" selected>${sel}</option>`;
+  }
+  let html = TAX_CODES.map(t =>
+    `<option value="${t.account_code}"${t.account_code === sel ? ' selected' : ''}>${taxRateText(t)}</option>`
+  ).join('');
+  // Keep a legacy/unknown saved code selectable so editing an old document
+  // never silently changes its tax code.
+  if (sel && !TAX_CODES.some(t => t.account_code === sel)) {
+    html = `<option value="${sel}" selected>${sel}</option>` + html;
+  }
+  return html;
+}
+function loadTaxCodes() {
+  return fetch('/sales-tax-codes/data')
+    .then(r => r.json())
+    .then(d => {
+      TAX_CODES = (d || []).filter(t => (t.status || 'Active') === 'Active');
+      // Refresh any dropdowns already on screen.
+      document.querySelectorAll('select[name="li_tax_code[]"]').forEach(sel => {
+        const cur = sel.value;
+        sel.innerHTML = taxOptionsHtml(cur);
+        sel.value = cur || TAX_DEFAULT_CODE;
+      });
+      const accEl = document.getElementById('sr_account_code');
+      if (accEl) {
+        const cur = accEl.value;
+        accEl.innerHTML = accountCodeOptionsHtml(cur);
+        accEl.value = cur;
+      }
+      // Recalculate every visible line with the real rates.
+      document.querySelectorAll('select[name="li_tax_code[]"]').forEach(sel => {
+        const m = (sel.id || '').match(/pltc_(\d+)/);
+        if (m && typeof recalcLi === 'function') recalcLi(parseInt(m[1]));
+      });
+      if (typeof recalcSummary === 'function') recalcSummary();
+    })
+    .catch(() => { TAX_CODES = []; });
+}
+document.addEventListener('DOMContentLoaded', loadTaxCodes);
+
+</script>
+{% endblock %}

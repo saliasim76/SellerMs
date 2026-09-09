@@ -1,0 +1,82 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+
+{% block title %}Start your free trial — Proledge{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-center">
+      <div class="breadcrumb"><a href="{{ url_for('proledg.home') }}">Home</a> &rarr; <a href="{{ url_for('proledg.pricing') }}">Pricing</a> &rarr; Start trial</div>
+      <h1>Start your free 14-day trial</h1>
+      <p class="hero-sub">No credit card required. Your ERP login is created instantly.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="contact-layout">
+      <div>
+        <div class="eyebrow">{{ icon('book') }} WHAT HAPPENS NEXT</div>
+        <h2>You're a minute away from logging in</h2>
+        <p>Tell us a little about your company below and pick the modules you'd like to try. We'll create your ERP account immediately and show you your login details on the next screen.</p>
+      </div>
+
+      <div class="form-card">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="form-alert {{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('proledg.trial_signup') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-grid">
+            <div class="field">
+              <label for="company_name">Company name</label>
+              <input type="text" id="company_name" name="company_name" placeholder="Your company" required>
+            </div>
+            <div class="field">
+              <label for="customer_name">Your name</label>
+              <input type="text" id="customer_name" name="customer_name" placeholder="Jordan Rivera" required>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="email">Work email</label>
+              <input type="email" id="email" name="email" placeholder="you@company.com" required>
+            </div>
+            <div class="field">
+              <label for="mobile">Mobile <span class="opt">(optional)</span></label>
+              <input type="text" id="mobile" name="mobile" placeholder="+966 5xx xxx xxx">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Modules to try</label>
+            <div class="module-list" style="border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:6px 12px;">
+              {% for m in saas_modules %}
+              <label class="module-row" style="cursor:pointer;">
+                <input type="checkbox" name="modules" value="{{ m.module_code }}"
+                       {% if m.module_code in preselected and m.trial_available %}checked{% endif %}
+                       {% if not m.trial_available %}disabled{% endif %}>
+                <span class="module-row-main">
+                  <span class="module-row-name">{{ m.module_name_en }}{% if not m.trial_available %}<span class="module-badge">No trial</span>{% endif %}</span>
+                </span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">Create my trial account</button>
+        </form>
+        <p class="form-note">Already have an account? <a href="{{ url_for('proledg.contact') }}" class="link-arrow" style="display:inline-flex;">Contact us &rarr;</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

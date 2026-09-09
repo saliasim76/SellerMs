@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}المهن{% else %}Professions{% endif %}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}المهن{% else %}Professions{% endif %}</li>
+{% endblock %}
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}المهن{% else %}Profession Master{% endif %}</h2>
+  <div class="toolbar">
+    <div class="toolbar-left">
+      {% if current_user.is_admin() %}
+      <button class="tool-btn tool-btn-green" data-bs-toggle="modal" data-bs-target="#addModal"><i class="fas fa-plus"></i></button>
+      {% endif %}
+      <a class="tool-btn" href="/io/professions/export?fmt=xlsx" style="text-decoration:none;" title="{% if ar %}تصدير{% else %}Export{% endif %}"><i class="fas fa-file-export"></i></a>
+      <a class="tool-btn" href="/io/professions/template?fmt=xlsx" style="text-decoration:none;" title="Template"><i class="fas fa-file-download"></i></a>
+      {% if current_user.is_admin() %}
+      <button type="button" class="tool-btn" title="{% if ar %}استيراد{% else %}Import{% endif %}" onclick="document.getElementById('profImp').click()"><i class="fas fa-file-import"></i></button>
+      <input type="file" id="profImp" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="ioImport(this,'professions')">
+      {% endif %}
+      <a href="{{ url_for('employees.list_employees') }}" class="tool-btn"><i class="fas fa-arrow-left"></i></a>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form"><i class="fas fa-search search-icon"></i>
+        <input type="text" id="srch" class="search-input" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="filterRows(this.value)">
+      </div>
+    </div>
+  </div>
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead><tr>
+        <th>#</th>
+        <th>{% if ar %}المعرف{% else %}ID{% endif %}</th>
+        <th>{% if ar %}المهنة بالإنجليزية{% else %}Profession (English){% endif %}</th>
+        <th>{% if ar %}المهنة بالعربية{% else %}Profession (Arabic){% endif %}</th>
+        <th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
+        <th>{% if ar %}تاريخ الإضافة{% else %}Created At{% endif %}</th>
+        {% if current_user.is_admin() %}<th class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>{% endif %}
+      </tr></thead>
+      <tbody>
+        {% for p in items %}
+        <tr class="data-row">
+          <td>{{ loop.index }}</td>
+          <td class="text-muted" style="font-family:monospace;font-size:11px;">{{ p.id }}</td>
+          <td class="fw-semibold">{{ p.name_en }}</td>
+          <td dir="rtl" style="text-align:right">{{ p.name_ar or '—' }}</td>
+          <td><span class="badge {% if p.is_active %}status-active{% else %}status-inactive{% endif %}">{% if p.is_active %}{% if ar %}نشط{% else %}Active{% endif %}{% else %}{% if ar %}غير نشط{% else %}Inactive{% endif %}{% endif %}</span></td>
+          <td>{{ p.created_at.strftime('%Y-%m-%d %H:%M') if p.created_at else '—' }}</td>
+          {% if current_user.is_admin() %}
+          <td class="text-center">
+            <button class="action-btn action-btn-edit" onclick="openEdit({{ p.id }},'{{ p.name_en|e }}','{{ p.name_ar|e }}',{{ p.is_active|lower }})"><i class="fas fa-pencil-alt"></i></button>
+            <form method="POST" action="{{ url_for('lookups.delete_profession', id=p.id) }}" class="d-inline" onsubmit="return confirm('{% if ar %}حذف؟{% else %}Delete?{% endif %}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="action-btn action-btn-delete"><i class="fas fa-trash"></i></button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-row"><i class="fas fa-briefcase fa-2x mb-2 d-block"></i>{% if ar %}لا توجد مهن{% else %}No professions added{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="proledg-pagination"><span class="page-count">{{ items|length }} {% if ar %}مهنة{% else %}profession(s){% endif %}</span></div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="modalTitle">{% if ar %}إضافة مهنة{% else %}Add Profession{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="profForm" method="POST" action="{{ url_for('lookups.add_profession') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="pl-row mb-2">
+            <div class="pl-field-wrap">
+              <div class="pl-labels"><span class="pl-label-en">{% if ar %}المهنة بالإنجليزية{% else %}Profession (English){% endif %}<span class="pl-req">*</span></span></div>
+              <div class="pl-en-wrap">
+                <input type="text" name="profession_en" id="p_en" class="pl-input pl-input-en" required placeholder="e.g. Forklift Operator" oninput="lkpTranslate(this,'p_ar','en')">
+                <button type="button" class="pl-retranslate pl-retranslate-en" onclick="lkpRetrans('p_ar','p_en','ar')"><i class="fas fa-sync-alt"></i></button>
+              </div>
+            </div>
+            <div class="pl-field-wrap">
+              <div class="pl-labels pl-labels-ar"><span class="pl-label-ar">{% if ar %}Profession (English){% else %}المهنة بالعربية{% endif %}</span></div>
+              <div class="pl-ar-wrap">
+                <input type="text" name="profession_ar" id="p_ar" class="pl-input pl-input-ar" dir="rtl" placeholder="{% if ar %}Profession (English){% else %}مثال: مشغل رافعة شوكية{% endif %}" oninput="lkpTranslate(this,'p_en','ar')">
+                <span class="pl-spin" id="p_spin"></span>
+                <button type="button" class="pl-retranslate pl-retranslate-ar" onclick="lkpRetrans('p_en','p_ar','en')"><i class="fas fa-sync-alt"></i></button>
+              </div>
+            </div>
+          </div>
+          <div class="form-check mt-2">
+            <input type="checkbox" name="is_active" id="p_active" class="form-check-input" checked>
+            <label for="p_active" class="form-check-label">{% if ar %}نشط{% else %}Active{% endif %}</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" class="pl-footer-btn pl-btn-save" onclick="submitForm()"><i class="fas fa-save me-1"></i>{% if ar %}حفظ{% else %}Save{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const TRANSLATE_URL='{{ url_for("sellers.translate_text") }}';
+const CSRF='{{ csrf_token() }}';
+let _lkpTimer=null;
+function lkpTranslate(src,targetId,srcLang){
+  clearTimeout(_lkpTimer);
+  const text=src.value.trim(), tgt=document.getElementById(targetId);
+  if(!text){if(tgt)tgt.value='';return;}
+  const spin=document.getElementById('p_spin');
+  if(spin)spin.innerHTML='<i class="fas fa-spinner fa-spin" style="font-size:11px;color:#9ca3af"></i>';
+  _lkpTimer=setTimeout(()=>{
+    fetch(TRANSLATE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({text,direction:`${srcLang}|${srcLang==='en'?'ar':'en'}`})})
+    .then(r=>r.json()).then(d=>{if(d.translated&&tgt)tgt.value=d.translated;if(spin)spin.innerHTML='';}).catch(()=>{if(spin)spin.innerHTML='';});
+  },700);
+}
+function lkpRetrans(targetId,srcId,tgtLang){
+  const src=document.getElementById(srcId),tgt=document.getElementById(targetId);
+  const text=src?src.value.trim():'';if(!text||!tgt)return;
+  const srcLang=tgtLang==='ar'?'en':'ar';
+  fetch(TRANSLATE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({text,direction:`${srcLang}|${tgtLang}`})})
+  .then(r=>r.json()).then(d=>{if(d.translated)tgt.value=d.translated;}).catch(()=>{});
+}
+function openEdit(id,en,ar,active){
+  document.getElementById('modalTitle').textContent='{{ "تعديل مهنة" if ar else "Edit Profession" }}';
+  document.getElementById('profForm').action=`/professions/${id}/edit`;
+  document.getElementById('p_en').value=en;
+  document.getElementById('p_ar').value=ar;
+  document.getElementById('p_active').checked=active;
+  new bootstrap.Modal(document.getElementById('addModal')).show();
+}
+function submitForm(){document.getElementById('profForm').submit();}
+function filterRows(q){document.querySelectorAll('.data-row').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none');}
+</script>
+{% endblock %}

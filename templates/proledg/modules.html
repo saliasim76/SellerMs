@@ -1,0 +1,189 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+{% from "proledg/_components.html" import checklist, cta_banner %}
+
+{% block title %}Modules — Proledge{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-center">
+      <div class="breadcrumb"><a href="{{ url_for('proledg.home') }}">Home</a> &rarr; Modules</div>
+      <h1>Switch on exactly what your business needs</h1>
+      <p class="hero-sub">Start with core accounting and activate modules as your business needs them — mix and match by company, and pay only for what you turn on.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('settings') }} HOW MODULES WORK</div>
+      <h2>One platform, tiered to your business</h2>
+      <p>No bolt-on integrations to buy or maintain — turn capabilities on per-company and they post straight to the same set of books.</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-tile">{{ icon('target') }}</div><h3>Start with the core</h3><p>Full double-entry accounting and inventory sit under every company — the foundations every business needs from day one.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('building') }}</div><h3>Activate per company</h3><p>Turn modules like manufacturing or multi-currency on for the companies that need them — each company keeps its own setup.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('refresh') }}</div><h3>One platform, one login</h3><p>Because every module shares the same locked posting engine, security and login, nothing you switch on ever gets out of sync.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('dollar') }} FINANCE &amp; COMPLIANCE</div>
+      <h2>Money, currencies and tax</h2>
+    </div>
+    <div class="grid grid-4">
+      <div class="card"><div class="icon-tile">{{ icon('globe') }}</div><div class="card-row-title"><h3>Multi-Currency</h3><span class="card-tag">CORE</span></div><p>Each company keeps a base currency, invoices and pays in any currency, and Proledge automatically posts realised &amp; unrealised FX gains or losses.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('percent') }}</div><h3>Withholding Tax</h3><p>Capture tax withheld on receipts and payments automatically, and reconcile the withholding tax ledger against the return filed.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('bank') }}</div><h3>Bank Reconciliation</h3><p>Import bank statements (OFX and CSV) and match transactions to your ledger automatically, so your books always tie out to the bank.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('handshake') }}</div><h3>Commission Agent</h3><p>Calculate agent and broker commissions automatically on sales, purchases and rentals; track commission earned and settled by agent.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('factory') }} OPERATIONS</div>
+      <h2>Your factory floor and warehouse, on the books</h2>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-tile">{{ icon('factory') }}</div><div class="card-row-title"><h3>Manufacturing &amp; BOMs</h3><span class="card-tag">CORE</span></div><p>Multi-level, multi-currency bills of materials with automatic backflush through job cards, from raw materials to finished goods.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('cpu') }}</div><h3>Machine Register</h3><p>Register machines and link operations to them for real-time capacity, machine utilization, and maintenance cost per machine.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('box') }}</div><h3>Landed Cost &amp; Letters of Credit</h3><p>Allocate landed costs — freight, insurance, customs duty — into inventory cost, with support for LC-based, multi-currency import costing.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('clipboard') }}</div><div class="card-row-title"><h3>Stock Take &amp; Revaluation</h3><span class="card-tag">CORE</span></div><p>Count physical stock against system stock at any time — the difference is automatically posted as a stock adjustment entry.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('folder') }}</div><div class="card-row-title"><h3>Project Costing</h3><span class="card-tag">CORE</span></div><p>Tag any transaction — purchases, payroll, or inventory issues — to a project. See revenue, cost and margin by project, live.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('briefcase') }}</div><h3>Fixed Assets</h3><p>Track purchase cost, accumulated depreciation, and net book value for equipment and property. Depreciation posts automatically each period.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('smartphone') }} PLATFORM &amp; MOBILE</div>
+      <h2>Run the group, control access, work on the move</h2>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-tile">{{ icon('building') }}</div><div class="card-row-title"><h3>Multi-Company</h3><span class="card-tag">CORE</span></div><p>Every company keeps its own books, its own base currency, and its own screens and reports — switch between them in a click.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('shield-check') }}</div><h3>Approvals &amp; Permissions</h3><p>Set up per-user, per-form permissions plus optional N-of-M approval workflows before a voucher posts.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('users') }}</div><h3>Payroll &amp; Employees</h3><p>Handle salary structures, statutory deductions, loans and reimbursements, with a shared employee master.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('paperclip') }}</div><h3>Paperless / Attachments</h3><p>Attach source documents, invoices and receipts directly to any voucher, so the paper trail travels with the transaction.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('smartphone') }}</div><div class="card-row-title"><h3>Mobile Dashboard</h3><span class="card-tag">CORE</span></div><p>A mobile-friendly dashboard with key ratios, cash position and outstanding balances — check the business from your phone.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('key') }}</div><div class="card-row-title"><h3>Sign-in &amp; Device Security</h3><span class="card-tag">CORE</span></div><p>TOTP two-factor authentication, session hardening, and optional single sign-on with Microsoft Entra for enterprise teams.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('award') }} MODULE SPOTLIGHT</div>
+      <h2>A closer look at two flagship modules</h2>
+      <p>The capabilities that usually mean a heavy ERP — bolted straight into your ledger.</p>
+    </div>
+
+    <div class="split-row flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('factory') }} MANUFACTURING &amp; BOMS</div>
+        <h3>Production that posts itself to the books</h3>
+        <p>Every multi-level bill of materials on Proledge links straight to the ledger — no separate spreadsheet or production system. Raw materials issue, WIP moves, and finished goods land at standard or actual cost, automatically.</p>
+        {{ checklist([
+          "Multi-level backflush through job cards & work orders",
+          "Named WIP accounts per job, standard or actual cost",
+          "Machine register captures utilization and maintenance cost",
+          "Optional negative-stock control, enforced at the engine",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-panel-title">BOM &middot; Barrel 480ml cost</div>
+          <div class="mock-row"><span class="mock-label">Assembly &middot; Cap 300ml</span><span class="mock-sub">1 unit</span></div>
+          <div class="mock-row"><span class="mock-label">Resin</span><span class="mock-sub">5.8 kg</span></div>
+          <div class="mock-row"><span class="mock-label">Machine time</span><span class="mock-sub">$2.87 / unit</span></div>
+          <div class="mock-row highlight"><span class="mock-label">Finished cost</span><span class="mock-status ok">$14.62 / unit</span></div>
+          <a href="{{ url_for('proledg.contact') }}" class="btn btn-primary btn-block">Post to job costing</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-row reverse">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('globe') }} MULTI-CURRENCY</div>
+        <h3>Invoice and pay in any currency — your books stay in one</h3>
+        <p>Raise invoices and settle payments in whatever currency your company operates in. Proledge automatically handles the realised and unrealised FX conversion for you — the consolidated group books stay in your base currency.</p>
+        {{ checklist([
+          "Invoice, pay and bank in foreign currency",
+          "Automatic realised & unrealised FX conversion",
+          "Group consolidation back to your base currency",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-panel-title">Invoice in USD &middot; export sale</div>
+          <div class="mock-row"><span class="mock-label">Invoiced on invoice date</span><span class="mock-sub">Rate 278.40</span></div>
+          <div class="mock-row"><span class="mock-label">Posted in base currency</span><span class="mock-sub">PKR 2,340,960</span></div>
+          <div class="mock-row highlight"><span class="mock-label">Paid date &middot; rate moved</span><span class="mock-status ok">+PKR 8,352</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('link') }} THE PLATFORM ADVANTAGE</div>
+      <h2>Built into every screen — not bolted on</h2>
+      <p>Beyond the modules, the things you touch every day: how documents connect, trace a number back to its source, and watch the business from your desk or phone.</p>
+    </div>
+
+    <div class="split-row flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('link') }} RELATIONSHIP MAPS</div>
+        <h3>See how every document connects — at a glance</h3>
+        <p>Open any voucher on Proledge and instantly map its relationships — purchase order to goods receipt to supplier invoice — or trace a single document across every company it touches, without leaving your chair.</p>
+        {{ checklist([
+          "Available on every voucher — sales, purchase, inventory and beyond",
+          "Click through the full document chain instantly",
+          "The full audit trail, visible in one click",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-flow">
+            <div class="mock-flow-item">Purchase Order &middot; PO-1710</div>
+            <div class="mock-flow-arrow">&darr;</div>
+            <div class="mock-flow-item">Goods Receipt &middot; GRN-887</div>
+            <div class="mock-flow-arrow">&darr;</div>
+            <div class="mock-flow-item">Supplier Invoice &middot; INV-1489</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top:16px;">
+      <div class="card"><h3>Drill down to the voucher</h3><p>Click any figure in the Trial Balance or a report to jump straight to the source voucher — no exports, no lookups.</p></div>
+      <div class="card"><h3>Desktop dashboard</h3><p>A live company overview with cash position, aging, and key ratios — configurable widgets, refreshed in real time.</p></div>
+      <div class="card"><h3>Mobile app (PWA)</h3><p>Install Proledge on your home screen and check the business from your phone, wherever you are.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    {{ cta_banner(
+      "Turn on what you need — leave the rest off",
+      "Start your free 14-day trial with core accounting, and switch on modules as your business grows. No bundles you don't need.",
+      "Start free trial", url_for('proledg.contact'),
+      "See how it works", url_for('proledg.features')
+    ) }}
+  </div>
+</section>
+
+{% endblock %}

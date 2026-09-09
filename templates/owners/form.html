@@ -1,0 +1,860 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} – Seller MS{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if current_locale == 'ar' %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('sellers.list_owners') }}">{% if current_locale == 'ar' %}الملاك{% else %}Owners{% endif %}</a></li>
+<li class="breadcrumb-item active">{{ title }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="fas {% if is_edit %}fa-edit{% else %}fa-user-plus{% endif %} me-2 text-primary"></i>
+        {{ title }}
+        {% if is_edit and owner %}
+        <small class="text-muted fs-6 ms-2">{{ owner.owner_code }}</small>
+        {% endif %}
+    </h1>
+</div>
+
+<form method="POST" action="" novalidate id="ownerForm" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="banks_submitted" value="1">
+    <input type="hidden" name="warehouses_submitted" value="1">
+
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs nav-tabs-modern mb-0" id="ownerTabs" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-general" type="button">
+            <i class="fas fa-info-circle me-1"></i> {% if current_locale == 'ar' %}المعلومات العامة{% else %}General{% endif %}
+        </button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-warehouse" type="button">
+            <i class="fas fa-warehouse me-1"></i> {% if current_locale == 'ar' %}المستودعات{% else %}Warehouses{% endif %}
+        </button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-contact" type="button">
+            <i class="fas fa-phone me-1"></i> {% if current_locale == 'ar' %}جهة الاتصال{% else %}Contact{% endif %}
+        </button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-address" type="button">
+            <i class="fas fa-map-marker-alt me-1"></i> {% if current_locale == 'ar' %}العنوان{% else %}Address{% endif %}
+        </button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-business" type="button">
+            <i class="fas fa-briefcase me-1"></i> {% if current_locale == 'ar' %}تجاري{% else %}Business{% endif %}
+        </button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-bank" type="button">
+            <i class="fas fa-university me-1"></i> {% if current_locale == 'ar' %}بيانات البنك{% else %}Bank{% endif %}
+        </button></li>
+    </ul>
+
+    <div class="tab-content form-tab-content">
+
+        <!-- SECTION 1: General -->
+        <div class="tab-pane fade show active" id="tab-general">
+            <div class="card card-modern border-top-0 rounded-top-0">
+                <div class="card-body">
+                    {% if is_edit and owner %}
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-muted">{% if current_locale == 'ar' %}كود المالك{% else %}Owner Code{% endif %}</label>
+                            <input type="text" class="form-control" value="{{ owner.owner_code }}" disabled>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label required">{% if current_locale == 'ar' %}اسم المالك{% else %}Owner Name{% endif %}</label>
+                            {{ form.owner_name(class="form-control" + (" is-invalid" if form.owner_name.errors else "")) }}
+                            {% for e in form.owner_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{% if current_locale == 'ar' %}الاسم التجاري{% else %}Trade Name{% endif %}</label>
+                            {{ form.trade_name(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}نوع المالك{% else %}Owner Type{% endif %}</label>
+                            {{ form.owner_type(class="form-select") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}فئة المورد{% else %}Supplier Category{% endif %}</label>
+                            {{ form.supplier_category(class="form-select") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label required">{% if current_locale == 'ar' %}الحالة{% else %}Status{% endif %}</label>
+                            {{ form.status(class="form-select") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}رقم التسجيل{% else %}Registration Number{% endif %}</label>
+                            {{ form.registration_number(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}الرقم الضريبي{% else %}Tax Number{% endif %}</label>
+                            {{ form.tax_number(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}رقم ضريبة القيمة المضافة{% else %}VAT Number{% endif %}</label>
+                            {{ form.vat_number(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}رقم الرخصة{% else %}License Number{% endif %}</label>
+                            {{ form.license_number(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}نوع الصناعة{% else %}Industry Type{% endif %}</label>
+                            {{ form.industry_type(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}الموقع الإلكتروني{% else %}Website{% endif %}</label>
+                            {{ form.website(class="form-control", placeholder="https://...") }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">{% if current_locale == 'ar' %}ملاحظات{% else %}Notes{% endif %}</label>
+                            {{ form.notes(class="form-control", rows="3") }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 2: Warehouse -->
+        <div class="tab-pane fade" id="tab-warehouse">
+            <div class="card card-modern border-top-0 rounded-top-0">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-warehouse me-2 text-primary"></i>
+                                    {% if current_locale == 'ar' %}مستودعات المالك{% else %}Owner Warehouses{% endif %}
+                                    <span id="warehouseCount" class="badge bg-primary ms-2" style="display:none;">0</span>
+                                </h5>
+                                <button type="button" class="btn btn-primary" onclick="openWarehouseModal()">
+                                    <i class="fas fa-plus me-1"></i>
+                                    {% if current_locale == 'ar' %}إضافة مستودع{% else %}Add Warehouse{% endif %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div id="warehouseList">
+                                <div class="text-center py-5 text-muted">
+                                    <i class="fas fa-warehouse fa-3x mb-3 d-block opacity-50"></i>
+                                    <p>{% if current_locale == 'ar' %}لم يتم إضافة مستودعات بعد{% else %}No warehouses added yet{% endif %}</p>
+                                </div>
+                            </div>
+                            <div id="warehouseHiddenFields"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: Contact -->
+        <div class="tab-pane fade" id="tab-contact">
+            <div class="card card-modern border-top-0 rounded-top-0">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">{% if current_locale == 'ar' %}الشخص المسؤول{% else %}Contact Person{% endif %}</label>
+                            {{ form.contact_person(class="form-control") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{% if current_locale == 'ar' %}المسمى الوظيفي{% else %}Designation{% endif %}</label>
+                            {{ form.designation(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}رقم الجوال{% else %}Mobile Number{% endif %}</label>
+                            {{ form.mobile(class="form-control", placeholder="+1 555 000 0000") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}جوال بديل{% else %}Alternate Mobile{% endif %}</label>
+                            {{ form.alternate_mobile(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}رقم الهاتف{% else %}Telephone{% endif %}</label>
+                            {{ form.telephone(class="form-control") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{% if current_locale == 'ar' %}البريد الإلكتروني{% else %}Email Address{% endif %}</label>
+                            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="email@example.com") }}
+                            {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 4: Address -->
+        <div class="tab-pane fade" id="tab-address">
+            <div class="card card-modern border-top-0 rounded-top-0">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">{% if current_locale == 'ar' %}العنوان - السطر 1{% else %}Address Line 1{% endif %}</label>
+                            {{ form.address1(class="form-control") }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">{% if current_locale == 'ar' %}العنوان - السطر 2{% else %}Address Line 2{% endif %}</label>
+                            {{ form.address2(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}المدينة{% else %}City{% endif %}</label>
+                            {{ form.city(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}المنطقة{% else %}State{% endif %}</label>
+                            {{ form.state(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{% if current_locale == 'ar' %}الرمز البريدي{% else %}Postal Code{% endif %}</label>
+                            {{ form.postal_code(class="form-control") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{% if current_locale == 'ar' %}الدولة{% else %}Country{% endif %}</label>
+                            {{ form.country(class="form-control") }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 5: Business -->
+        <div class="tab-pane fade" id="tab-business">
+            <div class="card card-modern border-top-0 rounded-top-0">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">{% if current_locale == 'ar' %}شروط الدفع{% else %}Payment Terms{% endif %}</label>
+                            {{ form.payment_terms(class="form-select") }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">{% if current_locale == 'ar' %}أيام الائتمان{% else %}Credit Days{% endif %}</label>
+                            {{ form.credit_days(class="form-control", min="0", max="365") }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">{% if current_locale == 'ar' %}العملة{% else %}Currency{% endif %}</label>
+                            {{ form.currency(class="form-select") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{% if current_locale == 'ar' %}شروط التسليم{% else %}Delivery Terms{% endif %}</label>
+                            {{ form.delivery_terms(class="form-select") }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 6: Bank Information -->
+        <div class="tab-pane fade" id="tab-bank">
+            <div class="card card-modern border-top-0 rounded-top-0">
+                <div class="card-body">
+                    <div class="alert alert-info d-flex align-items-center mb-4">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        <span>
+                            {% if current_locale == 'ar' %}
+                                يتم تخزين بيانات البنك بشكل آمن ومشفر.
+                            {% else %}
+                                Bank details are stored securely and encrypted.
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <!-- Bank List Display -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-university me-2 text-primary"></i>
+                                    {% if current_locale == 'ar' %}الحسابات البنكية{% else %}Bank Accounts{% endif %}
+                                    <span id="bankCount" class="badge bg-primary ms-2" style="display:none;">0</span>
+                                </h5>
+                                <button type="button" class="btn btn-primary" onclick="openBankModal()">
+                                    <i class="fas fa-plus me-1"></i>
+                                    {% if current_locale == 'ar' %}إضافة حساب بنكي{% else %}Add Bank Account{% endif %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div id="bankList">
+                                <div class="text-center py-5 text-muted">
+                                    <i class="fas fa-university fa-3x mb-3 d-block opacity-50"></i>
+                                    <p>{% if current_locale == 'ar' %}لم يتم إضافة حسابات بنكية بعد{% else %}No bank accounts added yet{% endif %}</p>
+                                </div>
+                            </div>
+                            <div id="bankHiddenFields"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="form-actions mt-4">
+        <button type="button" class="btn btn-primary btn-lg" onclick="submitOwnerForm()">
+            <i class="fas fa-save me-2"></i>
+            {% if is_edit %}{% if current_locale == 'ar' %}تحديث{% else %}Update{% endif %}{% else %}{% if current_locale == 'ar' %}حفظ{% else %}Save{% endif %}{% endif %}
+        </button>
+        <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-secondary btn-lg">
+            <i class="fas fa-times me-2"></i>{% if current_locale == 'ar' %}إلغاء{% else %}Cancel{% endif %}
+        </a>
+    </div>
+</form>
+
+<!-- Warehouse Modal -->
+<div class="modal fade" id="warehouseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="warehouseModalTitle">
+                    <i class="fas fa-warehouse me-2"></i>
+                    {% if current_locale == 'ar' %}إضافة مستودع{% else %}Add Warehouse{% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="whEditIndex">
+                <div class="mb-3">
+                    <label class="form-label">
+                        {% if current_locale == 'ar' %}اسم المستودع (إنجليزي){% else %}Warehouse Name (English){% endif %}
+                        <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="form-control" id="whNameEn" dir="ltr" 
+                           placeholder="e.g. Main Warehouse"
+                           oninput="translateWh('whNameEn','whNameAr','en')">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">
+                        {% if current_locale == 'ar' %}اسم المستودع (عربي){% else %}Warehouse Name (Arabic){% endif %}
+                    </label>
+                    <input type="text" class="form-control" id="whNameAr" dir="rtl" 
+                           placeholder="مثال: المستودع الرئيسي"
+                           oninput="translateWh('whNameAr','whNameEn','ar')">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">
+                        {% if current_locale == 'ar' %}الموقع (إنجليزي){% else %}Location (English){% endif %}
+                    </label>
+                    <input type="text" class="form-control" id="whLocationEn" dir="ltr"
+                           placeholder="e.g. Riyadh Warehouse"
+                           oninput="translateWh('whLocationEn','whLocationAr','en')">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">
+                        {% if current_locale == 'ar' %}الموقع (عربي){% else %}Location (Arabic){% endif %}
+                    </label>
+                    <input type="text" class="form-control" id="whLocationAr" dir="rtl"
+                           placeholder="مثال: مستودع الرياض"
+                           oninput="translateWh('whLocationAr','whLocationEn','ar')">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    {% if current_locale == 'ar' %}إلغاء{% else %}Cancel{% endif %}
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveWarehouse()">
+                    <i class="fas fa-save me-1"></i>
+                    {% if current_locale == 'ar' %}حفظ{% else %}Save{% endif %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bank Modal -->
+<div class="modal fade" id="bankModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bankModalTitle">
+                    <i class="fas fa-university me-2"></i>
+                    {% if current_locale == 'ar' %}إضافة حساب بنكي{% else %}Add Bank Account{% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="bankEditIndex" value="">
+                <div class="mb-3">
+                    <label class="form-label">
+                        {% if current_locale == 'ar' %}اسم البنك{% else %}Bank Name{% endif %}
+                        <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="form-control" id="bankName" 
+                           placeholder="{% if current_locale == 'ar' %}أدخل اسم البنك{% else %}Enter bank name{% endif %}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">
+                        {% if current_locale == 'ar' %}رقم الحساب{% else %}Account Number{% endif %}
+                        <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="form-control" id="bankAccountNumber" 
+                           placeholder="{% if current_locale == 'ar' %}أدخل رقم الحساب{% else %}Enter account number{% endif %}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">IBAN</label>
+                    <input type="text" class="form-control text-uppercase" id="bankIban" 
+                           placeholder="{% if current_locale == 'ar' %}أدخل رقم IBAN{% else %}Enter IBAN number{% endif %}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">SWIFT/BIC</label>
+                    <input type="text" class="form-control text-uppercase" id="bankSwift" 
+                           placeholder="{% if current_locale == 'ar' %}أدخل كود SWIFT{% else %}Enter SWIFT code{% endif %}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">
+                        {% if current_locale == 'ar' %}الفرع{% else %}Branch{% endif %}
+                    </label>
+                    <input type="text" class="form-control" id="bankBranch" 
+                           placeholder="{% if current_locale == 'ar' %}أدخل اسم الفرع{% else %}Enter branch name{% endif %}">
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="bankIsPrimary">
+                    <label class="form-check-label" for="bankIsPrimary">
+                        {% if current_locale == 'ar' %}حساب رئيسي{% else %}Primary Account{% endif %}
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    {% if current_locale == 'ar' %}إلغاء{% else %}Cancel{% endif %}
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveBank()">
+                    <i class="fas fa-save me-1"></i>
+                    {% if current_locale == 'ar' %}حفظ{% else %}Save{% endif %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TR_URL = '{{ url_for("sellers.translate_text") }}';
+const CSRF_TOKEN = '{{ csrf_token() }}';
+const IS_AR = {{ 'true' if current_locale == 'ar' else 'false' }};
+{% if is_edit and owner %}
+const WH_LOAD_URL = '{{ url_for("sellers.owner_warehouses", owner_id=owner.id) }}';
+const OWNER_JSON_URL = '{{ url_for("sellers.owner_json", id=owner.id) }}';
+{% endif %}
+
+// Translation
+const _timers = {};
+function translateWh(srcId, tgtId, sl) {
+    if (!IS_AR && sl==='ar') return;
+    if (IS_AR && sl==='en') return;
+    clearTimeout(_timers[tgtId]);
+    const src = document.getElementById(srcId);
+    const tgt = document.getElementById(tgtId);
+    const text = src ? src.value.trim() : '';
+    if (!text) { if(tgt) tgt.value = ''; return; }
+    _timers[tgtId] = setTimeout(() => {
+        fetch(TR_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            body: JSON.stringify({text, direction: `${sl}|${sl==='en'?'ar':'en'}`})
+        })
+        .then(r => r.json())
+        .then(d => { if (d.translated && tgt) tgt.value = d.translated; });
+    }, 700);
+}
+
+// Warehouse data management
+let warehouses = [];
+let banks = [];
+
+function openWarehouseModal(index) {
+    const title = document.getElementById('warehouseModalTitle');
+    document.getElementById('whEditIndex').value = index !== undefined ? index : '';
+    
+    if (index !== undefined && warehouses[index]) {
+        const wh = warehouses[index];
+        document.getElementById('whNameEn').value = wh.warehouse_name || '';
+        document.getElementById('whNameAr').value = wh.warehouse_name_ar || '';
+        document.getElementById('whLocationEn').value = wh.location || '';
+        document.getElementById('whLocationAr').value = wh.location_ar || '';
+        title.innerHTML = `<i class="fas fa-edit me-2"></i> ${IS_AR ? 'تعديل مستودع' : 'Edit Warehouse'}`;
+    } else {
+        document.getElementById('whNameEn').value = '';
+        document.getElementById('whNameAr').value = '';
+        document.getElementById('whLocationEn').value = '';
+        document.getElementById('whLocationAr').value = '';
+        title.innerHTML = `<i class="fas fa-warehouse me-2"></i> ${IS_AR ? 'إضافة مستودع' : 'Add Warehouse'}`;
+    }
+    
+    new bootstrap.Modal(document.getElementById('warehouseModal')).show();
+}
+
+function saveWarehouse() {
+    const index = document.getElementById('whEditIndex').value;
+    const nameEn = document.getElementById('whNameEn').value.trim();
+    const nameAr = document.getElementById('whNameAr').value.trim();
+    const locEn = document.getElementById('whLocationEn').value.trim();
+    const locAr = document.getElementById('whLocationAr').value.trim();
+    
+    if (!nameEn) { alert(IS_AR ? 'اسم المستودع مطلوب' : 'Warehouse name is required'); return; }
+    
+    const wh = {
+        warehouse_name: nameEn,
+        warehouse_name_ar: nameAr,
+        location: locEn,
+        location_ar: locAr,
+        _dbId: (index !== '' && warehouses[index]) ? warehouses[index]._dbId : null
+    };
+    
+    if (index !== '' && warehouses[index]) {
+        warehouses[index] = wh;
+    } else {
+        warehouses.push(wh);
+    }
+    
+    bootstrap.Modal.getInstance(document.getElementById('warehouseModal')).hide();
+    renderWarehouses();
+}
+
+function deleteWarehouse(index) {
+    if (!confirm(IS_AR ? 'حذف هذا المستودع؟' : 'Delete this warehouse?')) return;
+    warehouses.splice(index, 1);
+    renderWarehouses();
+}
+
+function renderWarehouses() {
+    const container = document.getElementById('warehouseList');
+    const badge = document.getElementById('warehouseCount');
+    
+    badge.textContent = warehouses.length;
+    badge.style.display = warehouses.length > 0 ? 'inline-block' : 'none';
+    
+    if (!warehouses.length) {
+        container.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-warehouse fa-3x mb-3 d-block opacity-50"></i>
+                <p>${IS_AR ? 'لم يتم إضافة مستودعات بعد' : 'No warehouses added yet'}</p>
+            </div>`;
+        return;
+    }
+    
+    let html = `<div class="table-responsive"><table class="table table-hover table-bordered"><thead class="table-light"><tr>
+        <th>${IS_AR ? 'اسم المستودع' : 'Warehouse Name'}</th>
+        <th>${IS_AR ? 'الموقع' : 'Location'}</th>
+        <th style="width:100px;text-align:center;">${IS_AR ? 'إجراءات' : 'Actions'}</th>
+    </tr></thead><tbody>`;
+    
+    warehouses.forEach((wh, i) => {
+        html += `<tr>
+            <td>
+                <strong>${wh.warehouse_name || '—'}</strong>
+                ${wh.warehouse_name_ar ? `<br><small class="text-muted">${wh.warehouse_name_ar}</small>` : ''}
+            </td>
+            <td>${wh.location || '<span class="text-muted">—</span>'}${wh.location_ar ? `<br><small class="text-muted">${wh.location_ar}</small>` : ''}</td>
+            <td class="text-center">
+                <!-- CRITICAL FIX: Added type="button" -->
+                <button type="button" class="btn btn-sm btn-warning me-1" onclick="openWarehouseModal(${i})" title="${IS_AR ? 'تعديل' : 'Edit'}">
+                    <i class="fas fa-pencil-alt"></i>
+                </button>
+                <!-- CRITICAL FIX: Added type="button" -->
+                <button type="button" class="btn btn-sm btn-danger" onclick="deleteWarehouse(${i})" title="${IS_AR ? 'حذف' : 'Delete'}">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function injectWarehouseFields() {
+    const container = document.getElementById('warehouseHiddenFields');
+    container.innerHTML = '';
+    warehouses.forEach((wh, i) => {
+        ['warehouse_name', 'warehouse_name_ar', 'location', 'location_ar', '_dbId'].forEach(field => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = `warehouses[${i}][${field}]`;
+            input.value = wh[field] || '';
+            container.appendChild(input);
+        });
+    });
+}
+
+// Bank data management - COMPLETELY REWRITTEN WITH TYPE="BUTTON"
+function editBank(index) {
+    console.log('Edit bank called with index:', index);
+    
+    const title = document.getElementById('bankModalTitle');
+    const editIndexInput = document.getElementById('bankEditIndex');
+    
+    if (banks[index]) {
+        const bank = banks[index];
+        document.getElementById('bankName').value = bank.bank_name || '';
+        document.getElementById('bankAccountNumber').value = bank.account_number || '';
+        document.getElementById('bankIban').value = bank.iban || '';
+        document.getElementById('bankSwift').value = bank.swift_code || '';
+        document.getElementById('bankBranch').value = bank.branch || '';
+        document.getElementById('bankIsPrimary').checked = bank.is_primary || false;
+        title.innerHTML = `<i class="fas fa-edit me-2"></i> ${IS_AR ? 'تعديل حساب بنكي' : 'Edit Bank Account'}`;
+        editIndexInput.value = index;
+    } else {
+        // Clear all fields
+        document.getElementById('bankName').value = '';
+        document.getElementById('bankAccountNumber').value = '';
+        document.getElementById('bankIban').value = '';
+        document.getElementById('bankSwift').value = '';
+        document.getElementById('bankBranch').value = '';
+        document.getElementById('bankIsPrimary').checked = false;
+        title.innerHTML = `<i class="fas fa-university me-2"></i> ${IS_AR ? 'إضافة حساب بنكي' : 'Add Bank Account'}`;
+        editIndexInput.value = '';
+    }
+    
+    // Show the modal
+    const modalElement = document.getElementById('bankModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+}
+
+function openBankModal() {
+    // This is for adding a new bank
+    const title = document.getElementById('bankModalTitle');
+    document.getElementById('bankEditIndex').value = '';
+    document.getElementById('bankName').value = '';
+    document.getElementById('bankAccountNumber').value = '';
+    document.getElementById('bankIban').value = '';
+    document.getElementById('bankSwift').value = '';
+    document.getElementById('bankBranch').value = '';
+    document.getElementById('bankIsPrimary').checked = false;
+    title.innerHTML = `<i class="fas fa-university me-2"></i> ${IS_AR ? 'إضافة حساب بنكي' : 'Add Bank Account'}`;
+    
+    const modalElement = document.getElementById('bankModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+}
+
+function saveBank() {
+    const indexInput = document.getElementById('bankEditIndex');
+    const index = indexInput.value;
+    const bankName = document.getElementById('bankName').value.trim();
+    const accountNumber = document.getElementById('bankAccountNumber').value.trim();
+    const iban = document.getElementById('bankIban').value.trim();
+    const swiftCode = document.getElementById('bankSwift').value.trim();
+    const branch = document.getElementById('bankBranch').value.trim();
+    const isPrimary = document.getElementById('bankIsPrimary').checked;
+    
+    // Validation
+    if (!bankName) { 
+        alert(IS_AR ? 'اسم البنك مطلوب' : 'Bank name is required'); 
+        return; 
+    }
+    if (!accountNumber) { 
+        alert(IS_AR ? 'رقم الحساب مطلوب' : 'Account number is required'); 
+        return; 
+    }
+    
+    const bank = {
+        bank_name: bankName,
+        account_number: accountNumber,
+        iban: iban,
+        swift_code: swiftCode,
+        branch: branch,
+        is_primary: isPrimary,
+        _dbId: null
+    };
+    
+    // If this is primary, unset others
+    if (isPrimary) {
+        banks.forEach((b, i) => {
+            if (i !== parseInt(index) && index !== '') {
+                b.is_primary = false;
+            }
+        });
+    }
+    
+    // Save or update
+    if (index !== '' && banks[parseInt(index)]) {
+        // Keep the existing _dbId
+        bank._dbId = banks[parseInt(index)]._dbId;
+        banks[parseInt(index)] = bank;
+    } else {
+        banks.push(bank);
+    }
+    
+    // Hide the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('bankModal'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // Clear the edit index
+    indexInput.value = '';
+    
+    renderBanks();
+}
+
+function deleteBank(index) {
+    if (!confirm(IS_AR ? 'حذف هذا الحساب البنكي؟' : 'Delete this bank account?')) return;
+    banks.splice(index, 1);
+    renderBanks();
+}
+
+function renderBanks() {
+    const container = document.getElementById('bankList');
+    const badge = document.getElementById('bankCount');
+    
+    badge.textContent = banks.length;
+    badge.style.display = banks.length > 0 ? 'inline-block' : 'none';
+    
+    if (!banks.length) {
+        container.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-university fa-3x mb-3 d-block opacity-50"></i>
+                <p>${IS_AR ? 'لم يتم إضافة حسابات بنكية بعد' : 'No bank accounts added yet'}</p>
+            </div>`;
+        return;
+    }
+    
+    let html = `<div class="table-responsive"><table class="table table-hover table-bordered"><thead class="table-light"><tr>
+        <th>${IS_AR ? 'اسم البنك' : 'Bank Name'}</th>
+        <th>${IS_AR ? 'رقم الحساب' : 'Account Number'}</th>
+        <th>IBAN</th>
+        <th>${IS_AR ? 'رئيسي' : 'Primary'}</th>
+        <th style="width:120px;text-align:center;">${IS_AR ? 'إجراءات' : 'Actions'}</th>
+    </tr></thead><tbody>`;
+    
+    banks.forEach((bank, i) => {
+        html += `<tr>
+            <td><strong>${bank.bank_name || '—'}</strong></td>
+            <td>${bank.account_number || '—'}</td>
+            <td>${bank.iban || '—'}</td>
+            <td class="text-center">${bank.is_primary ? '<span class="badge bg-success">✓</span>' : ''}</td>
+            <td class="text-center">
+                <!-- CRITICAL FIX: Added type="button" here -->
+                <button type="button" class="btn btn-sm btn-warning me-1" onclick="editBank(${i})" title="${IS_AR ? 'تعديل' : 'Edit'}">
+                    <i class="fas fa-pencil-alt"></i>
+                </button>
+                <!-- CRITICAL FIX: Added type="button" here -->
+                <button type="button" class="btn btn-sm btn-danger" onclick="deleteBank(${i})" title="${IS_AR ? 'حذف' : 'Delete'}">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function injectBankFields() {
+    const container = document.getElementById('bankHiddenFields');
+    container.innerHTML = '';
+    banks.forEach((bank, i) => {
+        const fields = ['bank_name', 'account_number', 'iban', 'swift_code', 'branch', 'is_primary', '_dbId'];
+        fields.forEach(field => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = `banks[${i}][${field}]`;
+            if (field === 'is_primary') {
+                input.value = bank[field] ? '1' : '0';
+            } else {
+                input.value = bank[field] || '';
+            }
+            container.appendChild(input);
+        });
+    });
+}
+
+function submitOwnerForm() {
+    injectWarehouseFields();
+    injectBankFields();
+    console.log('Submitting banks:', banks);
+    if (window.__allowOwnerSubmit) window.__allowOwnerSubmit();
+    document.getElementById('ownerForm').submit();
+}
+
+// Load owner data for editing
+{% if is_edit and owner %}
+function loadOwnerData() {
+    fetch(OWNER_JSON_URL)
+        .then(r => r.json())
+        .then(data => {
+            console.log('Owner data loaded:', data);
+            if (data.banks && data.banks.length > 0) {
+                banks = data.banks.map(b => ({
+                    bank_name: b.bank_name || '',
+                    account_number: b.account_number || '',
+                    iban: b.iban || '',
+                    swift_code: b.swift_code || '',
+                    branch: b.branch || '',
+                    is_primary: b.is_primary || false,
+                    _dbId: b.id || null
+                }));
+                console.log('Banks loaded:', banks);
+                renderBanks();
+            } else if (data.bank_name) {
+                banks = [{
+                    bank_name: data.bank_name || '',
+                    account_number: data.account_number || '',
+                    iban: data.iban || '',
+                    swift_code: data.swift_code || '',
+                    branch: data.branch || '',
+                    is_primary: true,
+                    _dbId: null
+                }];
+                renderBanks();
+            }
+        })
+        .catch(err => console.error('Error loading owner data:', err));
+}
+
+function loadExistingWarehouses() {
+    fetch(WH_LOAD_URL)
+        .then(r => r.json())
+        .then(data => {
+            warehouses = data.map(w => ({
+                warehouse_name: w.warehouse_name || '',
+                warehouse_name_ar: w.warehouse_name_ar || '',
+                location: w.location || '',
+                location_ar: w.location_ar || '',
+                _dbId: w.id
+            }));
+            renderWarehouses();
+        });
+}
+{% endif %}
+
+document.addEventListener('DOMContentLoaded', () => {
+    {% if is_edit and owner %}
+    loadExistingWarehouses();
+    loadOwnerData();
+    {% endif %}
+});
+</script>
+{% endblock %}
+
+<script>
+// ── Bank-edit submit guard (diagnostic + fix) ───────────────────────
+(function () {
+  var allowSubmit = false;
+  // Expose a setter the real submit path uses.
+  window.__allowOwnerSubmit = function () { allowSubmit = true; };
+  document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('ownerForm');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      if (!allowSubmit) {
+        // Something other than the Save button tried to submit the form.
+        console.warn('[guard] Blocked an unexpected owner-form submit. Trigger:', document.activeElement);
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      // reset for safety
+      allowSubmit = false;
+    }, true);
+  });
+})();
+</script>

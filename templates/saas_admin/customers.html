@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}عملاء SaaS{% else %}SaaS Customers{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}عملاء SaaS{% else %}SaaS Customers{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}عملاء SaaS{% else %}SaaS Customers{% endif %}</h2>
+  <p style="color:#6b7280;font-size:13px;margin-top:-8px;margin-bottom:16px;">
+    {% if ar %}إنشاء عميل مدفوع مباشرة، وتحديد الوحدات وتاريخ الانتهاء، مع إنشاء قاعدة بيانات مخصصة له تلقائيًا.
+    {% else %}Onboard a paid customer directly, assign modules and an expiry, and automatically provision a dedicated database for them.{% endif %}
+  </p>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="tool-btn tool-btn-green" data-bs-toggle="modal" data-bs-target="#scModal" onclick="openAdd()"><i class="fas fa-plus"></i></button>
+      <button class="tool-btn" title="{% if ar %}مزامنة المخطط لجميع قواعد بيانات العملاء{% else %}Sync schema to all customer databases{% endif %}" onclick="confirmSyncAll()"><i class="fas fa-sync-alt"></i></button>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-form">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" class="search-input" placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}" oninput="filterRows(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div class="proledg-table-wrap">
+    <table class="proledg-table">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>{% if ar %}الشركة{% else %}Company{% endif %}</th>
+          <th>{% if ar %}جهة الاتصال{% else %}Contact{% endif %}</th>
+          <th>{% if ar %}البريد الإلكتروني{% else %}Email{% endif %}</th>
+          <th>{% if ar %}قاعدة البيانات{% else %}Database{% endif %}</th>
+          <th>{% if ar %}الانتهاء{% else %}Expiry{% endif %}</th>
+          <th>{% if ar %}الوحدات{% else %}Modules{% endif %}</th>
+          <th style="width:90px">{% if ar %}الحالة{% else %}Status{% endif %}</th>
+          <th style="width:165px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in customers %}
+        {% set d = c.to_dict() %}
+        <tr class="data-row">
+          <td>{{ loop.index }}</td>
+          <td class="fw-semibold">{{ c.company_name or '—' }}</td>
+          <td>{{ c.customer_name }}</td>
+          <td>{{ c.email }}</td>
+          <td><span class="code-badge">{{ c.database_name or ('مشتركة' if ar else 'Shared') }}</span></td>
+          <td>{{ d.end_date or '—' }}</td>
+          <td style="font-size:12px;color:#6b7280;">{{ d.modules|length }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('saas_customers.toggle_saas_customer_status', id=c.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{% if ar %}تبديل الحالة{% else %}Toggle status{% endif %}">
+                {% if c.account_status == 'active' %}
+                <span class="st-active">{% if ar %}نشط{% else %}Active{% endif %}</span>
+                {% else %}
+                <span class="st-inactive">{{ c.account_status }}</span>
+                {% endif %}
+              </button>
+            </form>
+          </td>
+          <td class="text-center">
+            <button class="action-btn action-btn-edit" onclick='openEdit({{ c.id }}, {{ d|tojson }})'>
+              <i class="fas fa-pencil-alt"></i>
+            </button>
+            <button class="action-btn" onclick='openResetPassword({{ c.id }}, {{ (c.company_name or c.customer_name)|tojson }})' title="{% if ar %}إعادة تعيين كلمة المرور{% else %}Reset password{% endif %}">
+              <i class="fas fa-key"></i>
+            </button>
+            {% if c.database_name %}
+            <button class="action-btn" onclick='confirmSyncOne({{ c.id }}, {{ (c.company_name or c.customer_name)|tojson }})' title="{% if ar %}مزامنة المخطط{% else %}Sync schema{% endif %}">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+            {% endif %}
+            <button class="action-btn action-btn-delete" onclick='confirmDeleteCustomer({{ c.id }}, {{ (c.company_name or c.customer_name)|tojson }})' title="{% if ar %}حذف{% else %}Delete{% endif %}">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="empty-row"><i class="fas fa-building fa-2x mb-2 d-block"></i>{% if ar %}لا يوجد عملاء بعد{% else %}No customers yet{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="proledg-pagination">
+    <span class="page-count">{{ customers|length }} {% if ar %}عميل{% else %}customer(s){% endif %}</span>
+  </div>
+</div>
+
+<form id="scDeleteForm" method="POST" style="display:none;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+<form id="scSyncForm" method="POST" style="display:none;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="scModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="scModalTitle">{% if ar %}إضافة عميل{% else %}Add Customer{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="scForm" method="POST" action="{{ url_for('saas_customers.add_saas_customer') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}اسم الشركة{% else %}Company Name{% endif %} <span style="color:#ef4444">*</span></label>
+              <input type="text" name="company_name" id="sc_company" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}اسم جهة الاتصال{% else %}Contact Name{% endif %} <span style="color:#ef4444">*</span></label>
+              <input type="text" name="customer_name" id="sc_contact" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}البريد الإلكتروني{% else %}Email{% endif %} <span style="color:#ef4444">*</span></label>
+              <input type="email" name="email" id="sc_email" class="form-control" dir="ltr" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}الجوال{% else %}Mobile{% endif %}</label>
+              <input type="text" name="mobile" id="sc_mobile" class="form-control" dir="ltr">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}وضع الوصول{% else %}Access Mode{% endif %}</label>
+              <select name="access_mode" id="sc_access_mode" class="form-select">
+                <option value="expert">{% if ar %}خبير{% else %}Expert{% endif %}</option>
+                <option value="basic">{% if ar %}أساسي{% else %}Basic{% endif %}</option>
+              </select>
+              <div style="font-size:11px;color:#9ca3af;">
+                {% if ar %}أساسي: دليل الحسابات مقفل وأزرار الترحيل معطلة للجميع (حتى المسؤول)، إلا للمسؤول العام. خبير: تحكم كامل كما هو الحال اليوم.
+                {% else %}Basic: Chart of Accounts is locked and every Post button is disabled for everyone (even the admin), except a Super Admin. Expert: full control, as today.{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3" id="sc_trial_field">
+            <div class="form-check form-switch">
+              <input type="checkbox" name="is_trial" id="sc_is_trial" class="form-check-input" onchange="toggleTrialMode(this.checked)">
+              <label for="sc_is_trial" class="form-check-label fw-semibold">
+                {% if ar %}عميل تجريبي{% else %}Trial customer{% endif %}
+              </label>
+              <div style="font-size:11px;color:#9ca3af;">
+                {% if ar %}يستخدم قاعدة بيانات SellerMs المشتركة (بدون قاعدة بيانات منفصلة) لمدة 14 يومًا، ويقتصر على الوحدات المتاحة للتجربة فقط.
+                {% else %}Uses SellerMs's shared database (no dedicated database), for 14 days, limited to trial-eligible modules only.{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3" id="sc_paid_fields">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}دورة الفوترة{% else %}Billing Cycle{% endif %}</label>
+              <select name="billing_cycle" id="sc_cycle" class="form-select">
+                <option value="monthly">{% if ar %}شهري{% else %}Monthly{% endif %}</option>
+                <option value="yearly">{% if ar %}سنوي{% else %}Yearly{% endif %}</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{% if ar %}تاريخ الانتهاء{% else %}Subscription Expiry{% endif %}</label>
+              <input type="date" name="end_date" id="sc_end_date" class="form-control">
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold">{% if ar %}الوحدات المشترك بها{% else %}Subscribed Modules{% endif %}</label>
+            <div id="sc_modules" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;">
+              {% for m in modules %}
+              <div class="row g-2 align-items-center mb-1 sc-module-row">
+                <div class="col-auto">
+                  <input type="checkbox" class="form-check-input sc-mod-cb" name="modules" value="{{ m.id }}" id="sc_mod_{{ m.id }}">
+                </div>
+                <div class="col">
+                  <label class="form-check-label" for="sc_mod_{{ m.id }}" style="font-size:13px;">{{ m.module_name_en }}</label>
+                </div>
+                <div class="col-auto">
+                  <input type="date" name="module_expiry_{{ m.id }}" class="form-control form-control-sm sc-mod-expiry" placeholder="{% if ar %}اختياري{% else %}optional override{% endif %}">
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <p style="font-size:11px;color:#9ca3af;margin-top:4px;">
+              {% if ar %}اتركه فارغًا لاستخدام تاريخ انتهاء الاشتراك لكل وحدة.{% else %}Leave a module's date blank to use the subscription's overall expiry.{% endif %}
+            </p>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" id="scSaveBtn" class="pl-footer-btn pl-btn-save" onclick="submitScForm(this)">
+          <i class="fas fa-save me-1"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal fade" id="scResetPwModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header">
+        <h5 class="modal-title" id="scResetPwTitle">{% if ar %}إعادة تعيين كلمة المرور{% else %}Reset Password{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="scResetPwForm" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-2">
+            <label class="form-label fw-semibold">{% if ar %}كلمة مرور محددة (اختياري){% else %}Specific password (optional){% endif %}</label>
+            <input type="text" name="new_password" id="sc_reset_pw_input" class="form-control" dir="ltr" minlength="8" placeholder="{% if ar %}اتركه فارغًا لإنشاء كلمة مرور عشوائية{% else %}Leave blank to generate a random password{% endif %}">
+            <p style="font-size:11px;color:#9ca3af;margin-top:4px;">
+              {% if ar %}8 أحرف على الأقل إذا تم تحديدها. ستظهر كلمة المرور الجديدة مرة واحدة فقط بعد الحفظ.
+              {% else %}At least 8 characters if specified. The new password is shown once, right after saving.{% endif %}
+            </p>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>{% if ar %}إلغاء{% else %}Cancel{% endif %}
+        </button>
+        <button type="button" id="scResetPwBtn" class="pl-footer-btn pl-btn-save" onclick="submitResetPassword(this)">
+          <i class="fas fa-key me-1"></i>{% if ar %}إعادة تعيين{% else %}Reset{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+
+function submitScForm(btn) {
+  if (btn.disabled) return;  // already submitting -- ignore extra clicks
+  btn.disabled = true;
+  const isAdd = document.getElementById('scForm').action.endsWith('/add');
+  const isTrial = document.getElementById('sc_is_trial').checked;
+  btn.innerHTML = !isAdd
+    ? (IS_AR ? 'جارٍ الحفظ...' : 'Saving...')
+    : isTrial
+      ? (IS_AR ? 'جارٍ إنشاء العميل التجريبي...' : 'Creating trial customer...')
+      : (IS_AR ? 'جارٍ إنشاء قاعدة البيانات...' : 'Provisioning database...');
+  document.getElementById('scForm').submit();
+}
+
+function toggleTrialMode(isTrial) {
+  document.getElementById('sc_paid_fields').style.display = isTrial ? 'none' : '';
+}
+
+function _resetModules() {
+  document.querySelectorAll('.sc-mod-cb').forEach(cb => cb.checked = false);
+  document.querySelectorAll('.sc-mod-expiry').forEach(inp => inp.value = '');
+}
+
+function openAdd() {
+  document.getElementById('scModalTitle').textContent = IS_AR ? 'إضافة عميل' : 'Add Customer';
+  document.getElementById('scForm').action = '{{ url_for("saas_customers.add_saas_customer") }}';
+  document.getElementById('scForm').reset();
+  document.getElementById('sc_access_mode').value = 'expert';
+  document.getElementById('sc_trial_field').style.display = '';
+  toggleTrialMode(false);
+  _resetModules();
+}
+
+function openEdit(id, c) {
+  document.getElementById('scModalTitle').textContent = IS_AR ? 'تعديل العميل' : 'Edit Customer';
+  document.getElementById('scForm').action = `/saas-admin/customers/${id}/edit`;
+  document.getElementById('sc_company').value = c.company_name;
+  document.getElementById('sc_contact').value = c.customer_name;
+  document.getElementById('sc_email').value = c.email;
+  document.getElementById('sc_mobile').value = c.mobile;
+  document.getElementById('sc_cycle').value = c.billing_cycle || 'monthly';
+  document.getElementById('sc_end_date').value = c.end_date || '';
+  document.getElementById('sc_access_mode').value = c.access_mode || 'expert';
+  document.getElementById('sc_trial_field').style.display = 'none';
+  toggleTrialMode(false);
+  _resetModules();
+  (c.modules || []).forEach(m => {
+    const cb = document.getElementById('sc_mod_' + m.module_id);
+    if (cb) {
+      cb.checked = true;
+      const row = cb.closest('.sc-module-row');
+      const dateInput = row ? row.querySelector('.sc-mod-expiry') : null;
+      if (dateInput && m.end_date) dateInput.value = m.end_date;
+    }
+  });
+  new bootstrap.Modal(document.getElementById('scModal')).show();
+}
+
+function openResetPassword(id, name) {
+  document.getElementById('scResetPwTitle').textContent = IS_AR ? `إعادة تعيين كلمة المرور - ${name}` : `Reset Password - ${name}`;
+  document.getElementById('scResetPwForm').action = `/saas-admin/customers/${id}/reset-password`;
+  document.getElementById('sc_reset_pw_input').value = '';
+  const btn = document.getElementById('scResetPwBtn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-key me-1"></i>' + (IS_AR ? 'إعادة تعيين' : 'Reset');
+  new bootstrap.Modal(document.getElementById('scResetPwModal')).show();
+}
+
+function submitResetPassword(btn) {
+  if (btn.disabled) return;
+  const pw = document.getElementById('sc_reset_pw_input').value.trim();
+  if (pw && pw.length < 8) {
+    alert(IS_AR ? 'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.' : 'Password must be at least 8 characters.');
+    return;
+  }
+  btn.disabled = true;
+  btn.innerHTML = IS_AR ? 'جارٍ إعادة التعيين...' : 'Resetting...';
+  document.getElementById('scResetPwForm').submit();
+}
+
+function confirmDeleteCustomer(id, name) {
+  const msg = IS_AR
+    ? `هل تريد حذف العميل "${name}"؟ سيتم الاحتفاظ بقاعدة بياناته دون حذف.`
+    : `Delete customer "${name}"? Their database (if any) will be left in place, not deleted.`;
+  if (!confirm(msg)) return;
+  const form = document.getElementById('scDeleteForm');
+  form.action = `/saas-admin/customers/${id}/delete`;
+  form.submit();
+}
+
+function confirmSyncOne(id, name) {
+  const msg = IS_AR
+    ? `مزامنة مخطط قاعدة بيانات "${name}" مع التطبيق الرئيسي؟ سيتم فقط إضافة جداول/أعمدة جديدة -- لن يتم حذف أو تغيير أي بيانات.`
+    : `Sync "${name}"'s database schema with the main app? This only adds new tables/columns -- no data is ever changed or removed.`;
+  if (!confirm(msg)) return;
+  const form = document.getElementById('scSyncForm');
+  form.action = `/saas-admin/customers/${id}/sync-schema`;
+  form.submit();
+}
+
+function confirmSyncAll() {
+  const msg = IS_AR
+    ? 'مزامنة المخطط لجميع قواعد بيانات العملاء مع التطبيق الرئيسي؟ سيتم فقط إضافة جداول/أعمدة جديدة -- لن يتم حذف أو تغيير أي بيانات.'
+    : "Sync every customer database's schema with the main app? This only adds new tables/columns -- no data is ever changed or removed.";
+  if (!confirm(msg)) return;
+  const form = document.getElementById('scSyncForm');
+  form.action = '/saas-admin/customers/sync-schema-all';
+  form.submit();
+}
+
+function filterRows(q) {
+  document.querySelectorAll('.data-row').forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}مهن الموظفين{% else %}Employee Profession{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+:root{
+  --blue:#2563eb;--blue-dk:#1d4ed8;--blue-50:#eff6ff;--blue-100:#dbeafe;
+  --navy:#1e3a5f;--green:#16a34a;--green-50:#f0fdf4;
+  --gray-50:#f8fafc;--gray-100:#f1f5f9;--gray-200:#e2e8f0;
+  --gray-300:#d1d5db;--gray-400:#9ca3af;--gray-600:#4b5563;--gray-700:#374151;--gray-900:#111827;
+  --red:#ef4444;--amber:#f59e0b;--purple:#7c3aed;--r-lg:14px;
+  --shadow:0 20px 60px rgba(0,0,0,.18);
+}
+
+.ag-theme-alpine{
+  --ag-font-family:'Segoe UI',system-ui,sans-serif;--ag-font-size:13px;
+  --ag-header-background-color:#e5e7eb;--ag-header-foreground-color:#1e293b;
+  --ag-border-color:var(--gray-200);--ag-row-border-color:var(--gray-100);
+  --ag-row-hover-color:var(--blue-50);--ag-selected-row-background-color:var(--blue-100);
+  --ag-header-height:46px;--ag-row-height:46px;--ag-cell-horizontal-padding:12px;
+}
+.ag-theme-alpine .ag-header-cell-label{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}
+.ag-theme-alpine .ag-row-even{background:#fff;}
+.ag-theme-alpine .ag-row-odd{background:#fafbfc;}
+
+.pl-act{display:flex;align-items:center;gap:4px;}
+.pl-btn{width:28px;height:28px;border-radius:7px;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;transition:transform .12s,box-shadow .12s;text-decoration:none;}
+.pl-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.2);}
+.pl-edit{background:var(--amber);color:#fff;}
+.pl-del {background:var(--red);color:#fff;}
+
+.prof-pill{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;background:#ede9fe;color:#5b21b6;}
+
+.ed-modal .modal-dialog{max-width:520px;}
+.ed-modal .modal-content{border:none;border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);}
+.ed-hdr{background:linear-gradient(135deg,#5b21b6 0%,var(--purple) 100%);padding:16px 22px;display:flex;align-items:center;justify-content:space-between;}
+.ed-hdr h5{margin:0;color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.ed-hdr .btn-close{filter:brightness(0) invert(1);opacity:.8;}
+.ed-body{padding:22px;}
+.ed-lbl{font-size:11px;font-weight:700;color:var(--gray-700);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px;display:flex;align-items:center;gap:4px;}
+.req{color:var(--red);font-size:14px;}
+.ed-inp{width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--gray-300);border-radius:8px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s;box-sizing:border-box;}
+.ed-inp:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,58,237,.1);}
+.ed-inp.is-invalid{border-color:var(--red);}
+.ed-sel{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:16px;padding-right:34px;}
+.ed-footer{padding:14px 22px;background:var(--gray-50);border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end;gap:8px;}
+.sf-err{font-size:11px;font-weight:600;color:var(--red);margin-top:4px;display:none;align-items:center;gap:4px;}
+.sf-err.show{display:flex;}
+
+.prof-chk-list{max-height:220px;overflow-y:auto;border:1.5px solid var(--gray-300);border-radius:8px;padding:10px 12px;}
+.prof-chk-item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;}
+.prof-chk-item input{width:16px;height:16px;}
+
+.del-modal .modal-dialog{max-width:400px;}
+.del-modal .modal-content{border:none;border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}مهن الموظفين{% else %}Employee Profession{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <h2 class="page-heading">{% if ar %}مهن الموظفين{% else %}Employee Profession{% endif %}</h2>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="tool-btn tool-btn-blue" onclick="refreshGrid()" title="{% if ar %}تحديث{% else %}Refresh{% endif %}"><i class="fas fa-sync-alt"></i></button>
+      <button class="tool-btn" onclick="exportCSV()" title="{% if ar %}تصدير CSV{% else %}Export CSV{% endif %}"><i class="fas fa-file-export"></i></button>
+      <button class="tool-btn" onclick="clearFilters()" title="{% if ar %}مسح الفلاتر{% else %}Clear Filters{% endif %}"><i class="fas fa-times-circle"></i></button>
+      {% if current_user.is_admin() %}
+      <button onclick="openAddModal()"
+        style="display:inline-flex;align-items:center;gap:7px;padding:7px 18px;border-radius:8px;border:none;cursor:pointer;background:#7c3aed;color:#fff;font-size:12.5px;font-weight:700;transition:all .15s;"
+        onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
+        <i class="fas fa-plus"></i>
+        {% if ar %}إضافة مهنة{% else %}Add Profession{% endif %}
+      </button>
+      {% endif %}
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="epSelText" style="font-size:12px;font-weight:600;color:var(--gray-400);">0 {% if ar %}سجل{% else %}records{% endif %}</span>
+      <div style="position:relative;">
+        <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:12px;pointer-events:none;"></i>
+        <input id="epSearch" type="text"
+          style="padding:8px 12px 8px 32px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:13px;outline:none;width:240px;"
+          placeholder="{% if ar %}بحث...{% else %}Search...{% endif %}"
+          oninput="epGrid&&epGrid.setGridOption('quickFilterText',this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
+    <div id="epGridEl" class="ag-theme-alpine" style="width:100%;height:calc(100vh - 260px);min-height:560px;"></div>
+  </div>
+
+  <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
+    <span id="epPageInfo" style="font-size:12px;color:var(--gray-400);">–</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;color:var(--gray-400);">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:72px" onchange="epGrid&&epGrid.setGridOption('paginationPageSize',+this.value)" title="{% if ar %}عدد الصفوف{% else %}Rows per page{% endif %}">
+        <option>10</option><option selected>20</option><option>50</option><option>100</option><option>200</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD MODAL ══ -->
+<div class="modal fade ed-modal" id="addEpModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="ed-hdr">
+        <h5><i class="fas fa-user-tag"></i> {% if ar %}إضافة مهنة لموظف{% else %}Add Employee Profession{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="ed-body">
+        <div style="margin-bottom:16px;">
+          <div class="ed-lbl">{% if ar %}الموظف{% else %}Employee{% endif %} <span class="req">*</span></div>
+          <select id="add_emp_id" class="ed-inp ed-sel" onchange="document.getElementById('err_add_emp').classList.remove('show')" title="{% if ar %}الموظف{% else %}Employee{% endif %}">
+            <option value="">{% if ar %}-- اختر الموظف --{% else %}-- Select Employee --{% endif %}</option>
+            {% for e in employees %}
+            <option value="{{ e.id }}">{{ e.employee_code }} — {{ e.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="sf-err" id="err_add_emp"><i class="fas fa-exclamation-circle"></i><span>{% if ar %}الموظف مطلوب{% else %}Employee is required{% endif %}</span></div>
+        </div>
+        <div>
+          <div class="ed-lbl">{% if ar %}المهن{% else %}Profession(s){% endif %} <span class="req">*</span></div>
+          <div class="prof-chk-list" id="add_prof_list">
+            {% for p in professions %}
+            <label class="prof-chk-item">
+              <input type="checkbox" value="{{ p.id }}" onchange="document.getElementById('err_add_prof').classList.remove('show')">
+              <span>{{ p.name_en }}{% if p.name_ar %} — {{ p.name_ar }}{% endif %}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="sf-err" id="err_add_prof"><i class="fas fa-exclamation-circle"></i><span>{% if ar %}اختر مهنة واحدة على الأقل{% else %}Select at least one profession{% endif %}</span></div>
+        </div>
+      </div>
+      <div class="ed-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" onclick="submitAddEp()"
+          style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:linear-gradient(135deg,#5b21b6,var(--purple));color:#fff;display:inline-flex;align-items:center;gap:7px;">
+          <i class="fas fa-save"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EDIT MODAL ══ -->
+<div class="modal fade ed-modal" id="editEpModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="ed-hdr">
+        <h5><i class="fas fa-edit"></i> {% if ar %}تعديل مهنة الموظف{% else %}Edit Employee Profession{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="ed-body">
+        <input type="hidden" id="ed_ep_id">
+        <div style="margin-bottom:16px;">
+          <div class="ed-lbl">{% if ar %}الموظف{% else %}Employee{% endif %} <span class="req">*</span></div>
+          <select id="ed_emp_id" class="ed-inp ed-sel" title="{% if ar %}الموظف{% else %}Employee{% endif %}">
+            {% for e in employees %}
+            <option value="{{ e.id }}">{{ e.employee_code }} — {{ e.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <div class="ed-lbl">{% if ar %}المهنة{% else %}Profession{% endif %} <span class="req">*</span></div>
+          <select id="ed_prof_id" class="ed-inp ed-sel" onchange="this.classList.remove('is-invalid');document.getElementById('err_ed_prof').classList.remove('show')" title="{% if ar %}المهنة{% else %}Profession{% endif %}">
+            <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
+            {% for p in professions %}
+            <option value="{{ p.id }}">{{ p.name_en }}{% if p.name_ar %} — {{ p.name_ar }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <div class="sf-err" id="err_ed_prof"><i class="fas fa-exclamation-circle"></i><span>{% if ar %}المهنة مطلوبة{% else %}Profession is required{% endif %}</span></div>
+        </div>
+      </div>
+      <div class="ed-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button type="button" onclick="saveEpEdit()"
+          style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:linear-gradient(135deg,#5b21b6,var(--purple));color:#fff;display:inline-flex;align-items:center;gap:7px;">
+          <i class="fas fa-save"></i>{% if ar %}حفظ التعديلات{% else %}Save Changes{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DELETE CONFIRM MODAL ══ -->
+<div class="modal fade del-modal" id="delEpModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0" style="padding:18px 20px 0;">
+        <h6 class="modal-title text-danger fw-bold">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          {% if ar %}تأكيد الحذف{% else %}Confirm Delete{% endif %}
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:12px 20px;">
+        <p id="delEpText" style="font-size:14px;color:var(--gray-700);margin:0;"></p>
+      </div>
+      <div class="modal-footer border-0" style="padding:0 20px 18px;">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">{% if ar %}إلغاء{% else %}Cancel{% endif %}</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDeleteEp()">{% if ar %}حذف{% else %}Delete{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+const CSRF     = '{{ csrf_token() }}';
+const IS_AR    = {{ 'true' if ar else 'false' }};
+const IS_ADMIN = {{ 'true' if current_user.is_admin() else 'false' }};
+const DATA_URL = '{{ url_for("employees.employee_professions_data") }}';
+
+function renderEmpCode(p){
+  const code = p.value || '';
+  return code
+    ? `<span style="background:var(--blue-50);color:var(--blue-dk);padding:1px 7px;border-radius:4px;font-size:10.5px;font-weight:700;font-family:monospace;">${code}</span>`
+    : '—';
+}
+function renderProf(p){
+  return p.value ? `<span class="prof-pill">${p.value}</span>` : '—';
+}
+
+class ActRenderer{
+  init(p){
+    this.el = document.createElement('div');
+    this.el.className = 'pl-act';
+    const id = p.data.id;
+    let html = '';
+    if(IS_ADMIN){
+      html += `
+      <button class="pl-btn pl-edit" onclick="openEditModal(${id})" title="${IS_AR?'تعديل':'Edit'}"><i class="fas fa-pencil-alt"></i></button>
+      <button class="pl-btn pl-del" onclick="openDeleteModal(${id})" title="${IS_AR?'حذف':'Delete'}"><i class="fas fa-trash"></i></button>`;
+    }
+    this.el.innerHTML = html;
+  }
+  getGui(){ return this.el; }
+}
+
+const commonFilter = { filter:'agTextColumnFilter', filterParams:{buttons:['apply','reset','clear'],closeOnApply:true,maxNumConditions:5} };
+
+const colDefs = [
+  { field:'id', headerName:'ID', width:70, pinned:IS_AR?'right':'left',
+    filter:'agNumberColumnFilter', enableRowGroup:false, enablePivot:false, enableValue:false,
+    filterParams:{buttons:['apply','reset','clear'],closeOnApply:true},
+    cellStyle:{fontFamily:'monospace',color:'var(--gray-400)',fontSize:'11px'} },
+  { field:'employee_code', headerName:IS_AR?'كود الموظف':'Employee Code', width:150, cellRenderer:renderEmpCode, ...commonFilter },
+  { field:'employee_name', headerName:IS_AR?'اسم الموظف':'Employee Name', minWidth:200, cellStyle:{fontSize:'12.5px'}, ...commonFilter },
+  { field:'profession_name', headerName:IS_AR?'المهنة (EN)':'Profession (EN)', minWidth:180, cellRenderer:renderProf, ...commonFilter },
+  { field:'profession_name_ar', headerName:IS_AR?'المهنة (AR)':'Profession (AR)', minWidth:180, cellStyle:{direction:'rtl',textAlign:'right'}, ...commonFilter },
+  { field:'created_at', headerName:IS_AR?'تاريخ الإضافة':'Created At', width:160, ...commonFilter },
+  { field:'_actions', headerName:IS_AR?'إجراءات':'Actions',
+    width: IS_ADMIN ? 100 : 60, pinned: IS_AR ? 'left' : 'right',
+    sortable:false, suppressMenu:true, resizable:false,
+    filter:false, floatingFilter:false, enableRowGroup:false, enablePivot:false, enableValue:false, suppressColumnsToolPanel:true,
+    cellRenderer: ActRenderer, cellStyle:{overflow:'visible',padding:'0 8px'} },
+];
+
+let epGrid;
+document.addEventListener('DOMContentLoaded', () => {
+  epGrid = agGrid.createGrid(document.getElementById('epGridEl'), {
+    columnDefs: colDefs, multiSortKey:'ctrl',
+    rowData: [],
+    pagination: true, paginationPageSize: 20, paginationPageSizeSelector:[20,50,100],
+    alwaysShowHorizontalScroll: true, alwaysShowVerticalScroll: true,
+    sideBar: { toolPanels: [
+      { id:'columns', labelDefault:IS_AR?'الأعمدة':'Columns', toolPanel:'agColumnsToolPanel' },
+      { id:'filters', labelDefault:IS_AR?'الفلاتر':'Filters', toolPanel:'agFiltersToolPanel' }
+    ], defaultToolPanel:'' },
+    rowGroupPanelShow: 'always', groupDisplayType: 'groupRows',
+    rowSelection: 'multiple', suppressRowClickSelection: true,
+    animateRows: true, enableRtl: IS_AR,
+    defaultColDef: {
+      sortable:true, unSortIcon:true, resizable:true,
+      filter:true, floatingFilter:true, enableRowGroup:true, enablePivot:true, enableValue:true,
+      menuTabs:['filterMenuTab','columnsMenuTab','generalMenuTab'],
+    },
+    onGridReady(){ loadData(); },
+    onFilterChanged(){ updateBadge(); },
+    onPaginationChanged(){ updateBadge(); },
+    onSelectionChanged(){ updateBadge(); },
+    getRowStyle(p){ return p.node.rowIndex%2===0 ? {background:'#fff'} : {background:'#fafbfc'}; },
+  });
+});
+
+function loadData(){
+  if(!epGrid) return;
+  fetch(DATA_URL)
+    .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d => { epGrid.setGridOption('rowData', d); updateBadge(); })
+    .catch(e => console.error('loadData error:', e));
+}
+function refreshGrid(){ loadData(); }
+function exportCSV(){ epGrid && epGrid.exportDataAsCsv({fileName:'employee_professions.csv'}); }
+function clearFilters(){ epGrid && epGrid.setFilterModel(null); }
+
+function updateBadge(){
+  if(!epGrid) return;
+  try {
+    const sel   = epGrid.getSelectedRows().length;
+    const disp  = epGrid.getDisplayedRowCount();
+    const total = (epGrid.getGridOption('rowData')||[]).length;
+    document.getElementById('epSelText').textContent = sel > 0
+      ? `${sel} ${IS_AR?'محدد':'selected'}` : `${disp} ${IS_AR?'سجل':'records'}`;
+    const pg  = epGrid.paginationGetCurrentPage()+1;
+    const pgs = epGrid.paginationGetTotalPages();
+    document.getElementById('epPageInfo').textContent =
+      `${disp} / ${total} — ${IS_AR?'صفحة':'Page'} ${pg}/${pgs}`;
+  } catch(e) {}
+}
+
+/* ════ ADD ════ */
+function openAddModal(){
+  document.getElementById('add_emp_id').value = '';
+  document.querySelectorAll('#add_prof_list input[type=checkbox]').forEach(cb => cb.checked = false);
+  document.getElementById('err_add_emp').classList.remove('show');
+  document.getElementById('err_add_prof').classList.remove('show');
+  new bootstrap.Modal(document.getElementById('addEpModal')).show();
+}
+
+async function submitAddEp(){
+  const empId = document.getElementById('add_emp_id').value;
+  const profIds = Array.from(document.querySelectorAll('#add_prof_list input[type=checkbox]:checked')).map(cb => cb.value);
+  let ok = true;
+  if(!empId){ document.getElementById('err_add_emp').classList.add('show'); ok = false; }
+  if(!profIds.length){ document.getElementById('err_add_prof').classList.add('show'); ok = false; }
+  if(!ok) return;
+
+  const fd = new FormData();
+  fd.append('csrf_token', CSRF);
+  fd.append('employee_id', empId);
+  profIds.forEach(pid => fd.append('profession_ids[]', pid));
+
+  const res = await fetch('{{ url_for("employees.add_employee_profession") }}', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+  });
+  const data = await res.json();
+  if(data.ok){
+    bootstrap.Modal.getInstance(document.getElementById('addEpModal'))?.hide();
+    loadData();
+  } else {
+    alert(data.error || (IS_AR?'فشل الحفظ':'Save failed'));
+  }
+}
+
+/* ════ EDIT ════ */
+function openEditModal(id){
+  fetch(`/employee-professions/${id}/json`)
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('ed_ep_id').value = id;
+      document.getElementById('ed_emp_id').value = d.employee_id || '';
+      document.getElementById('ed_prof_id').value = d.profession_id || '';
+      document.getElementById('err_ed_prof').classList.remove('show');
+      new bootstrap.Modal(document.getElementById('editEpModal')).show();
+    })
+    .catch(()=>alert(IS_AR?'فشل تحميل البيانات':'Failed to load data'));
+}
+
+async function saveEpEdit(){
+  const id = document.getElementById('ed_ep_id').value;
+  const empId = document.getElementById('ed_emp_id').value;
+  const profId = document.getElementById('ed_prof_id').value;
+  if(!profId){ document.getElementById('err_ed_prof').classList.add('show'); return; }
+
+  const fd = new FormData();
+  fd.append('csrf_token', CSRF);
+  fd.append('employee_id', empId);
+  fd.append('profession_id', profId);
+
+  const res = await fetch(`/employee-professions/${id}/edit`, {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+  });
+  const data = await res.json();
+  if(data.ok){
+    bootstrap.Modal.getInstance(document.getElementById('editEpModal'))?.hide();
+    loadData();
+  } else {
+    alert(data.error || (IS_AR?'فشل الحفظ':'Save failed'));
+  }
+}
+
+/* ════ DELETE ════ */
+let _delEpId = null;
+function openDeleteModal(id){
+  _delEpId = id;
+  document.getElementById('delEpText').textContent =
+    IS_AR ? 'هل تريد حذف هذا التعيين؟' : 'Delete this profession assignment?';
+  new bootstrap.Modal(document.getElementById('delEpModal')).show();
+}
+
+async function confirmDeleteEp(){
+  if(!_delEpId) return;
+  const res = await fetch(`/employee-professions/${_delEpId}/delete`, {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF }
+  });
+  const data = await res.json();
+  if(data.ok){
+    bootstrap.Modal.getInstance(document.getElementById('delEpModal'))?.hide();
+    _delEpId = null;
+    loadData();
+  } else {
+    alert(IS_AR?'فشل الحذف':'Delete failed');
+  }
+}
+</script>
+{% endblock %}

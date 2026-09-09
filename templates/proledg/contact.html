@@ -1,0 +1,142 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+{% from "proledg/_components.html" import checklist, faq, cta_banner %}
+
+{% block title %}Contact — Proledge{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-center">
+      <div class="breadcrumb"><a href="{{ url_for('proledg.home') }}">Home</a> &rarr; Contact</div>
+      <h1>Talk to us — or see it live</h1>
+      <p class="hero-sub">Start a free trial yourself and set up in minutes — fully self-serve, no sales calls.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="contact-layout">
+      <div>
+        <div class="eyebrow">{{ icon('mail') }} GET IN TOUCH</div>
+        <h2>We'd love to help you get started</h2>
+        <p>Whether you want to kick the tyres on your own or have us walk you through it, we're here. Tell us a little about your business and what you're trying to solve, and we'll point you to the fastest path in.</p>
+        <div class="contact-list">
+          {{ checklist([
+            "Start a free 14-day trial — no credit card",
+            "Set up your own company in minutes, at your own pace",
+            "Ask us anything about multi-company or regional e-invoicing",
+            "Get onboarding help migrating your books",
+          ]) }}
+        </div>
+        <div class="contact-meta">
+          <div class="contact-meta-item">{{ icon('mail') }} {{ contact_email }}</div>
+          <div class="contact-meta-item">{{ icon('pin') }} {{ contact_location }}</div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="form-alert {{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('proledg.contact') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-grid">
+            <div class="field">
+              <label for="full_name">Full name</label>
+              <input type="text" id="full_name" name="full_name" placeholder="Jordan Rivera" required>
+            </div>
+            <div class="field">
+              <label for="work_email">Work email</label>
+              <input type="email" id="work_email" name="work_email" placeholder="you@company.com" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="company">Company</label>
+            <input type="text" id="company" name="company" placeholder="Your company">
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="country">Country <span class="opt">(optional)</span></label>
+              <input type="text" id="country" name="country" placeholder="e.g. United Arab Emirates">
+            </div>
+            <div class="field">
+              <label for="company_size">Company size</label>
+              <select id="company_size" name="company_size">
+                <option>1–10</option>
+                <option>11–50</option>
+                <option>51–200</option>
+                <option>200+</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="interest">I'm interested in</label>
+            <select id="interest" name="interest">
+              <option>Free trial</option>
+              <option>Seeing a live demo</option>
+              <option>Migrating my existing books</option>
+              <option>Pricing for multiple companies</option>
+              <option>Something else</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" placeholder="Tell us about your business and what you'd like to see."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Send message</button>
+        </form>
+        <p class="form-note">Prefer to dive in? <a href="{{ url_for('proledg.contact') }}" class="link-arrow" style="display:inline-flex;">Start a free trial &rarr;</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('book') }} ABOUT PROLEDGE</div>
+      <h2>One platform, from daily books to the factory floor</h2>
+      <p>Proledge is a multi-company cloud accounting and light-ERP platform that takes a business from daily bookkeeping through inventory, manufacturing, multi-currency and localized e-invoicing — on one secure login. Built global-first, with localized compliance by region.</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-tile">{{ icon('globe') }}</div><h3>Global-first</h3><p>Region-neutral accounting, inventory, manufacturing and multi-currency at the core — usable anywhere from day one.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('book') }}</div><h3>Built for multiple companies</h3><p>Run every entity under one login, each with its own books and base currency — switch between them in a click.</p></div>
+      <div class="card"><div class="icon-tile">{{ icon('globe') }}</div><h3>Multi-currency</h3><p>Invoice and pay in any currency, with automatic conversion to your base currency and realised &amp; unrealised FX handled for you.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('file') }} BEFORE YOU REACH OUT</div>
+      <h2>Quick answers</h2>
+    </div>
+    {{ faq([
+      ("How quickly can I get started?", "Sign up and you're in — most teams create their first company and start posting entries within minutes. No sales call required."),
+      ("How can I try Proledge before I pay?", "Every plan starts with a free 14-day trial, no credit card required. You can invite your team and explore every module before you decide."),
+      ("Can you help migrate my data?", "Yes — use our guided Excel import to map your existing chart of accounts and opening balances, or ask us for hands-on onboarding help."),
+      ("Which regions do you support?", "Proledge is built global-first with localized tax and e-invoicing compliance added by region. Tell us where you operate and we'll confirm what's supported."),
+    ]) }}
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    {{ cta_banner(
+      "Ready when you are",
+      "Start your free 14-day trial today — no credit card, no commitment. Set up your first company in minutes.",
+      "Start free trial", url_for('proledg.contact'),
+      "Compare plans", url_for('proledg.pricing')
+    ) }}
+  </div>
+</section>
+
+{% endblock %}

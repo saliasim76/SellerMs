@@ -1,0 +1,34 @@
+# Secrets / environment
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Logs
+*.log
+
+# Legacy/local database artifacts (this app is MySQL-only, see config.py)
+database/*.db
+*.sqlite3
+
+# User-uploaded content -- real business data, not source code.
+# Persist this on the host directly (upload once, back it up separately);
+# never deploy or overwrite it via git.
+uploads/*
+!uploads/.gitkeep
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Editor/OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code tooling config -- local machine paths/permissions, not app source
+.claude/

@@ -1,0 +1,384 @@
+{% extends "proledg/base.html" %}
+{% from "proledg/_icons.html" import icon %}
+{% from "proledg/_components.html" import checklist, faq, cta_banner %}
+
+{% block title %}Proledge — Run every company on one accurate platform{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-split">
+      <div>
+        <h1>Run every company on one platform — always accurate.</h1>
+        <p class="hero-sub" style="text-align:left; margin:0;">Proledge is a multi-company cloud accounting and light-ERP platform — accounting, inventory, manufacturing, multi-currency and payroll, built for businesses that have outgrown entry-level apps and aren't ready for a heavy ERP.</p>
+        <div class="hero-actions">
+          <a href="{{ url_for('proledg.contact') }}" class="btn btn-primary">Start free trial</a>
+          <a href="{{ url_for('proledg.features') }}" class="btn btn-outline">See it live</a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="browser-frame">
+          <div class="browser-frame-bar">
+            <span class="browser-dot red"></span><span class="browser-dot yellow"></span><span class="browser-dot green"></span>
+            <div class="browser-frame-url">proledge.com</div>
+          </div>
+          <div class="browser-frame-body">
+            <div class="mock-panel-title">Group overview</div>
+            <div class="mock-stat-row" style="margin-bottom:14px;">
+              <div class="mock-stat"><div class="num">$482K</div><div class="lbl">Cash position</div></div>
+              <div class="mock-stat"><div class="num">6</div><div class="lbl">Companies</div></div>
+              <div class="mock-stat"><div class="num">3</div><div class="lbl">Currencies</div></div>
+            </div>
+            <div class="mock-chart">
+              <div class="bar" style="height:38%"></div>
+              <div class="bar" style="height:58%"></div>
+              <div class="bar" style="height:46%"></div>
+              <div class="bar" style="height:72%"></div>
+              <div class="bar" style="height:64%"></div>
+              <div class="bar" style="height:90%"></div>
+              <div class="bar" style="height:80%"></div>
+            </div>
+            <div class="mock-row highlight" style="margin-top:14px;">
+              <span class="mock-label">Trial Balance</span>
+              <span class="mock-status ok">Reconciled ✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-tags">
+      <span class="hero-tag">{{ icon('factory') }} Manufacturing</span>
+      <span class="hero-tag">{{ icon('globe') }} Multi-currency</span>
+      <span class="hero-tag">{{ icon('refresh') }} Import &amp; export</span>
+      <span class="hero-tag">{{ icon('shield-check') }} Professional-grade security</span>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('key') }} SIGN IN ONCE</div>
+      <h2>Sign in once — every part of your business, one click away</h2>
+      <p>Pick a company from the switcher and every screen — invoicing, inventory, manufacturing, payroll — scopes to that entity automatically. No separate logins, no separate systems.</p>
+    </div>
+    <div class="browser-frame" style="max-width:980px; margin:0 auto;">
+      <div class="browser-frame-bar">
+        <span class="browser-dot red"></span><span class="browser-dot yellow"></span><span class="browser-dot green"></span>
+        <div class="browser-frame-url">proledge.com</div>
+      </div>
+      <div class="app-shot">
+        <div class="app-shot-header">
+          <div style="display:flex; align-items:center;">
+            <div class="app-shot-brand"><span class="mark">P</span> Proledge</div>
+            <div class="app-shot-crumb">{{ icon('layers') }} Home</div>
+          </div>
+          <div class="app-shot-user">superadmin <span class="app-shot-pill">OWNER</span></div>
+        </div>
+        <div class="app-shot-row">
+          <div class="app-shot-sidebar">
+            <div class="app-shot-menu-label">Main menu</div>
+            <div class="app-shot-item">Financials</div>
+            <div class="app-shot-item">Sales</div>
+            <div class="app-shot-item sub">Purchase Order</div>
+            <div class="app-shot-item sub">Goods Receipt Note</div>
+            <div class="app-shot-item active">Purchase Invoice</div>
+            <div class="app-shot-item sub">Landed Cost</div>
+            <div class="app-shot-item sub">Payment (WHT)</div>
+            <div class="app-shot-item">Inventory</div>
+            <div class="app-shot-item">Banking</div>
+            <div class="app-shot-item">Payroll</div>
+            <div class="app-shot-item">Production</div>
+          </div>
+          <div class="app-shot-main">
+            <div class="app-shot-welcome">Welcome, <b>superadmin</b> &mdash; pick an area.</div>
+            <div class="app-shot-grid">
+              <div class="app-shot-card"><div class="ico i-blue">{{ icon('bar-chart') }}</div><div class="lbl">COA, vouchers &amp; reports</div></div>
+              <div class="app-shot-card"><div class="ico i-green">{{ icon('file') }}</div><div class="lbl">Invoices, receipts, returns</div></div>
+              <div class="app-shot-card"><div class="ico i-violet">{{ icon('box') }}</div><div class="lbl">Bills, payments, knockoff</div></div>
+              <div class="app-shot-card"><div class="ico i-amber">{{ icon('layers') }}</div><div class="lbl">Items &amp; stock movement</div></div>
+              <div class="app-shot-card"><div class="ico i-teal">{{ icon('bank') }}</div><div class="lbl">Accounts &amp; transfers</div></div>
+              <div class="app-shot-card"><div class="ico i-rose">{{ icon('percent') }}</div><div class="lbl">Agents &amp; payouts</div></div>
+              <div class="app-shot-card"><div class="ico i-gray">{{ icon('users') }}</div><div class="lbl">Employees &amp; runs</div></div>
+              <div class="app-shot-card"><div class="ico i-orange">{{ icon('folder') }}</div><div class="lbl">BOMs &amp; orders</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="split-row flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('refresh') }} WHY TEAMS SWITCH</div>
+        <h2>Your spreadsheet, your invoicing app, your stock sheet — replaced by one system that always balances</h2>
+        <p>Most growing businesses run their books across a spreadsheet, an invoicing app, and a stock sheet that never quite agree. Proledge replaces all three with one connected system where every entry is real double-entry accounting — so your Trial Balance always ties out.</p>
+        {{ checklist([
+          "Inventory, invoicing and accounting — one connected system",
+          "Full audit trail on every transaction — nothing edited or deleted",
+          "Multi-warehouse inventory, tracked to the unit",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-panel-title">Sales invoice</div>
+          <div class="mock-row">
+            <span class="mock-label">Sales Invoice &middot; SI-1041</span>
+            <span class="mock-status ok">Reconciled ✓</span>
+          </div>
+          <div class="mock-row"><span class="mock-sub">Amount</span><span class="mock-label">$4,280.00</span></div>
+          <div class="mock-row"><span class="mock-sub">Warehouse</span><span class="mock-label">Main &middot; Unit A</span></div>
+          <div class="mock-stat-row">
+            <div class="mock-stat"><div class="num">128</div><div class="lbl">Open invoices</div></div>
+            <div class="mock-stat"><div class="num">0</div><div class="lbl">Unposted</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('book') }} REAL DOUBLE-ENTRY</div>
+      <h2>Real double-entry accounting, built for the way you work</h2>
+    </div>
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="icon-tile">{{ icon('layers') }}</div>
+        <h3>Double-entry at every step</h3>
+        <p>Every transaction — sales, purchases, payments, stock moves — posts as real double-entry. Nothing is a workaround bolted on top.</p>
+      </div>
+      <div class="card">
+        <div class="icon-tile">{{ icon('globe') }}</div>
+        <h3>Inventory, FX &amp; BOMs</h3>
+        <p>Multi-warehouse inventory, multi-currency, and manufacturing bills of materials, all natively part of the ledger — not a bolt-on add-on.</p>
+      </div>
+      <div class="card">
+        <div class="icon-tile">{{ icon('factory') }}</div>
+        <h3>Manufacturing &amp; BOMs</h3>
+        <p>Multi-level bills of materials with backflush costing through job cards — from raw materials to finished goods, automatically.</p>
+      </div>
+      <div class="card">
+        <div class="icon-tile">{{ icon('bank') }}</div>
+        <h3>Bank reconciliation</h3>
+        <p>Import bank statements and match transactions automatically — your books always tie out to what's actually in the bank.</p>
+      </div>
+      <div class="card">
+        <div class="icon-tile">{{ icon('shield') }}</div>
+        <h3>Approvals &amp; control</h3>
+        <p>Per-user, per-form permissions and optional approval workflows before a voucher posts — control who can do what.</p>
+      </div>
+      <div class="card">
+        <div class="icon-tile">{{ icon('file') }}</div>
+        <h3>Fast export &amp; audit</h3>
+        <p>Every report exports cleanly, and every number traces back to its source voucher — no black boxes, no manual reconciliation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight">
+  <div class="container">
+    <div class="stats-card">
+      <div class="stats-strip">
+        <div class="stat-block"><div class="num">13</div><div class="lbl">Modules &amp; counting</div></div>
+        <div class="stat-block"><div class="num">Multi</div><div class="lbl">Company &amp; currency</div></div>
+        <div class="stat-block"><div class="num">Real-time</div><div class="lbl">Dashboards &amp; reports</div></div>
+        <div class="stat-block"><div class="num">2FA</div><div class="lbl">Secured by default</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('settings') }} MODULAR BY DESIGN</div>
+      <h2>Switch on exactly what your business needs</h2>
+      <p>Start with core accounting and activate modules as your business needs them — mix and match by company.</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="module-card"><div class="icon-tile">{{ icon('building') }}</div><div><h3>Multi-Company <span class="card-tag">CORE</span></h3><p>Every entity, own books, one login.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('globe') }}</div><div><h3>Multi-Currency <span class="card-tag">CORE</span></h3><p>Invoice &amp; pay in any currency.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('factory') }}</div><div><h3>Manufacturing &amp; BOMs <span class="card-tag">CORE</span></h3><p>Multi-level BOMs, backflushed.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('box') }}</div><div><h3>Landed Cost &amp; Revaluation</h3><p>Freight &amp; duty into stock cost.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('bank') }}</div><div><h3>Bank Reconciliation</h3><p>Auto-match statements to ledger.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('percent') }}</div><div><h3>Withholding Tax</h3><p>Captured &amp; reconciled automatically.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('handshake') }}</div><div><h3>Commission Agent</h3><p>Auto-calculated agent commissions.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('users') }}</div><div><h3>Payroll &amp; Employees</h3><p>Salary, deductions &amp; loans.</p></div></div>
+      <div class="module-card"><div class="icon-tile">{{ icon('paperclip') }}</div><div><h3>Paperless / Attachments</h3><p>Source documents on every voucher.</p></div></div>
+    </div>
+    <div style="text-align:center; margin-top:32px;">
+      <a href="{{ url_for('proledg.modules') }}" class="link-arrow">See all modules {{ icon('arrow-right') }}</a>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <h2>Built for businesses that have outgrown entry-level apps</h2>
+    </div>
+
+    <div class="split-row flush">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('building') }} EVERY COMPANY, ONE LOGIN</div>
+        <h3>Every entity, its own books — under one login</h3>
+        {{ checklist([
+          "Switch companies without logging out",
+          "Isolated books and currency per company",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-row"><span class="mock-label">Northwind Trading</span><span class="mock-status muted">USD</span></div>
+          <div class="mock-row"><span class="mock-label">Apex Manufacturing</span><span class="mock-status muted">AED</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-row reverse">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('factory') }} FACTORY-FLOOR READY</div>
+        <h3>Your factory floor and your financials are the same system</h3>
+        {{ checklist([
+          "Machine register with utilization & cost",
+          "By-product recovery handled at the engine",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-stat-row">
+            <div class="mock-stat"><div class="num">42.9</div><div class="lbl">Cost / unit</div></div>
+            <div class="mock-stat"><div class="num">87%</div><div class="lbl">Utilization</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-row">
+      <div class="split-copy">
+        <div class="split-kicker">{{ icon('globe') }} MULTI-CURRENCY</div>
+        <h3>Invoice and pay in any currency — your books stay in one</h3>
+        {{ checklist([
+          "Invoice, pay and bank in foreign currency",
+          "Automatic realised & unrealised FX conversion",
+        ]) }}
+      </div>
+      <div class="split-visual">
+        <div class="mock-panel">
+          <div class="mock-row"><span class="mock-label">Invoice &middot; USD</span><span class="mock-sub">$8,400.00</span></div>
+          <div class="mock-row highlight"><span class="mock-label">Realised FX gain</span><span class="mock-status ok">+$126.40</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>One platform, many kinds of business</h2>
+    </div>
+    <div class="grid grid-3">
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('bank') }}</div><h3>Trading &amp; distribution</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('factory') }}</div><h3>Manufacturers &amp; assemblers</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('box') }}</div><h3>Importers &amp; exporters</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('building') }}</div><h3>Multi-entity groups</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('briefcase') }}</div><h3>Accountants &amp; bookkeepers</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('smartphone') }}</div><h3>Ecommerce sellers</h3></div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('shield-check') }} SECURITY</div>
+      <h2>Your numbers tie out — and stay protected</h2>
+    </div>
+    <div class="grid grid-4">
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('shield-check') }}</div><h3>Watertight by design</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('lock') }}</div><h3>2FA &amp; session hardening</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('cloud') }}</div><h3>Cloud-hosted &amp; backed up</h3></div>
+      <div class="card" style="text-align:center;"><div class="icon-tile" style="margin:0 auto 14px;">{{ icon('user') }}</div><h3>Granular permissions</h3></div>
+    </div>
+    <div style="text-align:center; margin-top:32px;">
+      <a href="{{ url_for('proledg.security') }}" class="link-arrow">Explore security details {{ icon('arrow-right') }}</a>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('dollar') }} SIMPLE PRICING</div>
+      <h2>Plans that grow with you</h2>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <h3>Starter</h3>
+        <p class="price-desc">Everything a small business needs for tidy books.</p>
+        <div class="price-amount">$19<span>/mo</span></div>
+        <div class="price-per">per company, billed monthly</div>
+        {{ checklist(["Core accounting & invoicing", "Single company", "Up to 3 users"]) }}
+        <a href="{{ url_for('proledg.contact') }}" class="btn btn-outline btn-block">Start free trial</a>
+      </div>
+      <div class="price-card featured">
+        <span class="price-badge">Popular</span>
+        <h3>Business</h3>
+        <p class="price-desc">For growing teams running manufacturing &amp; FX.</p>
+        <div class="price-amount">$49<span>/mo</span></div>
+        <div class="price-per">per company, billed monthly</div>
+        {{ checklist(["Everything in Starter", "Manufacturing & multi-currency", "Up to 15 users"]) }}
+        <a href="{{ url_for('proledg.contact') }}" class="btn btn-primary btn-block">Start free trial</a>
+      </div>
+      <div class="price-card">
+        <h3>Enterprise</h3>
+        <p class="price-desc">For multi-company groups with custom needs.</p>
+        <div class="price-amount">Custom</div>
+        <div class="price-per">volume &amp; multi-company pricing</div>
+        {{ checklist(["Everything in Business", "Unlimited companies", "SSO with Microsoft Entra"]) }}
+        <a href="{{ url_for('proledg.contact') }}" class="btn btn-outline btn-block">Talk to us</a>
+      </div>
+    </div>
+    <div style="text-align:center; margin-top:32px;">
+      <a href="{{ url_for('proledg.pricing') }}" class="link-arrow">Compare all plans {{ icon('arrow-right') }}</a>
+    </div>
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">{{ icon('file') }} FAQ</div>
+      <h2>Frequently asked</h2>
+    </div>
+    {{ faq([
+      ("How quickly can I get started?", "Sign up and you're in — most teams create their first company and start posting entries within minutes. No sales call or setup fee required."),
+      ("Is there a free trial?", "Yes — every plan starts with a free 14-day trial, no credit card required. You can invite your team and try every module before you pay."),
+      ("Can I run multiple companies?", "Yes. Add as many companies as you need under one login, each with its own books, currency and chart of accounts, and switch between them in a click."),
+      ("Do you support my region?", "Proledge is built global-first with localized tax and e-invoicing compliance added by region. Tell us where you operate and we'll confirm what's supported."),
+    ]) }}
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    {{ cta_banner(
+      "Bring every company onto one accurate platform",
+      "Start your free 14-day trial today — no credit card, no commitment. Set up your first company in minutes.",
+      "Start free trial", url_for('proledg.contact'),
+      "Talk to us", url_for('proledg.contact')
+    ) }}
+  </div>
+</section>
+
+{% endblock %}

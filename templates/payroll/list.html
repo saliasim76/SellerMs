@@ -1,0 +1,1419 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}الرواتب{% else %}Payroll{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}الرواتب{% else %}Payroll{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+<style>
+  /* Cosmetic only -- removes the divider line AG-Grid draws between the
+     header text/swatch row and the floating-filter input row underneath
+     it; the filter row itself (input box + funnel icon) is untouched. */
+  #payrollGridRoot.ag-theme-alpine .ag-header-row-column .ag-header-cell{ border-bottom:none !important; }
+  #payrollGridRoot.ag-theme-alpine .ag-header-row-column-filter .ag-header-cell{ border-top:none !important; }
+  .pr-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:14px;}
+  .pr-header-row{display:flex;flex-wrap:wrap;gap:10px;align-items:end;}
+  .pr-header-grid{display:contents;}
+  .pr-field label{display:block;font-size:11.5px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px;}
+  .pr-field input, .pr-field select{width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box;}
+  .pr-header-row .pr-field{flex:1 1 160px;min-width:150px;}
+  .pr-header-row .pr-field-narrow{flex:0 0 110px;min-width:110px;}
+  .pr-header-row .pr-field-btn{flex:0 0 auto;min-width:0;}
+  .pr-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+  .pr-btn{padding:9px 16px;border-radius:7px;border:none;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .pr-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .pr-btn-primary{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;}
+  .pr-btn-blue{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;}
+  .pr-btn-purple{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;}
+  .pr-btn-amber{background:linear-gradient(135deg,#d97706,#b45309);color:#fff;}
+  .pr-btn-gray{background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;}
+  .pr-btn-red{background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;}
+  .pr-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  /* GRL (General Receipt Ledger) section -- same look as the Purchase/
+     Sales/Cash & Bank forms' own GRL panel. */
+  .grl-lbl{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;}
+  .grl-inp{width:100%;padding:8px 11px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;color:#374151;}
+  .grl-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .grl-table th{background:#1e3a5f;color:#fff;padding:8px 7px;font-size:10.5px;text-transform:uppercase;text-align:left;font-weight:600;}
+  .grl-table td{padding:6px 7px;border-bottom:1px solid #f1f5f9;}
+  .pr-grl-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px;}
+  .pr-toolbar input{padding:8px 10px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;min-width:160px;}
+  .pr-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#6b7280;margin-inline-start:auto;}
+  .pr-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .pr-swatch{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.15);}
+  #payrollGridRoot{width:100%;height:calc(100vh - 260px);min-height:520px;}
+  .pr-editable-cell{background:#eff6ff;}
+  .pr-row-yellow{background:#fef9c3 !important;}
+  .pr-row-red{background:#fecaca !important;}
+  .pr-row-gray{background:#e5e7eb !important;}
+  .pr-flash{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:3000;padding:12px 22px;border-radius:9px;
+    font-size:14px;font-weight:700;color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.22);opacity:0;transition:opacity .25s;pointer-events:none;
+    text-align:center;max-width:80vw;}
+  .pr-flash.show{opacity:1;}
+  .pr-flash.ok{background:#16a34a;}
+  .pr-flash.err{background:#dc2626;}
+  .pr-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:2500;display:flex;align-items:center;justify-content:center;}
+  .pr-modal{background:#fff;border-radius:12px;padding:20px 22px;width:520px;max-width:92vw;max-height:82vh;overflow:auto;}
+  .pr-modal h4{margin:0 0 12px;font-size:15px;color:#1e3a5f;}
+  .pr-emp-row{display:flex;justify-content:space-between;align-items:center;padding:8px 6px;border-bottom:1px solid #f1f5f9;font-size:13px;}
+  .pr-emp-row button{padding:5px 12px;border-radius:6px;border:none;background:#1e3a5f;color:#fff;font-size:12px;cursor:pointer;}
+  .pr-emp-row button:disabled{background:#d1d5db;cursor:not-allowed;}
+  /* Local, not-yet-saved edit (Initial-status rows) */
+  .pr-cell-dirty{ background:#fef3c7 !important; box-shadow:inset 0 0 0 1px #f59e0b; }
+  .pr-unsaved-bar{
+    display:flex; align-items:center; gap:12px; background:#fffbeb; border:1.5px solid #fde68a;
+    border-radius:8px; padding:8px 14px; margin-bottom:10px; font-size:13px; font-weight:600; color:#92400e;
+  }
+  /* Summable columns show their running total inside their own header cell
+     (see buildColumns' renderHeader), stacked under the column name --
+     computed client-side from whatever rows are currently loaded, including
+     any not-yet-saved local edits. */
+  .pr-col-header{ display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:6px; line-height:1.2; width:100%; }
+  .pr-col-header .hname-main{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .pr-col-header .hname{ font-size:11.5px; font-weight:700; white-space:normal; }
+  .pr-col-header .htotal{ font-size:11px; font-weight:700; color:#2563eb; white-space:nowrap; }
+  .pr-sort-icon{ font-size:9px; color:#2563eb; }
+  .pr-col-header .swatch-stack{ display:flex; flex-direction:column; align-items:center; gap:3px; flex-shrink:0; margin-right:-10px; }
+  /* Small color-swatch trigger in every column header -- click or
+     right-click either one opens the same color picker (per-column,
+     per-browser custom background color; see openColorPicker()). */
+  .pr-col-swatch-btn{ width:12px; height:12px; border-radius:3px; border:1.5px solid rgba(0,0,0,.25); cursor:pointer;
+    flex-shrink:0; background:repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0/6px 6px; }
+  /* Text-color swatch looks like Word/Excel's "font color" icon: a small
+     "A" with a colored bar underneath reflecting the column's current
+     text color (gray when none is set), instead of a filled square. */
+  .pr-col-swatch-text{ background:none; display:inline-flex; align-items:center; justify-content:center;
+    font-size:9px; font-weight:800; color:#374151; line-height:1; border:none; border-bottom:2.5px solid #9ca3af; border-radius:0; }
+  .pr-color-popover{ position:fixed; z-index:4000; background:#fff; border:1px solid #d1d5db; border-radius:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.18); padding:8px; display:none; }
+  .pr-color-popover.show{ display:grid; grid-template-columns:repeat(6, 20px); gap:6px; }
+  .pr-color-popover .pr-swatch-opt{ width:20px; height:20px; border-radius:5px; border:1.5px solid rgba(0,0,0,.2); cursor:pointer; padding:0; }
+  .pr-color-popover .pr-swatch-opt.empty{ background:repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0/8px 8px; }
+  .pr-color-popover .pr-swatch-opt:hover{ transform:scale(1.12); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page">
+  <!-- Stage 1: Header / Generate -->
+  <div class="pr-card">
+    <div class="pr-header-row">
+      <div class="pr-field pr-field-btn">
+        <button class="pr-btn pr-btn-primary" id="btnGenerate" type="button"><i class="fas fa-cogs"></i> {% if ar %}إنشاء كشف الرواتب{% else %}Generate Payroll{% endif %}</button>
+      </div>
+      <div id="prHeaderGrid" class="pr-header-grid"></div>
+    </div>
+    <div class="pr-actions">
+      <span id="genMsg" style="font-size:12.5px;color:#6b7280;align-self:center;"></span>
+    </div>
+  </div>
+
+  {# ── Section: General Receipt Ledger (GRL) -- collapsed by default, same
+       as the Purchase/Sales/Cash & Bank forms' GRL panel; reflects whichever
+       payroll batch is currently loaded in the Payroll ID filter above. ── #}
+  <div class="pr-card" id="prGrlCard" style="display:none;padding:0;overflow:hidden;">
+    <button type="button" id="prGrlSecHdr" onclick="prTogGrlSec(this)" style="width:100%;border:none;cursor:pointer;text-align:left;background:#1e3a5f;color:#fff;padding:10px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
+      <span><i class="fas fa-book me-1"></i>{% if ar %}دفتر الاستلام العام (GRL){% else %}General Receipt Ledger (GRL){% endif %}</span>
+      <i class="fas fa-chevron-down"></i>
+    </button>
+    <div id="prGrlSecBody" style="display:none;padding:14px 16px;">
+      <div id="prGrlPreviewBadge" style="display:none;margin-bottom:10px;font-size:12px;font-weight:700;color:#b45309;background:#fffbeb;border:1.5px solid #fde68a;border-radius:7px;padding:6px 10px;">
+        <i class="fas fa-eye me-1"></i><span id="prGrlPreviewBadgeText">{% if ar %}معاينة حية -- لم يتم الترحيل بعد{% else %}Live preview -- not yet posted{% endif %}</span>
+      </div>
+      <div class="pr-grl-row">
+        <div>
+          <label class="grl-lbl">{% if ar %}رقم القيد{% else %}JE No{% endif %}</label>
+          <input type="text" id="prgrl_je_no" class="grl-inp" readonly>
+        </div>
+        <div>
+          <label class="grl-lbl">{% if ar %}رقم GRL{% else %}GRL No{% endif %}</label>
+          <input type="text" id="prgrl_no" class="grl-inp" readonly>
+        </div>
+        <div>
+          <label class="grl-lbl">{% if ar %}المصدر / Origin{% else %}Origin{% endif %}</label>
+          <input type="text" id="prgrl_origion" class="grl-inp" readonly>
+        </div>
+        <div>
+          <label class="grl-lbl">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</label>
+          <input type="text" id="prgrl_posting_date" class="grl-inp" readonly>
+        </div>
+        <div>
+          <label class="grl-lbl">{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</label>
+          <input type="text" id="prgrl_document_date" class="grl-inp" readonly>
+        </div>
+        <div>
+          <label class="grl-lbl">{% if ar %}البيان{% else %}Narration{% endif %}</label>
+          <input type="text" id="prgrl_narration" class="grl-inp" readonly>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="grl-table">
+          <thead>
+            <tr>
+              <th>{% if ar %}الرمز{% else %}Code{% endif %}</th>
+              <th>{% if ar %}حساب ضبط{% else %}Control Account{% endif %}</th>
+              <th>{% if ar %}الرمز المرجعي{% else %}Reference Code{% endif %}</th>
+              <th>{% if ar %}اسم الحساب (EN){% else %}Account Name (EN){% endif %}</th>
+              <th>{% if ar %}اسم الحساب (AR){% else %}Account Name (AR){% endif %}</th>
+              <th style="text-align:right;">{% if ar %}مدين{% else %}Debit{% endif %}</th>
+              <th style="text-align:right;">{% if ar %}دائن{% else %}Credit{% endif %}</th>
+              <th>{% if ar %}البيان{% else %}Narration{% endif %}</th>
+            </tr>
+          </thead>
+          <tbody id="prGrlDetailBody">
+            <tr><td colspan="8" style="text-align:center;color:#9ca3af;padding:10px;">{% if ar %}لم يتم إنشاء الكشف بعد{% else %}This payroll has not been generated yet{% endif %}</td></tr>
+          </tbody>
+          <tfoot>
+            <tr style="font-weight:700;background:#f8fafc;">
+              <td colspan="5" style="text-align:right;padding:6px 8px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</td>
+              <td style="text-align:right;padding:6px 8px;" id="prGrlTotDebit">0.00</td>
+              <td style="text-align:right;padding:6px 8px;" id="prGrlTotCredit">0.00</td>
+              <td id="prGrlBalance"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div style="margin-top:8px;font-size:11.5px;color:#94a3b8;">
+        {% if ar %}سجلان ثابتان فقط، يُنشآن تلقائياً من إجمالي كشف الرواتب عند الترحيل -- لا يمكن إضافتهما أو حذفهما.{% else %}Exactly two fixed records, generated automatically from the payroll's total on Post -- they cannot be added or removed.{% endif %}
+      </div>
+      <div class="pr-actions" style="margin-top:12px;">
+        <button type="button" class="pr-btn pr-btn-primary" id="prGrlPostBtn" disabled title="{% if ar %}متاح فقط عندما تكون حالة الكشف جاهز{% else %}Available only when the payroll status is Ready{% endif %}">
+          <i class="fas fa-check-circle"></i> {% if ar %}ترحيل{% else %}Post{% endif %}
+        </button>
+        <span id="prGrlPostHint" style="font-size:12px;color:#94a3b8;align-self:center;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid toolbar -->
+  <div class="pr-toolbar">
+    <input type="text" id="fltPayrollId" placeholder="{% if ar %}رقم الكشف{% else %}Payroll ID{% endif %}" value="{{ payroll_id }}">
+    <button class="pr-btn pr-btn-blue" id="btnLoad"><i class="fas fa-search"></i> {% if ar %}تحميل{% else %}Load{% endif %}</button>
+    <button class="pr-btn pr-btn-amber" id="btnRefreshAll"><i class="fas fa-sync"></i> {% if ar %}تحديث من ملف الموظف{% else %}Refresh from Employee{% endif %}</button>
+    <button class="pr-btn pr-btn-purple" id="btnAddEmployee"><i class="fas fa-user-plus"></i> {% if ar %}إضافة موظف{% else %}Add Employee{% endif %}</button>
+    <a class="pr-btn pr-btn-gray" style="text-decoration:none;" href="{{ url_for('payroll.payroll_reports') }}"><i class="fas fa-chart-bar"></i> {% if ar %}التقارير{% else %}Reports{% endif %}</a>
+    <button class="pr-btn pr-btn-gray" id="btnExportPayroll" onclick="exportPayroll()" title="{% if ar %}تصدير الكشف المحدد أو كل الرواتب إن كان الحقل فارغًا{% else %}Export this Payroll ID, or all payroll if blank{% endif %}"><i class="fas fa-file-export"></i> {% if ar %}تصدير{% else %}Export{% endif %}</button>
+    <button class="pr-btn pr-btn-gray" id="btnImportPayroll" onclick="document.getElementById('payrollImportFile').click()" title="{% if ar %}استيراد من ملف تم تصديره سابقًا{% else %}Import a previously-exported file{% endif %}"><i class="fas fa-file-import"></i> {% if ar %}استيراد{% else %}Import{% endif %}</button>
+    <input type="file" id="payrollImportFile" accept=".xlsx,.xls" style="display:none;" onchange="importPayroll(this.files[0])">
+    <div class="pr-legend">
+      <span><i class="pr-swatch" style="background:#fff;"></i>{% if ar %}عادي{% else %}Normal{% endif %}</span>
+      <span><i class="pr-swatch" style="background:#fef9c3;"></i>{% if ar %}مكرر ≤30{% else %}Dup ≤30d{% endif %}</span>
+      <span><i class="pr-swatch" style="background:#fecaca;"></i>{% if ar %}مكرر &gt;30{% else %}Dup &gt;30d{% endif %}</span>
+      <span><i class="pr-swatch" style="background:#e5e7eb;"></i>{% if ar %}مرحّل{% else %}Posted{% endif %}</span>
+    </div>
+  </div>
+
+  <div id="payrollGridRoot" class="ag-theme-alpine"></div>
+  <div class="proledg-pagination" style="justify-content:flex-start;gap:12px;">
+    <button class="pr-btn pr-btn-gray" onclick="payrollPrevPage&&payrollPrevPage()" title="{% if ar %}الصفحة السابقة{% else %}Previous Page{% endif %}"><i class="fas fa-chevron-left"></i></button>
+    <button class="pr-btn pr-btn-gray" onclick="payrollNextPage&&payrollNextPage()" title="{% if ar %}الصفحة التالية{% else %}Next Page{% endif %}"><i class="fas fa-chevron-right"></i></button>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-muted">{% if ar %}صفوف:{% else %}Rows:{% endif %}</span>
+      <select class="form-select form-select-sm" style="width:80px;" onchange="payrollSetPageSize&&payrollSetPageSize(+this.value)" title="{% if ar %}عدد الصفوف{% else %}Rows per page{% endif %}">
+        <option value="10">10</option><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option>
+      </select>
+    </div>
+  </div>
+  <div id="prFlash" class="pr-flash"></div>
+  <div id="prModalRoot"></div>
+  <div id="prColorPopover" class="pr-color-popover"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  Payroll grid — AG-Grid Enterprise, replacing the previous MUI X Data
+//  Grid implementation with the same functionality:
+//    - Stage-2 cell editing with the same lock rules (Initial/Ready/Post)
+//    - Initial-status edits stage locally (pendingEdits) and only reach
+//      the server via Save Changes -- Ready/Post commit immediately
+//    - Excel-style drag-to-fill a cell's value into other rows, now via
+//      AG-Grid Enterprise's own native fill handle (enableRangeSelection +
+//      enableFillHandle) instead of a hand-rolled implementation -- it
+//      already respects each cell's `editable` state on its own, so
+//      locked rows are skipped automatically during a drag
+//    - Per-column running totals shown inside each summable column's own
+//      header cell
+//    - Row coloring for duplicate-employee detection (yellow/red) and
+//      locked/Posted rows (gray)
+//    - Column width/visibility/filter/export now come from GridKit (the
+//      same shared toolkit already used by every other AG-Grid page in
+//      this app), which is why the old standalone "Reset Column Widths" /
+//      "Reset Column Visibility" buttons were removed from the toolbar --
+//      GridKit's own Columns panel provides the same two resets plus pin/
+//      autosize, and its Filters panel adds a quick-search-all-columns box
+//      this page didn't have before.
+// ══════════════════════════════════════════════════════════════════
+
+const CSRF_TOKEN = "{{ csrf_token() }}";
+const AR = {{ 'true' if ar else 'false' }};
+const DATA_URL = "{{ url_for('payroll.payroll_data') }}";
+const FILTERS_URL = "{{ url_for('payroll.payroll_filters') }}";
+const GENERATE_URL = "{{ url_for('payroll.payroll_generate') }}";
+const CHECK_URL = "{{ url_for('payroll.payroll_check') }}";
+const GRID_ROOT_EL = document.getElementById('payrollGridRoot');
+const MODAL_ROOT_EL = document.getElementById('prModalRoot');
+
+function flash(msg, ok) {
+  const el = document.getElementById('prFlash');
+  el.textContent = msg;
+  el.className = 'pr-flash show ' + (ok ? 'ok' : 'err');
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => { el.classList.remove('show'); }, 3000);
+}
+
+// Stage-2 editable numeric fields -- keep in sync with database/routes/payroll.py::_EDITABLE_NUM
+const EDITABLE_NUM_FIELDS = ['absent', 'total_hours', 'extra_ot', 'bonus',
+  'deduction', 'advance', 'credit', 'paid', 'holidays'];
+const INT_FIELDS = new Set(['absent', 'holidays']);
+
+function isRowLocked(row) { return row.payroll_status === 'Post'; }
+function isRowReadyOnly(row) { return row.payroll_status === 'Ready'; }
+// Payroll fields (sheet_no/status/the numeric Stage-2 fields) are editable
+// only while the batch is still Initial; payment_status is the one
+// exception and stays individually changeable through Ready too (holding/
+// releasing one person's payment before the batch posts is a separate
+// decision from the payroll calculation itself) -- but Post still locks
+// everything, payment_status included, matching the backend's hard block.
+function cellEditable(field, row) {
+  if (isRowLocked(row)) return false;
+  if (field === 'payment_status') return true;
+  if (isRowReadyOnly(row)) return false;
+  return field === 'sheet_no' || field === 'status' || EDITABLE_NUM_FIELDS.includes(field);
+}
+const money = (v) => (v == null ? '' : Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+// Buyer column shows just the first word of the buyer's full name (e.g.
+// "Al Rajhi Trading Co" -> "Al") -- display-only, the stored buyer_name
+// stays the full name everywhere else (export, reports, other pages).
+const shortName = (v) => (v ? String(v).trim().split(/\s+/)[0] : '');
+
+// Columns worth totalling above the grid header. Rates (day_hour, ot_rate,
+// po_rate, po_ot_rate) are deliberately excluded -- summing a per-unit rate
+// across many employees isn't a meaningful number, unlike summing an
+// amount/hours/count column.
+const SUMMABLE_FIELDS = [
+  ['days', AR ? 'الأيام' : 'Days'],
+  ['fridays', AR ? 'الجمع' : 'Fridays'],
+  ['holidays', AR ? 'الإجازات' : 'Holidays'],
+  ['absent', AR ? 'الغياب' : 'Absent'],
+  ['basic_salary', AR ? 'الراتب الأساسي' : 'Basic Salary'],
+  ['allowance', AR ? 'البدل' : 'Allowance'],
+  ['monthly_salary', AR ? 'الراتب الشهري' : 'Monthly Salary'],
+  ['total_hours', AR ? 'إجمالي الساعات' : 'Total Hours'],
+  ['working_hour', AR ? 'ساعات العمل' : 'Working Hour'],
+  ['ot_hour', AR ? 'ساعات إضافية' : 'OT Hour'],
+  ['extra_ot', AR ? 'إضافي إضافي' : 'Extra OT'],
+  ['ot_amount', AR ? 'مبلغ الإضافي' : 'OT Amount'],
+  ['bonus', AR ? 'مكافأة' : 'Bonus'],
+  ['deduction', AR ? 'خصم' : 'Deduction'],
+  ['total_salary', AR ? 'إجمالي الراتب' : 'Total Salary'],
+  ['advance', AR ? 'سلفة' : 'Advance'],
+  ['credit', AR ? 'دائن' : 'Credit'],
+  ['salary_payable', AR ? 'صافي المستحق' : 'Salary Payable'],
+  ['paid', AR ? 'المدفوع' : 'Paid'],
+  ['balance', AR ? 'الرصيد' : 'Balance'],
+  ['services_charges', AR ? 'رسوم الخدمات' : 'Services Charges'],
+  ['invoice_amount', AR ? 'مبلغ الفاتورة' : 'Invoice Amount'],
+];
+const SUMMABLE_SET = new Set(SUMMABLE_FIELDS.map(([f]) => f));
+
+function rowClassFor(row) {
+  if (row.row_color === 'gray') return 'pr-row-gray';
+  if (row.row_color === 'red') return 'pr-row-red';
+  if (row.row_color === 'yellow') return 'pr-row-yellow';
+  return '';
+}
+
+// ── Stage 1 header form (plain DOM) ────────────────────────────────
+let FILTER_OPTIONS = { kafeel: [], buyer_department: [], location: [], buyers: [], salary_category: [], salary_order: [] };
+
+function fieldHtml(id, label, type, options, extraClass) {
+  const cls = 'pr-field' + (extraClass ? ' ' + extraClass : '');
+  if (type === 'select') {
+    let opts = '<option value="">' + (AR ? '(الكل)' : '(any)') + '</option>';
+    (options || []).forEach(o => {
+      const val = typeof o === 'object' ? o.id : o;
+      const lbl = typeof o === 'object' ? o.name : o;
+      opts += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + lbl + '</option>';
+    });
+    return '<div class="' + cls + '"><label>' + label + '</label><select id="' + id + '">' + opts + '</select></div>';
+  }
+  return '<div class="' + cls + '"><label>' + label + '</label><input type="' + type + '" id="' + id + '"' + (type === 'date' ? '' : '') + '></div>';
+}
+
+function renderHeaderForm() {
+  const el = document.getElementById('prHeaderGrid');
+  el.innerHTML =
+    fieldHtml('selEditFlow', AR ? 'حالة الكشف' : 'Payroll Status', 'select',
+      [{ id: 'Initial', name: AR ? 'أولي' : 'Initial' }, { id: 'Ready', name: AR ? 'جاهز' : 'Ready' }], 'pr-field-narrow') +
+    fieldHtml('hMonthFrom', AR ? 'من تاريخ' : 'Month From', 'date') +
+    fieldHtml('hMonthTo', AR ? 'إلى تاريخ' : 'Month To', 'date') +
+    fieldHtml('hMonth', AR ? 'الشهر' : 'Month', 'text', null, 'pr-field-narrow') +
+    fieldHtml('hSalaryCategory', AR ? 'فئة الراتب' : 'Salary Category', 'select', FILTER_OPTIONS.salary_category) +
+    fieldHtml('hKafeel', AR ? 'الكفيل' : 'Kafeel', 'select', FILTER_OPTIONS.kafeel) +
+    fieldHtml('hBuyer', AR ? 'المشتري' : 'Buyer', 'select', FILTER_OPTIONS.buyers) +
+    fieldHtml('hDept', AR ? 'القسم' : 'Department', 'select', FILTER_OPTIONS.buyer_department) +
+    fieldHtml('hLocation', AR ? 'الموقع' : 'Location', 'select', FILTER_OPTIONS.location) +
+    fieldHtml('hSalaryOrder', AR ? 'أمر الراتب' : 'Salary Order', 'text');
+
+  document.getElementById('hMonth').readOnly = true;
+  document.getElementById('hSalaryOrder').readOnly = true;
+  document.getElementById('hSalaryOrder').placeholder = AR ? 'يُملأ تلقائيًا عند اختيار المشتري' : 'auto-filled from Buyer';
+
+  // Department and Location are independent dropdowns (sourced from
+  // EmployeeWorkAllocation, like Kafeel used to be) and are also the actual
+  // matching criteria used server-side. Only Salary Order cascades from Buyer.
+  document.getElementById('hBuyer').addEventListener('change', loadBuyerContext);
+
+  // Payroll Status: the "(any)" option fieldHtml() adds for every select
+  // doesn't apply here (this isn't a filter, it's an action) -- swap it for
+  // a neutral placeholder so nothing fires until the user picks a target.
+  const selFlow = document.getElementById('selEditFlow');
+  selFlow.options[0].textContent = AR ? '-- اختر --' : '-- Select --';
+  selFlow.addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    doSetFlow(e.target.value, load);
+  });
+
+  // Month is derived from Month To (not Month From), e.g. Month To
+  // 25-Aug-2026 -> "Aug-26" -- matches the server's derivation exactly.
+  const syncMonth = () => {
+    const v = document.getElementById('hMonthTo').value;
+    if (!v) { document.getElementById('hMonth').value = ''; return; }
+    const d = new Date(v + 'T00:00:00');
+    const monthsAbbrev = AR
+      ? ['ينا','فبر','مار','أبر','ماي','يون','يول','أغس','سبت','أكت','نوف','ديس']
+      : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const yy = String(d.getFullYear()).slice(-2);
+    document.getElementById('hMonth').value = monthsAbbrev[d.getMonth()] + '-' + yy;
+  };
+  document.getElementById('hMonthTo').addEventListener('change', syncMonth);
+}
+
+function headerFormData() {
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF_TOKEN);
+  fd.set('month_from', document.getElementById('hMonthFrom').value);
+  fd.set('month_to', document.getElementById('hMonthTo').value);
+  fd.set('kafeel', document.getElementById('hKafeel').value);
+  fd.set('buyer_id', document.getElementById('hBuyer').value);
+  fd.set('buyer_department', document.getElementById('hDept').value);
+  fd.set('location', document.getElementById('hLocation').value);
+  fd.set('salary_category', document.getElementById('hSalaryCategory').value);
+  fd.set('salary_order', document.getElementById('hSalaryOrder').value);
+  return fd;
+}
+
+async function loadFilterOptions() {
+  try {
+    const r = await fetch(FILTERS_URL, { credentials: 'same-origin' });
+    FILTER_OPTIONS = await r.json();
+  } catch (e) {
+    console.error('Failed to load filter options', e);
+  }
+  renderHeaderForm();
+}
+
+async function loadBuyerContext() {
+  // Only Salary Order cascades from the selected Buyer now -- Department and
+  // Location are independent dropdowns (sourced from EmployeeWorkAllocation)
+  // and are the real matching criteria, unaffected by this.
+  const buyerId = document.getElementById('hBuyer').value;
+  const orderEl = document.getElementById('hSalaryOrder');
+
+  if (!buyerId) {
+    orderEl.value = '';
+    return;
+  }
+  try {
+    const r = await fetch('/payroll/buyer/' + buyerId + '/context', { credentials: 'same-origin' });
+    const ctx = await r.json();
+    orderEl.value = (ctx.salary_order != null) ? ctx.salary_order : '';
+  } catch (e) {
+    console.error('Failed to load buyer context', e);
+  }
+}
+
+function openPayroll(payrollId) {
+  document.getElementById('fltPayrollId').value = payrollId;
+  load();
+}
+
+async function doGenerate() {
+  const msgEl = document.getElementById('genMsg');
+  msgEl.textContent = AR ? 'جارٍ الإنشاء...' : 'Generating...';
+  let r;
+  try {
+    r = await fetch(GENERATE_URL, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN },
+      credentials: 'same-origin', body: headerFormData() });
+  } catch (e) {
+    // A *real* network failure: request never reached the server (offline, DNS, CORS, etc.)
+    msgEl.textContent = '';
+    flash((AR ? 'تعذّر الاتصال بالخادم: ' : 'Could not reach the server: ') + e.message, false);
+    console.error('Generate: network-level failure', e);
+    return;
+  }
+
+  let res;
+  try {
+    res = await r.json();
+  } catch (e) {
+    // The server responded, but not with JSON -- almost always a server error page
+    // (500/404/etc). Show the real HTTP status instead of a vague "network error".
+    const bodyText = await r.text().catch(() => '');
+    msgEl.textContent = '';
+    flash((AR ? 'خطأ من الخادم (' : 'Server error (') + r.status + '): ' +
+          (bodyText.slice(0, 200) || r.statusText), false);
+    console.error('Generate: server did not return JSON. Status:', r.status, 'Body:', bodyText);
+    return;
+  }
+
+  if (res.duplicate) {
+    msgEl.textContent = '';
+    const ok = confirm(res.error + '\n\n' + (AR ? 'فتح الكشف الحالي؟' : 'Open the existing payroll?'));
+    if (ok) openPayroll(res.payroll_id);
+    return;
+  }
+  if (!res.ok) {
+    msgEl.textContent = res.error || (AR ? 'فشل الإنشاء' : 'Generation failed');
+    flash(res.error || (AR ? 'فشل الإنشاء' : 'Generation failed'), false);
+    return;
+  }
+  msgEl.textContent = '';
+  flash((AR ? 'تم إنشاء الكشف: ' : 'Payroll created: ') + res.payroll_id + ' (' + res.created + (AR ? ' موظف' : ' employees') + ')', true);
+  openPayroll(res.payroll_id);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadFilterOptions();
+  document.getElementById('btnGenerate').addEventListener('click', doGenerate);
+});
+
+// Export: current Payroll ID filter -> that one batch; blank -> everything.
+window.exportPayroll = function () {
+  const pid = document.getElementById('fltPayrollId').value.trim();
+  const params = pid ? ('?payroll_id=' + encodeURIComponent(pid)) : '';
+  window.location.href = '/payroll/export' + params;
+};
+
+// Import: rows are matched by the 'ID' column the export itself writes,
+// so the currently-loaded filter doesn't matter -- whatever rows are in
+// the uploaded file get updated (each still gated by its own stage lock).
+window.importPayroll = function (file) {
+  const input = document.getElementById('payrollImportFile');
+  if (!file) return;
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF_TOKEN);
+  fd.set('file', file);
+  flash(AR ? 'جارٍ الاستيراد...' : 'Importing...', true);
+  fetch('/payroll/import', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin', body: fd,
+  })
+    .then(r => r.text().then(t => ({ status: r.status, text: t })))
+    .then(({ status, text }) => {
+      let d = null;
+      try { d = JSON.parse(text); } catch (e) { /* non-JSON, handled below */ }
+      if (!d || !d.ok) {
+        flash((d && d.error) || ((AR ? 'فشل الاستيراد' : 'Import failed') + ' (' + status + ')'), false);
+        return;
+      }
+      const s = d.summary;
+      flash((AR ? 'تم تحديث ' : 'Updated ') + s.updated +
+            (s.failed ? ((AR ? '، فشل ' : ', failed ') + s.failed) : ''), s.failed === 0);
+      if (d.failed_rows && d.failed_rows.length) {
+        const lines = d.failed_rows.slice(0, 20).map(fr =>
+          'Row ' + fr.row + ' (' + (fr.employee_name || fr.id) + '): ' + fr.error);
+        console.warn('Payroll import failures:\n' + lines.join('\n'));
+        alert((AR ? 'أخطاء الاستيراد:\n' : 'Import errors:\n') + lines.join('\n') +
+              (d.failed_rows.length > 20 ? '\n...' : ''));
+      }
+      load();
+    })
+    .catch(err => flash((AR ? 'خطأ في الشبكة: ' : 'Network error: ') + err.message, false))
+    .finally(() => { input.value = ''; });
+};
+
+// Per-user column-width + column-visibility memory: saved to this
+// browser's localStorage (keyed by user id so different accounts sharing
+// a browser don't clobber each other's settings), read back on every
+// load/login, until its own Reset button is clicked -- same mechanism as
+// the Employee grid.
+const COL_WIDTH_KEY = 'payroll_grid_col_widths_{{ current_user.id }}';
+const COL_VIS_KEY = 'payroll_grid_col_visibility_{{ current_user.id }}';
+function loadColWidths() {
+  try { return JSON.parse(localStorage.getItem(COL_WIDTH_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveColWidths(widths) {
+  try { localStorage.setItem(COL_WIDTH_KEY, JSON.stringify(widths)); } catch (e) {}
+}
+function loadColVisibility() {
+  try { return JSON.parse(localStorage.getItem(COL_VIS_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveColVisibility(vis) {
+  try { localStorage.setItem(COL_VIS_KEY, JSON.stringify(vis)); } catch (e) {}
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  Grid state
+// ══════════════════════════════════════════════════════════════════
+let gridApi = null;
+let defaultColumnDefs = [];   // captured once, used by the two Reset buttons
+let currentRows = [];
+// Initial-status rows edit locally (including fill-handle drags) and only
+// reach the server via the Save Changes button. { [rowId]: { [field]: value } }
+let pendingEdits = {};
+let saving = false;
+let currentTotals = {};
+
+// Excel SUBTOTAL-style: totals reflect only the rows currently passing the
+// grid's active filter(s), recalculating live as a filter is applied or
+// cleared -- not a fixed sum of every loaded row.
+function computeTotals() {
+  const out = {};
+  for (const [field] of SUMMABLE_FIELDS) out[field] = 0;
+  const addRow = (r) => {
+    for (const [field] of SUMMABLE_FIELDS) {
+      const v = Number(r[field]);
+      if (!isNaN(v)) out[field] += v;
+    }
+  };
+  if (gridApi) {
+    gridApi.forEachNodeAfterFilter((node) => { if (node.data) addRow(node.data); });
+  } else {
+    currentRows.forEach(addRow);
+  }
+  currentTotals = out;
+}
+
+function isDirty(rowId, field) {
+  return !!(pendingEdits[rowId] && pendingEdits[rowId][field] !== undefined);
+}
+function editableClass(field, row) {
+  if (!cellEditable(field, row)) return '';
+  return isDirty(row.id, field) ? 'pr-editable-cell pr-cell-dirty' : 'pr-editable-cell';
+}
+
+function cellClassFor(field, row) {
+  return editableClass(field, row);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  Per-column custom background color -- every column header carries a
+//  small swatch (click or right-click either one opens the same picker,
+//  see PrHeader/openColorPicker below) so any column's color can be
+//  picked or cleared interactively, instead of being fixed in code.
+//  Saved to this browser's localStorage per user, same mechanism as
+//  COL_WIDTH_KEY/COL_VIS_KEY above.
+// ══════════════════════════════════════════════════════════════════
+const COL_COLOR_KEY = 'payroll_grid_col_colors_{{ current_user.id }}';
+const COL_TEXT_COLOR_KEY = 'payroll_grid_col_text_colors_{{ current_user.id }}';
+// The palette either swatch can be set to -- Excel's default Office theme
+// palette (6 accent colors, then the same 6 as their "Lighter 80%" tints),
+// matching the exact scheme requested from Excel's color picker. Shared by
+// both the fill and text swatches -- there is one palette, not two.
+const COLOR_PALETTE = [
+  '#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47',
+  '#DAE3F3', '#FCE4D6', '#EDEDED', '#FFF2CC', '#DDEBF7', '#E2EFDA',
+];
+// Seeded once, on a browser that has never customized fill colors yet, so
+// the grid looks exactly as it always has until the user changes something.
+const DEFAULT_COLUMN_COLORS = {
+  fridays: '#ccffcc', holidays: '#d6f5d6', absent: '#c2fff0',
+  total_hours: '#d9ff99', ot_hour: '#d9ff99', bonus: '#b9f2ff',
+  deduction: '#ffc40c', advance: '#ffba00', credit: '#ffc0cb',
+};
+function loadColColors() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COL_COLOR_KEY));
+    return saved || { ...DEFAULT_COLUMN_COLORS };
+  } catch (e) { return { ...DEFAULT_COLUMN_COLORS }; }
+}
+function saveColColors(colors) {
+  try { localStorage.setItem(COL_COLOR_KEY, JSON.stringify(colors)); } catch (e) {}
+}
+function loadColTextColors() {
+  try { return JSON.parse(localStorage.getItem(COL_TEXT_COLOR_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveColTextColors(colors) {
+  try { localStorage.setItem(COL_TEXT_COLOR_KEY, JSON.stringify(colors)); } catch (e) {}
+}
+let columnColors = loadColColors();
+let columnTextColors = loadColTextColors();
+
+function cellStyleFor(field, row) {
+  // An unsaved-edit highlight (pr-cell-dirty, applied via cellClass) always
+  // wins over a column's custom colors -- a pending edit must never be hidden.
+  if (editableClass(field, row).includes('pr-cell-dirty')) return null;
+  const bg = columnColors[field];
+  const fg = columnTextColors[field];
+  if (!bg && !fg) return null;
+  const style = {};
+  if (bg) style.backgroundColor = bg;
+  if (fg) style.color = fg;
+  return style;
+}
+
+// Shared by both swatches -- which column and which of the two color
+// stores (fill vs. text) the open popover is currently editing.
+let _colorPickerField = null;
+let _colorPickerKind = 'bg';   // 'bg' | 'text'
+function buildColorPopover() {
+  const pop = document.getElementById('prColorPopover');
+  if (pop.childElementCount) return pop;
+  // Palette first, in its own two neat rows of 6 (accents, then their
+  // Lighter 80% tints, matching the Excel color picker layout) -- "no
+  // color" sits alone on its own row after, so it stays visually distinct
+  // from an actual color choice.
+  COLOR_PALETTE.forEach((hex) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pr-swatch-opt'; b.style.background = hex; b.title = hex;
+    b.onclick = () => { setColumnColor(_colorPickerField, hex, _colorPickerKind); closeColorPicker(); };
+    pop.appendChild(b);
+  });
+  const empty = document.createElement('button');
+  empty.type = 'button'; empty.className = 'pr-swatch-opt empty';
+  empty.title = AR ? 'بدون لون' : 'No color';
+  empty.onclick = () => { setColumnColor(_colorPickerField, null, _colorPickerKind); closeColorPicker(); };
+  pop.appendChild(empty);
+  return pop;
+}
+function openColorPicker(field, kind, anchorEl) {
+  const pop = buildColorPopover();
+  _colorPickerField = field;
+  _colorPickerKind = kind;
+  const r = anchorEl.getBoundingClientRect();
+  pop.style.top = (r.bottom + 4) + 'px';
+  pop.style.left = Math.min(r.left, window.innerWidth - 180) + 'px';
+  pop.classList.add('show');
+}
+function closeColorPicker() {
+  const pop = document.getElementById('prColorPopover');
+  pop.classList.remove('show');
+  _colorPickerField = null;
+}
+document.addEventListener('click', (e) => {
+  const pop = document.getElementById('prColorPopover');
+  if (!pop || !pop.classList.contains('show')) return;
+  if (pop.contains(e.target) || e.target.classList.contains('pr-col-swatch-btn')) return;
+  closeColorPicker();
+});
+function setColumnColor(field, color, kind) {
+  if (!field) return;
+  const store = kind === 'text' ? columnTextColors : columnColors;
+  if (color) store[field] = color; else delete store[field];
+  (kind === 'text' ? saveColTextColors : saveColColors)(store);
+  if (gridApi) { gridApi.refreshCells({ force: true }); gridApi.refreshHeader(); }
+}
+
+// Every column's header shows its name, a click-to-sort indicator (a fully
+// custom headerComponent replaces AG-Grid's own header entirely, so sort
+// click-handling has to be re-implemented here -- otherwise it silently
+// stops working, exactly as it did before this comment was added), two
+// small color-swatch triggers -- one for the column's fill color, one for
+// its text color (click either, or right-click the header for the fill
+// picker) -- and, for summable columns only, its own running total
+// underneath, recomputed whenever the loaded rows change (including any
+// not-yet-saved local edits; see computeTotals()/refreshHeaders()).
+class PrHeader {
+  init(params) {
+    this.params = params;
+    this.eGui = document.createElement('div');
+    this.eGui.className = 'pr-col-header';
+    this.onSortChanged = this.onSortChanged.bind(this);
+    // this.eGui itself is created once and reused across every refresh()
+    // (only its innerHTML content is replaced each render()), so listeners
+    // that don't depend on freshly-rendered child elements are attached
+    // here, in init(), exactly once -- attaching them inside render()
+    // instead would stack a fresh duplicate on every refresh.
+    this.eGui.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const bgSwatch = this.eGui.querySelector('.pr-col-swatch-bg');
+      openColorPicker(this.params.column.getColId(), 'bg', bgSwatch);
+    });
+    if (params.column.isSortable()) {
+      this.eGui.style.cursor = 'pointer';
+      this.eGui.addEventListener('click', (e) => {
+        if (e.target.closest('.pr-col-swatch-btn')) return;   // swatches handle their own click
+        params.progressSort(e.shiftKey);
+      });
+      params.column.addEventListener('sortChanged', this.onSortChanged);
+    }
+    this.render();
+  }
+  onSortChanged() { this.render(); }
+  render() {
+    const field = this.params.column.getColId();
+    const totalHtml = SUMMABLE_SET.has(field)
+      ? '<span class="htotal" data-field="' + field + '">' + money(currentTotals[field] || 0) + '</span>' : '';
+    const bg = columnColors[field];
+    const fg = columnTextColors[field];
+    const sort = this.params.column.getSort();
+    const sortIcon = sort === 'asc' ? ' <i class="fas fa-arrow-up pr-sort-icon"></i>'
+      : sort === 'desc' ? ' <i class="fas fa-arrow-down pr-sort-icon"></i>' : '';
+    this.eGui.innerHTML =
+      '<span class="hname-main"><span class="hname">' + this.params.displayName + sortIcon + '</span>' + totalHtml + '</span>' +
+      '<span class="swatch-stack">' +
+      '<span class="pr-col-swatch-btn pr-col-swatch-bg" style="' + (bg ? ('background:' + bg + ';') : '') + '" title="' +
+        (AR ? 'لون تعبئة العمود' : 'Column fill color') + '"></span>' +
+      '<span class="pr-col-swatch-btn pr-col-swatch-text" style="border-bottom-color:' + (fg || '#9ca3af') + ';" title="' +
+        (AR ? 'لون نص العمود' : 'Column text color') + '">A</span></span>';
+    // innerHTML replaces the DOM every render(), so listeners are
+    // (re-)attached here each time rather than once in init() -- otherwise
+    // they'd be lost the first time refresh() runs (e.g. after any cell edit).
+    const bgSwatch = this.eGui.querySelector('.pr-col-swatch-bg');
+    const fgSwatch = this.eGui.querySelector('.pr-col-swatch-text');
+    bgSwatch.addEventListener('click', (e) => { e.stopPropagation(); openColorPicker(field, 'bg', bgSwatch); });
+    fgSwatch.addEventListener('click', (e) => { e.stopPropagation(); openColorPicker(field, 'text', fgSwatch); });
+  }
+  refresh(params) { this.params = params; this.render(); return true; }
+  destroy() {
+    if (this.params.column.isSortable()) this.params.column.removeEventListener('sortChanged', this.onSortChanged);
+  }
+  getGui() { return this.eGui; }
+}
+// Updates each summable column's own total text in place, without calling
+// gridApi.refreshHeader() -- that forces AG-Grid to tear down and rebuild
+// every header cell, INCLUDING the floating-filter row's own <input>
+// elements, which destroys whatever the user was mid-typing there and
+// steals focus after every keystroke (the user has to click back in and
+// can only ever get one letter in before losing it again). Mutating the
+// already-rendered total text directly avoids touching that row at all.
+function refreshHeaders() {
+  document.querySelectorAll('#payrollGridRoot .htotal[data-field]').forEach((el) => {
+    const field = el.getAttribute('data-field');
+    el.textContent = money(currentTotals[field] || 0);
+  });
+}
+
+// Rendered at BOTH ends of the row (field '__actions' first, field
+// '__actions_right' last) -- this grid has ~45 columns, so whichever
+// edge the user has scrolled to, Refresh/Delete are already right there
+// with no need to scroll back.
+class RowActions {
+  init(p) {
+    this.el = document.createElement('div');
+    this.el.style.display = 'flex'; this.el.style.gap = '4px'; this.el.style.height = '100%'; this.el.style.alignItems = 'center';
+    if (p.data.payroll_status !== 'Initial') return;
+    this.el.innerHTML =
+      '<button type="button" data-act="refresh" title="' + (AR ? 'تحديث من الموظف' : 'Refresh from Employee') +
+        '" style="border:none;background:transparent;cursor:pointer;color:#2563eb;font-size:14px;">↻</button>' +
+      '<button type="button" data-act="delete" title="' + (AR ? 'حذف' : 'Delete') +
+        '" style="border:none;background:transparent;cursor:pointer;color:#dc2626;font-size:14px;">✕</button>';
+    const rid = p.data.id;
+    this.el.querySelector('[data-act="refresh"]').addEventListener('click', () => refreshRow(rid));
+    this.el.querySelector('[data-act="delete"]').addEventListener('click', () => deleteRow(rid));
+  }
+  getGui() { return this.el; }
+}
+
+function buildColumnDefs() {
+  const moneyFmt = (p) => money(p.value);
+  const numCol = (field, headerName, width) => ({
+    field, headerName, width: width || 110,
+    editable: (p) => cellEditable(field, p.data),
+    cellClass: (p) => cellClassFor(field, p.data),
+    valueFormatter: moneyFmt,
+  });
+  const moneyCol = (field, headerName, width, extra) => ({
+    field, headerName, width: width || 120, valueFormatter: moneyFmt, ...(extra || {}),
+  });
+  const col = (field, headerName, width, extra) => ({ field, headerName, width: width || 120, ...(extra || {}) });
+  // Kept as a no-op passthrough at call sites that opted into a header total
+  // before every column got PrHeader (which now shows a total for any
+  // SUMMABLE_SET field on its own, with or without this wrapper).
+  const withHeaderTotal = (c) => c;
+  // Every data column (anything but the pinned Action columns) gets
+  // PrHeader (name + color-swatch trigger + total when summable) and a
+  // custom-color cellStyle -- applied once here rather than at each
+  // col()/numCol()/moneyCol() call site.
+  const withColumnHeader = (c) => (c.field && !c.field.startsWith('__')
+    ? { ...c, headerComponent: PrHeader, cellStyle: (p) => cellStyleFor(c.field, p.data) }
+    : c);
+
+  const actionsColLeft = {
+    field: '__actions', headerName: AR ? 'إجراءات' : 'Action', width: 90, pinned: 'left',
+    sortable: false, filter: false, floatingFilter: false, resizable: false, suppressColumnsToolPanel: true,
+    cellRenderer: RowActions, cellStyle: { overflow: 'visible' },
+  };
+
+  const pillRenderer = (colorMap) => (p) => {
+    const c = colorMap[p.value] || colorMap._default;
+    return '<span style="padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:700;background:' +
+      c.bg + ';color:' + c.fg + ';">' + (p.value || '') + '</span>';
+  };
+
+  const cols = [
+    col('id', AR ? 'المعرّف' : 'Id', 70, { filter: 'agNumberColumnFilter' }),
+    col('payroll_id', AR ? 'رقم الكشف' : 'Payroll ID', 110),
+    {
+      field: 'payroll_status', headerName: AR ? 'حالة الكشف' : 'Payroll Status', width: 120,
+      cellRenderer: pillRenderer({
+        Post: { bg: '#e5e7eb', fg: '#374151' }, Ready: { bg: '#dcfce7', fg: '#15803d' },
+        _default: { bg: '#dbeafe', fg: '#1e40af' },
+      }),
+    },
+    col('salary_order', AR ? 'أمر الراتب' : 'Salary Order', 110),
+    col('month_from', AR ? 'من تاريخ' : 'Month From', 105),
+    col('month_to', AR ? 'إلى تاريخ' : 'Month To', 105),
+    col('month', AR ? 'الشهر' : 'Month', 100),
+    col('kafeel', AR ? 'الكفيل' : 'Kafeel', 130),
+    col('buyer_name', AR ? 'المشتري' : 'Buyer', 140, { valueFormatter: (p) => shortName(p.value) }),
+    col('buyer_department', AR ? 'القسم' : 'Department', 140),
+    col('location', AR ? 'الموقع' : 'Location', 120),
+    {
+      field: 'sheet_no', headerName: AR ? 'رقم الشيت' : 'Sheet No', width: 100,
+      editable: (p) => cellEditable('sheet_no', p.data), cellClass: (p) => editableClass('sheet_no', p.data),
+    },
+    col('employee_code', AR ? 'كود الموظف' : 'Employee Code', 110),
+    col('employee_name', AR ? 'اسم الموظف' : 'Employee Name', 160),
+    col('profession', AR ? 'المهنة' : 'Profession', 130),
+    col('nationality', AR ? 'الجنسية' : 'Nationality', 110),
+    col('iqama', AR ? 'الإقامة' : 'Iqama', 115),
+    col('salary_category', AR ? 'فئة الراتب' : 'Salary Category', 130),
+    col('salary_type', AR ? 'نوع الراتب' : 'Salary Type', 105),
+    moneyCol('day_hour', AR ? 'ساعات/اليوم' : 'Day Hour', 100),
+    withHeaderTotal(moneyCol('basic_salary', AR ? 'الراتب الأساسي' : 'Basic Salary', 125)),
+    withHeaderTotal(moneyCol('allowance', AR ? 'البدل' : 'Allowance', 105)),
+    withHeaderTotal(col('days', AR ? 'الأيام' : 'Days', 75, { filter: 'agNumberColumnFilter' })),
+    withHeaderTotal(col('fridays', AR ? 'الجمع' : 'Fridays', 80, {
+      filter: 'agNumberColumnFilter', cellClass: (p) => cellClassFor('fridays', p.data),
+    })),
+    withHeaderTotal(numCol('holidays', AR ? 'الإجازات' : 'Holidays', 95)),
+    withHeaderTotal(numCol('absent', AR ? 'الغياب' : 'Absent', 95)),
+    withHeaderTotal(moneyCol('monthly_salary', AR ? 'الراتب الشهري' : 'Monthly Salary', 125)),
+    withHeaderTotal(numCol('total_hours', AR ? 'إجمالي الساعات' : 'Total Hours', 115)),
+    withHeaderTotal(moneyCol('working_hour', AR ? 'ساعات العمل' : 'Working Hour', 115)),
+    withHeaderTotal(moneyCol('ot_hour', AR ? 'ساعات إضافية' : 'OT Hour', 95, {
+      cellClass: (p) => cellClassFor('ot_hour', p.data),
+    })),
+    withHeaderTotal(numCol('extra_ot', AR ? 'إضافي إضافي' : 'Extra OT', 100)),
+    numCol('ot_rate', AR ? 'سعر الإضافي' : 'OT Rate', 100),
+    withHeaderTotal(moneyCol('ot_amount', AR ? 'مبلغ الإضافي' : 'OT Amount', 115)),
+    withHeaderTotal(numCol('bonus', AR ? 'مكافأة' : 'Bonus', 100)),
+    withHeaderTotal(numCol('deduction', AR ? 'خصم' : 'Deduction', 100)),
+    withHeaderTotal(moneyCol('total_salary', AR ? 'إجمالي الراتب' : 'Total Salary', 125)),
+    withHeaderTotal(numCol('advance', AR ? 'سلفة' : 'Advance', 100)),
+    withHeaderTotal(numCol('credit', AR ? 'دائن' : 'Credit', 100)),
+    withHeaderTotal(moneyCol('salary_payable', AR ? 'صافي المستحق' : 'Salary Payable', 130)),
+    withHeaderTotal(numCol('paid', AR ? 'المدفوع' : 'Paid', 100)),
+    withHeaderTotal(moneyCol('balance', AR ? 'الرصيد' : 'Balance', 100)),
+    col('employ_payroll_status', AR ? 'فردي/مزدوج' : 'Single/Double', 115),
+    {
+      field: 'payment_status', headerName: AR ? 'حالة الدفع' : 'Payment Status', width: 120,
+      editable: (p) => cellEditable('payment_status', p.data), cellClass: (p) => editableClass('payment_status', p.data),
+      cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['Ready', 'Hold'] },
+      cellRenderer: pillRenderer({ Hold: { bg: '#fee2e2', fg: '#991b1b' }, _default: { bg: '#dcfce7', fg: '#15803d' } }),
+    },
+    col('iqama_expiry', AR ? 'انتهاء الإقامة' : 'Iqama Expiry', 115),
+    {
+      field: 'status', headerName: AR ? 'الحالة' : 'Status', width: 110,
+      editable: (p) => cellEditable('status', p.data), cellClass: (p) => editableClass('status', p.data),
+      cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['Active', 'Inactive'] },
+    },
+    col('bank_code', AR ? 'رمز البنك' : 'Bank Code', 100),
+    col('iban_no', AR ? 'رقم الآيبان' : 'IBAN No', 150),
+    moneyCol('po_rate', AR ? 'سعر أمر الشراء' : 'PO Rate', 100),
+    moneyCol('po_ot_rate', AR ? 'سعر إضافي أمر الشراء' : 'PO OT Rate', 110),
+    withHeaderTotal(moneyCol('services_charges', AR ? 'رسوم الخدمات' : 'Services Charges', 130)),
+    withHeaderTotal(moneyCol('invoice_amount', AR ? 'مبلغ الفاتورة' : 'Invoice Amount', 130)),
+  ];
+  return [actionsColLeft].concat(cols.map(withColumnHeader));
+}
+
+// Applies a field change to one row: Initial-status rows stage locally
+// (no server round-trip until Save Changes); anything else still editable
+// (payment_status on a Ready row) commits immediately. Used by both direct
+// typing and the native AG-Grid fill handle -- both funnel through
+// onCellValueChanged the same way.
+function onCellValueChanged(params) {
+  const field = params.colDef.field;
+  const row = params.data;
+  if (params.newValue === params.oldValue) return;
+
+  if (row.payroll_status === 'Initial') {
+    pendingEdits[row.id] = pendingEdits[row.id] || {};
+    pendingEdits[row.id][field] = params.newValue;
+    computeTotals();
+    refreshHeaders();
+    gridApi.refreshCells({ rowNodes: [params.node], force: true });
+    renderUnsavedBar();
+    return;
+  }
+
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF_TOKEN);
+  fd.set(field, INT_FIELDS.has(field) ? String(parseInt(params.newValue || 0, 10)) : String(params.newValue == null ? '' : params.newValue));
+  fetch('/payroll/' + row.id + '/edit', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin', body: fd,
+  }).then(r => r.json()).then(res => {
+    if (!res.ok) {
+      flash(res.error || (AR ? 'تعذّر الحفظ' : 'Save failed'), false);
+      row[field] = params.oldValue;
+      gridApi.refreshCells({ rowNodes: [params.node], force: true });
+      return;
+    }
+    flash(AR ? 'تم الحفظ' : 'Saved', true);
+    Object.assign(row, res.row || {});
+    gridApi.refreshCells({ rowNodes: [params.node], force: true });
+    computeTotals();
+    refreshHeaders();
+  }).catch(() => {
+    flash(AR ? 'فشل الاتصال بالخادم' : 'Server connection failed', false);
+    row[field] = params.oldValue;
+    gridApi.refreshCells({ rowNodes: [params.node], force: true });
+  });
+}
+
+function renderUnsavedBar() {
+  const count = Object.keys(pendingEdits).length;
+  let bar = document.getElementById('prUnsavedBar');
+  if (!count) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'prUnsavedBar';
+    bar.className = 'pr-unsaved-bar';
+    GRID_ROOT_EL.parentNode.insertBefore(bar, GRID_ROOT_EL);
+  }
+  bar.innerHTML =
+    '<span>' + (AR ? `${count} صف يحتوي تغييرات غير محفوظة` : `${count} row(s) with unsaved changes`) + '</span>' +
+    '<button type="button" class="pr-btn pr-btn-primary" id="prBtnSaveAll"' + (saving ? ' disabled' : '') + '>' +
+      (saving ? (AR ? 'جارٍ الحفظ...' : 'Saving...') : (AR ? 'حفظ التغييرات' : 'Save Changes')) + '</button>' +
+    '<button type="button" class="pr-btn pr-btn-gray" id="prBtnDiscardAll"' + (saving ? ' disabled' : '') + '>' +
+      (AR ? 'تجاهل' : 'Discard') + '</button>';
+  document.getElementById('prBtnSaveAll').addEventListener('click', saveAllPending);
+  document.getElementById('prBtnDiscardAll').addEventListener('click', discardPending);
+}
+
+async function saveAllPending() {
+  const rowIds = Object.keys(pendingEdits);
+  if (!rowIds.length) return;
+  saving = true; renderUnsavedBar();
+  // Sequential, not Promise.all: the server re-scans the whole month's rows
+  // for duplicate-employee detection on every save, and two of those
+  // transactions overlapping is enough for SQL Server to deadlock one of
+  // them (Error 1205) -- one at a time avoids that entirely.
+  const results = [];
+  for (const rid of rowIds) {
+    const fields = pendingEdits[rid];
+    const fd = new FormData();
+    fd.set('csrf_token', CSRF_TOKEN);
+    Object.entries(fields).forEach(([f, v]) => {
+      fd.set(f, INT_FIELDS.has(f) ? String(parseInt(v || 0, 10)) : String(v == null ? '' : v));
+    });
+    const res = await fetch('/payroll/' + rid + '/edit', {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin', body: fd,
+    }).then((r) => r.json()).catch(() => ({ ok: false }));
+    results.push({ rid, res });
+  }
+  saving = false;
+  const failedIds = results.filter((r) => !r.res.ok).map((r) => r.rid);
+  if (failedIds.length) {
+    // Keep only the rows that failed staged, so already-saved ones don't re-send.
+    const next = {};
+    failedIds.forEach((rid) => { if (pendingEdits[rid]) next[rid] = pendingEdits[rid]; });
+    pendingEdits = next;
+    flash(AR ? `فشل حفظ ${failedIds.length} صف` : `Failed to save ${failedIds.length} row(s)`, false);
+  } else {
+    pendingEdits = {};
+    flash(AR ? `تم حفظ ${rowIds.length} صف` : `Saved ${rowIds.length} row(s)`, true);
+  }
+  renderUnsavedBar();
+  load();
+}
+
+function discardPending() {
+  if (!Object.keys(pendingEdits).length) return;
+  if (!confirm(AR ? 'تجاهل كل التغييرات غير المحفوظة؟' : 'Discard all unsaved changes?')) return;
+  pendingEdits = {};
+  renderUnsavedBar();
+  load();
+}
+
+// ── GRL (General Receipt Ledger) section ────────────────────────────
+function prMoney(v){ return Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function prTogGrlSec(btn){
+  const body = document.getElementById('prGrlSecBody');
+  const icon = btn.querySelector('.fa-chevron-down, .fa-chevron-up');
+  const show = body.style.display === 'none';
+  body.style.display = show ? '' : 'none';
+  if (icon) icon.className = show ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+}
+
+/* header = {je_no, grl_no, origion, posting_date, document_date, narration};
+   lines = array of {code, control_account, reference_code, account_name,
+   account_name_ar, debit, credit, narration} -- same shape whether it came
+   from the real posted GRL's `details` or from the live /grl-preview. */
+function prRenderGrl(header, lines, emptyMsg){
+  const g = id => document.getElementById(id);
+  g('prgrl_je_no').value = header ? (header.je_no || '') : '';
+  g('prgrl_no').value = header ? (header.grl_no || '') : '';
+  g('prgrl_origion').value = header ? (header.origion || '') : '';
+  g('prgrl_posting_date').value = header ? (header.posting_date || '') : '';
+  g('prgrl_document_date').value = header ? (header.document_date || '') : '';
+  g('prgrl_narration').value = header ? (header.narration || '') : '';
+  const body = g('prGrlDetailBody');
+  lines = lines || [];
+  if (!lines.length){
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#9ca3af;padding:10px;">' +
+      (emptyMsg || (AR ? 'لم يتم إنشاء الكشف بعد' : 'This payroll has not been generated yet')) + '</td></tr>';
+    g('prGrlTotDebit').textContent = prMoney(0);
+    g('prGrlTotCredit').textContent = prMoney(0);
+    g('prGrlBalance').innerHTML = '';
+    return;
+  }
+  let td = 0, tc = 0;
+  body.innerHTML = lines.map(l => {
+    td += Number(l.debit)||0; tc += Number(l.credit)||0;
+    return `<tr>
+      <td>${l.code||''}</td><td>${l.control_account||''}</td><td>${l.reference_code||''}</td>
+      <td>${l.account_name||''}</td><td>${l.account_name_ar||''}</td>
+      <td style="text-align:right;">${l.debit ? prMoney(l.debit) : ''}</td>
+      <td style="text-align:right;">${l.credit ? prMoney(l.credit) : ''}</td>
+      <td>${l.narration||''}</td>
+    </tr>`;
+  }).join('');
+  g('prGrlTotDebit').textContent = prMoney(td);
+  g('prGrlTotCredit').textContent = prMoney(tc);
+  const bal = g('prGrlBalance');
+  if (Math.abs(td - tc) < 0.005){
+    bal.innerHTML = '<span style="color:#16a34a;font-weight:700;"><i class="fas fa-check-circle me-1"></i>' + (AR?'متوازن':'Balanced') + '</span>';
+  } else {
+    bal.innerHTML = '<span style="color:#dc2626;font-weight:700;"><i class="fas fa-exclamation-circle me-1"></i>' + (AR?'غير متوازن':'Not balanced') + '</span>';
+  }
+}
+
+// Refreshed by load() itself (the one place every grid refresh already
+// funnels through: initial page load, openPayroll(), and every doSetFlow/
+// doRefreshAll reload), so the panel always reflects whichever batch is
+// currently in the Payroll ID filter without needing its own separate
+// wiring at each call site. Shows the real persisted GRL once this batch
+// has actually been Posted; before that, shows a live (unsaved) preview
+// of the two records Post would create, computed from the batch's current
+// total -- mirrors how Purchase/Sales preview a GRN/PINV before Post.
+function prLoadGrl(payrollId){
+  const card = document.getElementById('prGrlCard');
+  const badge = document.getElementById('prGrlPreviewBadge');
+  if (!payrollId){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  fetch('/payroll/' + encodeURIComponent(payrollId) + '/grl', { credentials: 'same-origin' })
+    .then(r => r.json()).then(res => {
+      if (res.ok && res.grl && res.grl.details && res.grl.details.length){
+        badge.style.display = 'none';
+        prRenderGrl(res.grl, res.grl.details);
+        return;
+      }
+      // Not posted yet: fall back to the live preview.
+      fetch('/payroll/' + encodeURIComponent(payrollId) + '/grl-preview', { credentials: 'same-origin' })
+        .then(r => r.json()).then(pres => {
+          if (!pres.ok) { badge.style.display = 'none'; prRenderGrl(null, []); return; }
+          if (pres.lines && pres.lines.length){
+            badge.style.display = '';
+            prRenderGrl({origion: pres.origion, posting_date: pres.posting_date,
+                         document_date: pres.document_date, narration: pres.narration}, pres.lines);
+          } else {
+            badge.style.display = 'none';
+            prRenderGrl(null, [], pres.error || null);
+          }
+        });
+    });
+}
+
+// The GRL section's own Post button is the only way to move a batch INTO
+// Post (Post is no longer an option in the Edit Payroll Status dropdown,
+// which now only toggles Initial <-> Ready) -- so it's only ever enabled
+// when the currently loaded batch's status is Ready, matching the
+// "post-only" mutation rule: moving accounting is a deliberate, explicit
+// action, never a side effect of a routine status-dropdown change.
+function prUpdatePostBtnState(rows){
+  const btn = document.getElementById('prGrlPostBtn');
+  const hint = document.getElementById('prGrlPostHint');
+  if (!btn) return;
+  const status = (rows && rows.length) ? rows[0].payroll_status : null;
+  if (status === 'Ready'){
+    btn.disabled = false;
+    hint.textContent = '';
+  } else {
+    btn.disabled = true;
+    hint.textContent = status === 'Post'
+      ? (AR ? 'تم الترحيل بالفعل' : 'Already posted')
+      : (AR ? 'يتطلب حالة "جاهز"' : 'Requires status Ready');
+  }
+}
+
+function load() {
+  if (!gridApi) return;
+  gridApi.setGridOption('loading', true);
+  const pid = document.getElementById('fltPayrollId').value.trim();
+  prLoadGrl(pid);
+  const params = new URLSearchParams();
+  if (pid) params.set('payroll_id', pid);
+  fetch(DATA_URL + (params.toString() ? ('?' + params.toString()) : ''), { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      let list = Array.isArray(data) ? data : [];
+      // Re-apply any not-yet-saved local edits on top of the fresh server
+      // data, so Load/Refresh doesn't silently discard pending changes.
+      if (Object.keys(pendingEdits).length) {
+        list = list.map((row) => (pendingEdits[row.id] ? { ...row, ...pendingEdits[row.id] } : row));
+      }
+      currentRows = list;
+      gridApi.setGridOption('rowData', list);
+      gridApi.setGridOption('loading', false);
+      computeTotals();
+      refreshHeaders();
+      prUpdatePostBtnState(list);
+    })
+    .catch(() => { gridApi.setGridOption('loading', false); flash(AR ? 'تعذّر التحميل' : 'Failed to load data', false); });
+}
+window.__prLoad = load;
+// Exposed so both the plain-DOM "leave the page" guard (registered once,
+// below) and the Load button can check/act on pending local edits without
+// needing their own copy of this state.
+window.__prHasPending = () => Object.keys(pendingEdits).length > 0;
+window.__prSaveAllPending = saveAllPending;
+
+function refreshRow(id) {
+  fetch('/payroll/' + id + '/refresh', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin' })
+    .then(r => r.json()).then(res => {
+      if (!res.ok) { flash(res.error || (AR ? 'فشل التحديث' : 'Refresh failed'), false); return; }
+      flash(AR ? 'تم التحديث' : 'Refreshed', true);
+      load();
+    });
+}
+
+function deleteRow(id) {
+  if (!confirm(AR ? 'حذف هذا الصف؟' : 'Delete this row?')) return;
+  fetch('/payroll/' + id + '/delete', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin' })
+    .then(r => r.json()).then(res => {
+      if (!res.ok) { flash(res.error || (AR ? 'فشل الحذف' : 'Delete failed'), false); return; }
+      flash(AR ? 'تم الحذف' : 'Deleted', true);
+      load();
+    });
+}
+
+function doRefreshAll(reload) {
+  const pid = document.getElementById('fltPayrollId').value.trim();
+  if (!pid) { flash(AR ? 'أدخل رقم الكشف أولاً' : 'Enter a Payroll ID first', false); return; }
+  fetch('/payroll/' + encodeURIComponent(pid) + '/refresh-all', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin',
+  }).then(r => r.json()).then(res => {
+    if (!res.ok) { flash(res.error || (AR ? 'فشل التحديث' : 'Refresh failed'), false); return; }
+    flash((AR ? 'تم تحديث ' : 'Refreshed ') + res.refreshed + (AR ? ' صف' : ' rows'), true);
+    reload();
+  });
+}
+
+function doSetFlow(target, reload) {
+  const pid = document.getElementById('fltPayrollId').value.trim();
+  if (!pid) { flash(AR ? 'أدخل رقم الكشف أولاً' : 'Enter a Payroll ID first', false); return; }
+  const labels = {
+    Initial: AR ? 'أولي' : 'Initial',
+    Ready: AR ? 'جاهز' : 'Ready',
+    Post: AR ? 'مرحّل' : 'Post',
+  };
+  const label = labels[target] || target;
+  if (!confirm((AR ? 'تعيين حالة الكشف إلى "' : 'Set payroll status to "') + label +
+               (AR ? '"؟' : '"?'))) {
+    document.getElementById('selEditFlow').value = '';
+    return;
+  }
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF_TOKEN);
+  fd.set('flow', target);
+  fetch('/payroll/' + encodeURIComponent(pid) + '/set-flow', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin', body: fd,
+  }).then(r => r.json()).then(res => {
+    if (!res.ok) { flash(res.error || (AR ? 'فشلت العملية' : 'Action failed'), false); return; }
+    flash(AR ? 'تم التحديث' : 'Updated', true);
+    reload();
+  });
+}
+
+function openAddEmployeeModal(reload) {
+  const pid = document.getElementById('fltPayrollId').value.trim();
+  if (!pid) { flash(AR ? 'أدخل رقم الكشف أولاً' : 'Enter a Payroll ID first', false); return; }
+
+  MODAL_ROOT_EL.innerHTML =
+    '<div class="pr-modal-backdrop" id="prModalBackdrop"><div class="pr-modal">' +
+    '<h4>' + (AR ? 'إضافة موظف' : 'Add Employee') + '</h4>' +
+    '<div id="prEmpList" style="font-size:13px;color:#6b7280;">' + (AR ? 'جارٍ التحميل...' : 'Loading...') + '</div>' +
+    '<div class="pr-actions" style="margin-top:14px;"><button type="button" class="pr-btn pr-btn-gray" id="prModalClose">' +
+    (AR ? 'إغلاق' : 'Close') + '</button></div></div></div>';
+
+  document.getElementById('prModalClose').addEventListener('click', () => { MODAL_ROOT_EL.innerHTML = ''; });
+  document.getElementById('prModalBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'prModalBackdrop') MODAL_ROOT_EL.innerHTML = '';
+  });
+
+  fetch('/payroll/' + encodeURIComponent(pid) + '/available-employees', { credentials: 'same-origin' })
+    .then(r => r.json()).then(list => {
+      const box = document.getElementById('prEmpList');
+      if (!box) return;
+      if (!list.length) { box.textContent = AR ? 'لا يوجد موظفون مطابقون' : 'No matching employees'; return; }
+      box.innerHTML = '';
+      list.forEach(emp => {
+        const row = document.createElement('div');
+        row.className = 'pr-emp-row';
+        row.innerHTML = '<span>' + emp.employee_name + ' <span style="color:#9ca3af;">(' + (emp.profession || '') + ')</span></span>';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = emp.already_in_payroll ? (AR ? 'مضاف (تكرار)' : 'Added (dup)') : (AR ? 'إضافة' : 'Add');
+        btn.addEventListener('click', () => {
+          const fd = new FormData();
+          fd.set('csrf_token', CSRF_TOKEN);
+          fd.set('employee_id', emp.employee_id);
+          fetch('/payroll/' + encodeURIComponent(pid) + '/add-employee', {
+            method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin', body: fd,
+          }).then(r => r.json()).then(res => {
+            if (!res.ok) { flash(res.error || (AR ? 'فشل' : 'Failed'), false); return; }
+            flash(AR ? 'تمت الإضافة' : 'Added', true);
+            reload();
+            btn.disabled = true;
+            btn.textContent = AR ? 'تمت الإضافة' : 'Added';
+          });
+        });
+        row.appendChild(btn);
+        box.appendChild(row);
+      });
+    });
+}
+
+// ── Unsaved-changes guard: any in-app link click (sidebar nav, the
+// Reports link, My Account, Logout, etc.) while Initial-status edits are
+// still pending gets intercepted with a Save/Discard/Cancel choice
+// instead of silently losing them. `onProceed` runs once the user has
+// either discarded or successfully saved everything. ──
+function confirmDiscardOrSave(onProceed) {
+  MODAL_ROOT_EL.innerHTML =
+    '<div class="pr-modal-backdrop" id="prLeaveBackdrop"><div class="pr-modal" style="width:420px;">' +
+    '<h4>' + (AR ? 'تغييرات غير محفوظة' : 'Unsaved Changes') + '</h4>' +
+    '<p style="font-size:13px;color:#4b5563;">' +
+    (AR
+      ? 'لديك تعديلات في كشف الرواتب لم تُحفظ بعد. ماذا تريد أن تفعل؟'
+      : "You have payroll edits that haven't been saved yet. What would you like to do?") +
+    '</p>' +
+    '<div class="pr-actions" style="margin-top:14px;justify-content:flex-end;">' +
+      '<button type="button" class="pr-btn pr-btn-gray" id="prLeaveCancel">' + (AR ? 'إلغاء' : 'Cancel') + '</button>' +
+      '<button type="button" class="pr-btn pr-btn-red" id="prLeaveDiscard">' + (AR ? 'تجاهل والمتابعة' : 'Discard & Continue') + '</button>' +
+      '<button type="button" class="pr-btn pr-btn-primary" id="prLeaveSave">' + (AR ? 'حفظ والمتابعة' : 'Save & Continue') + '</button>' +
+    '</div></div></div>';
+
+  const close = () => { MODAL_ROOT_EL.innerHTML = ''; };
+  document.getElementById('prLeaveCancel').addEventListener('click', close);
+  document.getElementById('prLeaveBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'prLeaveBackdrop') close();
+  });
+  document.getElementById('prLeaveDiscard').addEventListener('click', () => {
+    close();
+    onProceed();
+  });
+  document.getElementById('prLeaveSave').addEventListener('click', async () => {
+    const btn = document.getElementById('prLeaveSave');
+    btn.disabled = true;
+    btn.textContent = AR ? 'جارٍ الحفظ...' : 'Saving...';
+    await window.__prSaveAllPending();
+    close();
+    if (window.__prHasPending && window.__prHasPending()) return;   // some rows failed -- stay put
+    onProceed();
+  });
+}
+
+// Registered once: intercepts clicks on any real link (sidebar nav,
+// breadcrumbs, the Reports link, My Account, Logout...) while there are
+// unsaved local edits. Uses the capture phase so it runs before the
+// page-panel launcher in base.html gets a chance to act.
+document.addEventListener('click', function (e) {
+  if (!window.__prHasPending || !window.__prHasPending()) return;
+  const link = e.target.closest('a[href]');
+  if (!link) return;
+  const href = link.getAttribute('href');
+  if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+  if (link.target && link.target !== '_self') return;   // opens a new tab -- this page isn't going anywhere
+  e.preventDefault();
+  e.stopPropagation();
+  confirmDiscardOrSave(() => { window.location.href = href; });
+}, true);
+
+window.addEventListener('beforeunload', (e) => {
+  if (Object.keys(pendingEdits).length) { e.preventDefault(); e.returnValue = ''; }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  defaultColumnDefs = buildColumnDefs();
+
+  gridApi = agGrid.createGrid(GRID_ROOT_EL, {
+    columnDefs: defaultColumnDefs,
+    rowData: [],
+    getRowId: (p) => String(p.data.id),
+    stopEditingWhenCellsLoseFocus: true,
+    enterNavigatesVertically: true,
+    enterNavigatesVerticallyAfterEdit: true,
+    enableRangeSelection: true,
+    enableFillHandle: true,
+    onCellValueChanged,
+    getRowClass: (p) => rowClassFor(p.data),
+    pagination: true, paginationPageSize: 25, paginationPageSizeSelector: [10, 25, 50, 100],
+    animateRows: true, enableRtl: AR,
+    headerHeight: 56,
+    defaultColDef: {
+      sortable: true, unSortIcon: true, resizable: true,
+      filter: 'agTextColumnFilter', floatingFilter: true,
+    },
+    getRowStyle(p) { return p.node.rowIndex % 2 === 0 ? { background: '#fff' } : { background: '#fafbfc' }; },
+    onFilterChanged() {
+      // Excel SUBTOTAL-style: header totals re-sum only the rows the
+      // active filter(s) currently leave visible.
+      computeTotals();
+      refreshHeaders();
+    },
+    onColumnResized(e) {
+      if (!e.finished || !gridApi) return;
+      const widths = loadColWidths();
+      gridApi.getColumnState().forEach((s) => { widths[s.colId] = s.width; });
+      saveColWidths(widths);
+    },
+    onColumnVisible() {
+      if (!gridApi) return;
+      const vis = loadColVisibility();
+      gridApi.getColumnState().forEach((s) => { vis[s.colId] = !!s.hide; });
+      saveColVisibility(vis);
+    },
+    onGridReady() {
+      if (window.GridKit) GridKit.enhance({ api: gridApi }, 'payrollGridRoot', { storageKey: 'payroll_list', exportName: 'Payroll', toolbar: '.pr-toolbar', hidePivot: true, noColumnColors: true });
+      const widths = loadColWidths();
+      const vis = loadColVisibility();
+      const state = defaultColumnDefs.map((c) => {
+        const s = { colId: c.field };
+        if (widths[c.field]) s.width = widths[c.field];
+        if (vis[c.field] !== undefined) s.hide = !!vis[c.field];
+        return s;
+      });
+      gridApi.applyColumnState({ state, applyOrder: false });
+      load();
+    },
+  });
+
+  window.payrollPrevPage = () => gridApi && gridApi.paginationGoToPreviousPage();
+  window.payrollNextPage = () => gridApi && gridApi.paginationGoToNextPage();
+  window.payrollSetPageSize = (size) => gridApi && gridApi.paginationSetPageSize(size);
+  document.getElementById('btnLoad').addEventListener('click', () => {
+    if (window.__prHasPending()) { confirmDiscardOrSave(load); return; }
+    load();
+  });
+  document.getElementById('btnRefreshAll').addEventListener('click', () => doRefreshAll(load));
+  document.getElementById('btnAddEmployee').addEventListener('click', () => openAddEmployeeModal(load));
+  document.getElementById('prGrlPostBtn').addEventListener('click', () => doSetFlow('Post', load));
+});
+</script>
+{% endblock %}

@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% set ar = current_locale != 'en' %}
+{% block title %}{{ owner.name }} – Seller MS{% endblock %}
+
+{% block extra_css %}
+<style>
+:root{
+  --navy:#1e3a5f;--blue:#2563eb;--blue-dk:#1d4ed8;--blue-50:#eff6ff;--blue-100:#dbeafe;
+  --green:#16a34a;--green-50:#f0fdf4;--teal:#0d9488;--teal-50:#f0fdfa;
+  --gray-50:#f8fafc;--gray-100:#f1f5f9;--gray-200:#e2e8f0;
+  --gray-300:#d1d5db;--gray-400:#9ca3af;--gray-600:#4b5563;--gray-700:#374151;--gray-900:#111827;
+  --red:#ef4444;--amber:#f59e0b;--purple:#7c3aed;--purple-50:#faf5ff;
+}
+
+/* ── Profile Header ── */
+.sv-header{
+  background:linear-gradient(135deg,#0f2040 0%,var(--navy) 40%,#1a56db 100%);
+  border-radius:16px;padding:28px 32px;margin-bottom:22px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;
+  box-shadow:0 8px 32px rgba(30,58,95,.25);
+  position:relative;overflow:hidden;
+}
+.sv-header::before{
+  content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;
+  border-radius:50%;background:rgba(255,255,255,.04);pointer-events:none;
+}
+.sv-avatar{
+  width:68px;height:68px;border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,255,255,.25),rgba(255,255,255,.1));
+  border:2px solid rgba(255,255,255,.3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;font-weight:800;color:#fff;flex-shrink:0;
+  box-shadow:0 4px 12px rgba(0,0,0,.2);
+}
+.sv-name{color:#fff;font-size:20px;font-weight:800;margin:0 0 2px;letter-spacing:-.2px;}
+.sv-name-ar{color:rgba(255,255,255,.7);font-size:13px;margin-bottom:8px;direction:rtl;}
+.sv-code{background:rgba(255,255,255,.15);color:#fff;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;font-family:monospace;border:1px solid rgba(255,255,255,.2);}
+.sv-status-active  {background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.sv-status-inactive{background:rgba(255,255,255,.15);color:rgba(255,255,255,.8);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.sv-meta-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;}
+.sv-header-btns{display:flex;gap:8px;flex-wrap:wrap;z-index:1;}
+.sv-hdr-stat{display:flex;flex-direction:column;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 18px;min-width:80px;}
+.sv-hdr-stat-val{font-size:22px;font-weight:800;color:#fff;}
+.sv-hdr-stat-lbl{font-size:10px;color:rgba(255,255,255,.6);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
+
+/* ── Cards ── */
+.sv-card{background:#fff;border:1px solid var(--gray-200);border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05);margin-bottom:16px;}
+.sv-card:last-child{margin-bottom:0;}
+.sv-card-header{padding:13px 18px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;}
+.sv-card-title{font-size:13px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;}
+.sv-card-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.sv-card-body{padding:0;}
+
+/* ── Info Rows ── */
+.sv-info-row{display:flex;align-items:flex-start;padding:10px 18px;border-bottom:1px solid var(--gray-100);font-size:13px;}
+.sv-info-row:last-child{border-bottom:none;}
+.sv-info-label{width:200px;flex-shrink:0;font-weight:600;color:var(--gray-500,#6b7280);font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;padding-top:1px;}
+.sv-info-value{color:var(--gray-900);word-break:break-word;font-size:13px;}
+.sv-info-value a{color:var(--blue);text-decoration:none;}
+.sv-info-value a:hover{text-decoration:underline;}
+.sv-info-value.mono{font-family:monospace;font-size:12.5px;color:var(--gray-700);}
+
+/* ── Bank Table ── */
+.sv-bank-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.sv-bank-tbl thead tr{background:var(--navy);}
+.sv-bank-tbl thead th{padding:10px 14px;color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+.sv-bank-tbl tbody tr{border-bottom:1px solid var(--gray-100);transition:background .1s;}
+.sv-bank-tbl tbody tr:last-child{border-bottom:none;}
+.sv-bank-tbl tbody tr:hover{background:var(--blue-50);}
+.sv-bank-tbl tbody tr.is-primary{background:var(--green-50);}
+.sv-bank-tbl td{padding:11px 14px;color:var(--gray-700);vertical-align:middle;}
+.sv-bank-tbl .mono{font-family:monospace;font-size:11.5px;color:var(--gray-600);}
+.primary-badge{background:#dcfce7;color:#15803d;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:4px;}
+.sv-bank-name-cell strong{font-size:13px;color:var(--navy);}
+.sv-bank-name-cell small{font-size:11px;color:var(--gray-400);direction:rtl;display:block;margin-top:1px;}
+.sv-branch-cell{font-size:12.5px;}
+.sv-branch-cell small{font-size:11px;color:var(--gray-400);direction:rtl;display:block;margin-top:1px;}
+.sv-empty{text-align:center;padding:36px;color:var(--gray-400);}
+.sv-empty i{font-size:28px;display:block;margin-bottom:8px;opacity:.25;}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  .sv-header{padding:20px;flex-direction:column;align-items:flex-start;}
+  .sv-info-row{flex-direction:column;gap:3px;}
+  .sv-info-label{width:100%;}
+  .sv-bank-tbl{font-size:11px;}
+  .sv-bank-tbl thead th,.sv-bank-tbl td{padding:8px 10px;}
+}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{{ t('home') }}</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('sellers.list_owners') }}">{{ t('owners') }}</a></li>
+<li class="breadcrumb-item active">{{ owner.name }}</li>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- PROFILE HEADER                                             -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="sv-header">
+  <!-- Left: Avatar & Info -->
+  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+    <div class="sv-avatar">{{ (owner.name or 'S')[0].upper() }}</div>
+    <div>
+      <div class="sv-name">{{ owner.name }}</div>
+      {% if owner.name_ar %}
+      <div class="sv-name-ar">{{ owner.name_ar }}</div>
+      {% endif %}
+      <div class="sv-meta-row">
+        <span class="sv-code">{{ owner.owner_code or '—' }}</span>
+        <span class="sv-status-{{ owner.status or 'active' }}">{{ (owner.status or 'active')|title }}</span>
+        {% if owner.city %}
+        <span style="color:rgba(255,255,255,.7);font-size:12px;">
+          <i class="fas fa-map-marker-alt me-1"></i>{{ owner.city }}
+        </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Stats -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <div class="sv-hdr-stat">
+      <span class="sv-hdr-stat-val">{{ banks|length }}</span>
+      <span class="sv-hdr-stat-lbl">{{ t('banks') }}</span>
+    </div>
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('sellers.list_owners') }}?edit={{ owner.id }}" 
+       class="btn btn-sm" 
+       style="background:rgba(255,255,255,.2);color:#fff;border:1.5px solid rgba(255,255,255,.35);text-decoration:none;">
+      <i class="fas fa-arrow-left me-1"></i>{{ t('back') }}
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- OWNER INFORMATION CARDS                                   -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+  <!-- ── Card 1: Identification ── -->
+  <div class="sv-card">
+    <div class="sv-card-header">
+      <div class="sv-card-title">
+        <span class="sv-card-icon" style="background:#eff6ff;">
+          <i class="fas fa-id-card" style="color:var(--blue);"></i>
+        </span>
+        {{ t('identification') }}
+      </div>
+    </div>
+    <div class="sv-card-body">
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('code') }}</span>
+        <span class="sv-info-value mono">{{ owner.owner_code or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('vat_number') }}</span>
+        <span class="sv-info-value mono">{{ owner.vat_number or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('crn') }}</span>
+        <span class="sv-info-value mono">{{ owner.crn or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('status') }}</span>
+        <span class="sv-info-value">{{ (owner.status or 'active')|title }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('created') }}</span>
+        <span class="sv-info-value">{{ owner.created_at.strftime('%d %b %Y') if owner.created_at else '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('updated') }}</span>
+        <span class="sv-info-value">{{ owner.updated_at.strftime('%d %b %Y') if owner.updated_at else '—' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Card 2: Contact ── -->
+  <div class="sv-card">
+    <div class="sv-card-header">
+      <div class="sv-card-title">
+        <span class="sv-card-icon" style="background:#f0fdf4;">
+          <i class="fas fa-phone" style="color:var(--green);"></i>
+        </span>
+        {{ t('contact') }}
+      </div>
+    </div>
+    <div class="sv-card-body">
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('phone') }}</span>
+        <span class="sv-info-value mono">
+          {% if owner.phone %}<a href="tel:{{ owner.phone }}">{{ owner.phone }}</a>{% else %}—{% endif %}
+        </span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('fax') }}</span>
+        <span class="sv-info-value mono">{{ owner.fax or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('email') }}</span>
+        <span class="sv-info-value">
+          {% if owner.email %}<a href="mailto:{{ owner.email }}">{{ owner.email }}</a>{% else %}—{% endif %}
+        </span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('website') }}</span>
+        <span class="sv-info-value">
+          {% if owner.website %}<a href="{{ owner.website }}" target="_blank">{{ owner.website }}</a>{% else %}—{% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Card 3: Address (English) ── -->
+  <div class="sv-card">
+    <div class="sv-card-header">
+      <div class="sv-card-title">
+        <span class="sv-card-icon" style="background:#fffbeb;">
+          <i class="fas fa-map-marker-alt" style="color:var(--amber);"></i>
+        </span>
+        {{ t('address_en') }}
+      </div>
+    </div>
+    <div class="sv-card-body">
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('street') }}</span>
+        <span class="sv-info-value">{{ owner.street_name or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('building_no') }}</span>
+        <span class="sv-info-value">{{ owner.building_number or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('additional_no') }}</span>
+        <span class="sv-info-value">{{ owner.additional_number or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('district') }}</span>
+        <span class="sv-info-value">{{ owner.district or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('city') }}</span>
+        <span class="sv-info-value">{{ owner.city or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('postal_code') }}</span>
+        <span class="sv-info-value">{{ owner.postal_code or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('country') }}</span>
+        <span class="sv-info-value">{{ owner.country or '—' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Card 4: Address (Arabic) ── -->
+  <div class="sv-card">
+    <div class="sv-card-header">
+      <div class="sv-card-title">
+        <span class="sv-card-icon" style="background:#fffbeb;">
+          <i class="fas fa-map-marker-alt" style="color:var(--amber);"></i>
+        </span>
+        {% if ar %}العنوان ({{ configured_lang_native }}){% else %}Address ({{ configured_lang_native }}){% endif %}
+      </div>
+    </div>
+    <div class="sv-card-body" dir="rtl">
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('street') }}</span>
+        <span class="sv-info-value">{{ owner.street_name_ar or '—' }}</span>
+      </div>
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('building_no') }}</span>
+        <span class="sv-info-value">{{ owner.building_number or '—' }}</span>
+      </div>
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('additional_no') }}</span>
+        <span class="sv-info-value">{{ owner.additional_number or '—' }}</span>
+      </div>
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('district') }}</span>
+        <span class="sv-info-value">{{ owner.district_ar or '—' }}</span>
+      </div>
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('city') }}</span>
+        <span class="sv-info-value">{{ owner.city_ar or '—' }}</span>
+      </div>
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('postal_code') }}</span>
+        <span class="sv-info-value">{{ owner.postal_code or '—' }}</span>
+      </div>
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('country') }}</span>
+        <span class="sv-info-value">{{ owner.country_ar or '—' }}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- BANK ACCOUNTS                                              -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="sv-card" style="margin-top:16px;">
+  <div class="sv-card-header">
+    <div class="sv-card-title">
+      <span class="sv-card-icon" style="background:var(--teal-50);">
+        <i class="fas fa-university" style="color:var(--teal);"></i>
+      </span>
+      {{ t('bank_accounts') }}
+    </div>
+    <span style="font-size:11px;color:var(--gray-400);font-weight:600;">
+      {{ banks|length }} {% if ar %}{{ t('account_word') }}{% else %}account{{ 's' if banks|length != 1 }}{% endif %}
+    </span>
+  </div>
+  <div class="sv-card-body">
+    {% if banks %}
+    <div style="overflow-x:auto;">
+      <table class="sv-bank-tbl">
+        <thead>
+          <tr>
+            <th>{{ t('bank_name') }}</th>
+            <th>{{ t('branch') }}</th>
+            <th>{{ t('account_no') }}</th>
+            <th>IBAN</th>
+            <th>SWIFT</th>
+            <th>{{ t('primary') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in banks %}
+          <tr class="{{ 'is-primary' if b.is_primary else '' }}">
+            <td class="sv-bank-name-cell">
+              <strong>{{ b.bank_name or '—' }}</strong>
+              {% if b.bank_name_ar %}<small>{{ b.bank_name_ar }}</small>{% endif %}
+            </td>
+            <td class="sv-branch-cell">
+              {{ b.branch or '—' }}
+              {% if b.branch_ar %}<small>{{ b.branch_ar }}</small>{% endif %}
+            </td>
+            <td class="mono">{{ b.account_number or '—' }}</td>
+            <td class="mono" style="font-size:11.5px;">{{ b.iban or '—' }}</td>
+            <td class="mono">{{ b.swift_code or '—' }}</td>
+            <td>
+              {% if b.is_primary %}
+              <span class="primary-badge">
+                <i class="fas fa-check-circle"></i> 
+                {{ t('primary') }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="sv-empty">
+      <i class="fas fa-university"></i>
+      {{ t('no_bank_accounts_added') }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- WAREHOUSES                                                 -->
+<!-- ════════════════════════════════════════════════════════════ -->
+{% set warehouses = owner.warehouses.all() %}
+<div class="sv-card" style="margin-top:16px;">
+  <div class="sv-card-header">
+    <div class="sv-card-title">
+      <span class="sv-card-icon" style="background:#ecfeff;">
+        <i class="fas fa-warehouse" style="color:#0891b2;"></i>
+      </span>
+      {{ t('warehouses') }}
+    </div>
+    <span style="font-size:11px;color:var(--gray-400);font-weight:600;">
+      {{ warehouses|length }} {% if ar %}{{ t('warehouse_word') }}{% else %}warehouse{{ 's' if warehouses|length != 1 }}{% endif %}
+    </span>
+  </div>
+  <div class="sv-card-body">
+    {% if warehouses %}
+    <div style="overflow-x:auto;">
+      <table class="sv-bank-tbl">
+        <thead>
+          <tr>
+            <th>{{ t('warehouse_name') }}</th>
+            <th>{{ t('location') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in warehouses %}
+          <tr>
+            <td class="sv-bank-name-cell">
+              <strong>{{ w.warehouse_name or '—' }}</strong>
+              {% if w.warehouse_name_ar %}<small>{{ w.warehouse_name_ar }}</small>{% endif %}
+            </td>
+            <td>
+              {{ w.location or '—' }}
+              {% if w.location_ar %}<br><small>{{ w.location_ar }}</small>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="sv-empty">
+      <i class="fas fa-warehouse"></i>
+      {{ t('no_warehouses_added2') }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+ 
+    <div class="sv-hdr-stat">
+      <span class="sv-hdr-stat-val">{{ owner.warehouses.count() }}</span>
+      <span class="sv-hdr-stat-lbl">{{ t('warehouses') }}</span>
+    </div>
+ 
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- BACK BUTTON                                                -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div style="margin-top:20px;text-align:center;">
+  <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-1"></i>
+    {{ t('back_to_owners') }}
+  </a>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// No JavaScript needed for this view
+</script>
+{% endblock %}

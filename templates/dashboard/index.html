@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}لوحة التحكم{% else %}Dashboard{% endif %} – {% if ar %}نظام إدارة البائعين{% else %}Seller MS{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">{% if ar %}لوحة التحكم{% else %}Dashboard{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fas fa-tachometer-alt me-2 text-primary"></i>
+    {% if ar %}لوحة التحكم{% else %}Dashboard{% endif %}
+  </h1>
+  <p class="text-muted">{% if ar %}نظرة عامة على النظام{% else %}System Overview{% endif %}</p>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card stat-card-primary">
+      <div class="stat-icon"><i class="fas fa-users"></i></div>
+      <div class="stat-body">
+        <div class="stat-number">{{ stats.total }}</div>
+        <div class="stat-label">{% if ar %}إجمالي الملاك{% else %}Total Owners{% endif %}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card stat-card-success">
+      <div class="stat-icon"><i class="fas fa-user-check"></i></div>
+      <div class="stat-body">
+        <div class="stat-number">{{ stats.active }}</div>
+        <div class="stat-label">{% if ar %}الملاك النشطون{% else %}Active Owners{% endif %}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card stat-card-warning">
+      <div class="stat-icon"><i class="fas fa-user-times"></i></div>
+      <div class="stat-body">
+        <div class="stat-number">{{ stats.inactive }}</div>
+        <div class="stat-label">{% if ar %}الملاك غير النشطين{% else %}Inactive Owners{% endif %}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card stat-card-info">
+      <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
+      <div class="stat-body">
+        <div class="stat-number">{{ stats.new_month }}</div>
+        <div class="stat-label">{% if ar %}جدد هذا الشهر{% else %}New This Month{% endif %}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if stats.expiring_docs > 0 %}
+<div class="alert alert-warning d-flex align-items-center mb-4">
+  <i class="fas fa-exclamation-triangle fa-lg me-3"></i>
+  <div>
+    <strong>{% if ar %}تنبيه:{% else %}Alert:{% endif %}</strong>
+    {% if ar %}{{ stats.expiring_docs }} وثيقة تنتهي صلاحيتها خلال 30 يومًا.
+    {% else %}{{ stats.expiring_docs }} document(s) expiring within 30 days.{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <!-- Recent Owners Table -->
+  <div class="col-12 col-xl-8">
+    <div class="card card-modern">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-clock me-2 text-primary"></i>{% if ar %}أحدث الملاك{% else %}Recent Owners{% endif %}</h5>
+        <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-sm btn-outline-primary">
+          {% if ar %}عرض الكل{% else %}View All{% endif %}
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>{% if ar %}الكود{% else %}Code{% endif %}</th>
+                <th>{% if ar %}الاسم{% else %}Name{% endif %}</th>
+                <th>{% if ar %}جهة الاتصال{% else %}Contact{% endif %}</th>
+                <th>{% if ar %}الدولة{% else %}Country{% endif %}</th>
+                <th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for owner in recent_owners %}
+              <tr>
+                <td><a href="{{ url_for('sellers.list_owners') }}" class="fw-semibold text-primary">{{ owner.owner_code }}</a></td>
+                <td>{% if ar and owner.name_ar %}{{ owner.name_ar }}{% else %}{{ owner.name }}{% endif %}</td>
+                <td>{{ owner.phone or '—' }}</td>
+                <td>{% if ar and owner.country_ar %}{{ owner.country_ar }}{% else %}{{ owner.country or '—' }}{% endif %}</td>
+                <td>
+                  <span class="badge status-{{ owner.status }}">
+                    {% if ar %}
+                      {% if owner.status == 'active' %}نشط
+                      {% elif owner.status == 'inactive' %}غير نشط
+                      {% elif owner.status == 'pending' %}معلق
+                      {% else %}{{ owner.status }}{% endif %}
+                    {% else %}{{ owner.status | title }}{% endif %}
+                  </span>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-4">
+                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                {% if ar %}لا توجد بيانات{% else %}No owners yet{% endif %}
+              </td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="col-12 col-xl-4">
+    <div class="card card-modern mb-4">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-bolt me-2 text-warning"></i>{% if ar %}إجراءات سريعة{% else %}Quick Actions{% endif %}</h5>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          {% if current_user.is_admin() %}
+          <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-primary">
+            <i class="fas fa-user-plus me-2"></i>{% if ar %}إضافة مالك جديد{% else %}Add New Owner{% endif %}
+          </a>
+          {% endif %}
+          <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-outline-primary">
+            <i class="fas fa-list me-2"></i>{% if ar %}عرض جميع الملاك{% else %}View All Owners{% endif %}
+          </a>
+          <a href="{{ url_for('sellers.export_owners') }}" class="btn btn-outline-success">
+            <i class="fas fa-file-csv me-2"></i>{% if ar %}تصدير CSV{% else %}Export CSV{% endif %}
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="card card-modern">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-pie me-2 text-info"></i>{% if ar %}ملخص{% else %}Summary{% endif %}</h5>
+      </div>
+      <div class="card-body">
+        <div class="summary-item">
+          <span>{% if ar %}نشط{% else %}Active{% endif %}</span>
+          <div class="progress flex-grow-1 mx-3" style="height:8px">
+            <div class="progress-bar bg-success" style="width:{% if stats.total > 0 %}{{ (stats.active/stats.total*100)|int }}{% else %}0{% endif %}%"></div>
+          </div>
+          <span class="fw-bold">{{ stats.active }}</span>
+        </div>
+        <div class="summary-item mt-2">
+          <span>{% if ar %}غير نشط{% else %}Inactive{% endif %}</span>
+          <div class="progress flex-grow-1 mx-3" style="height:8px">
+            <div class="progress-bar bg-warning" style="width:{% if stats.total > 0 %}{{ (stats.inactive/stats.total*100)|int }}{% else %}0{% endif %}%"></div>
+          </div>
+          <span class="fw-bold">{{ stats.inactive }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% set ar = current_locale == 'ar' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if ar %}دفعة واردة{% else %}Incoming Payment{% endif %} · {{ doc.payment_no }}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+@page { size: A4; margin: 0; }
+html { font-size:13.5px; }
+html, body { background:#e6e9ef; }
+body { display:flex; justify-content:center; align-items:center; min-height:100vh; font-family:'Segoe UI','Arial',sans-serif; padding:20px 0; }
+.wrap { width:210mm; min-height:297mm; background:white; box-shadow:0 12px 30px rgba(0,0,0,.15); border:1px solid #d0d5de; padding:12mm 14mm; }
+.toolbar { width:210mm; margin:0 auto 10px; display:flex; justify-content:flex-end; gap:10px; }
+.toolbar button, .toolbar a { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; border:none; text-decoration:none; }
+.header-arabic { font-size:1.1rem; font-weight:600; color:#1e2a41; }
+.company-name { font-size:1.5rem; font-weight:700; color:#0b1a33; line-height:1.3; }
+.doc-badge { background:#f0f3f8; padding:.35rem 1.2rem; border-radius:8px; font-size:1rem; font-weight:700; color:#1f3a5f; border:1px solid #bcc3d0; text-align:center; }
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:.3rem 1.8rem; margin-top:1.2rem; border-top:2px solid #222; padding-top:1rem; }
+.field-group { display:flex; flex-wrap:wrap; align-items:baseline; border-bottom:1px dashed #dce1ea; padding:.35rem 0; gap:.4rem; }
+.field-group .label { font-weight:600; font-size:.8rem; color:#3d4d66; min-width:130px; text-transform:uppercase; }
+.field-group .value { font-weight:600; color:#111c2e; font-size:.9rem; }
+.lines-table { width:100%; border-collapse:collapse; margin-top:1.2rem; font-size:.85rem; border:1px solid #bcc4d2; }
+.lines-table th { background:#e9edf5; color:#1b2b44; font-weight:700; padding:.5rem .3rem; border:1px solid #b0bacb; text-align:center; }
+.lines-table td { padding:.5rem .3rem; border:1px solid #bdc6d6; text-align:center; background:white; }
+.totals-grid { display:grid; grid-template-columns:1fr 1fr; gap:.2rem 2rem; margin-top:1.2rem; border-top:2px solid #1f2f47; padding-top:1rem; }
+.total-line { display:flex; justify-content:space-between; padding:.3rem .1rem; border-bottom:1px solid #e2e7f0; font-size:.9rem; }
+.total-line .tlabel { font-weight:600; color:#1b314d; }
+.total-line .tvalue { font-weight:600; color:#0f1e34; }
+.total-line.bold { font-weight:700; font-size:1.05rem; border-bottom:2px solid #1b2f4a; }
+.amount-words { margin-top:.8rem; font-size:.85rem; font-style:italic; color:#374151; }
+.sign-row { display:flex; justify-content:space-between; margin-top:2.2rem; }
+.sign-box { width:30%; text-align:center; border-top:1px solid #667; padding-top:.4rem; font-size:.8rem; color:#3d4d66; }
+@media print {
+  html { font-size:13.5px; }
+  body { background:white; padding:0; display:block; }
+  .toolbar { display:none; }
+  .wrap { width:210mm; min-height:297mm; box-shadow:none; border:none; margin:0; page-break-after:avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button onclick="window.close()" style="background:white;color:#374151;border:1.5px solid #d1d5db;"><i class="fas fa-arrow-left"></i>{% if ar %}رجوع{% else %}Back{% endif %}</button>
+  <button onclick="window.print()" style="background:#2563eb;color:white;"><i class="fas fa-print"></i>{% if ar %}طباعة{% else %}Print{% endif %}</button>
+</div>
+
+<div class="wrap">
+
+  {# HEADER: Owner (our own company) identity + doc badge #}
+  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;border-bottom:2px solid #1a2b42;padding-bottom:.4rem;">
+    <div>
+      <div class="header-arabic">{{ owner.name_ar if owner and owner.name_ar else '—' }}</div>
+      <div class="company-name">{{ owner.name if owner else '—' }}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;margin-top:.2rem;font-size:.8rem;">
+        <span><span style="font-weight:600;">C.R :</span> {{ owner.crn if owner and owner.crn else '—' }}</span>
+        <span><span style="font-weight:600;">VAT :</span> {{ owner.vat_number if owner and owner.vat_number else '—' }}</span>
+      </div>
+    </div>
+    <div class="doc-badge">
+      {% if ar %}دفعة واردة{% else %}INCOMING PAYMENT{% endif %}<br>
+      <span style="font-size:1.1rem;">{{ doc.payment_no }}</span>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="field-group"><span class="label">{% if ar %}استلام من{% else %}Receive From{% endif %}</span><span class="value">{{ doc.receive_from_type }}{% if doc._receive_from_name() %} — {{ doc._receive_from_name() }}{% endif %}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}نوع الدفعة{% else %}Payment Type{% endif %}</span><span class="value">{{ doc.payment_type or '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}الحالة{% else %}Status{% endif %}</span><span class="value">{{ doc.status }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}تاريخ الدفع{% else %}Payment Date{% endif %}</span><span class="value">{{ doc.payment_date or '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</span><span class="value">{{ doc.posting_date or '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}طريقة الدفع{% else %}Payment Method{% endif %}</span><span class="value">{{ doc.payment_method.name if doc.payment_method else '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}حساب الدفع{% else %}Payment Account{% endif %}</span><span class="value">{{ doc.payment_account_id or '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}الرقم المرجعي{% else %}Reference No{% endif %}</span><span class="value">{{ doc.reference_no or '—' }}</span></div>
+  </div>
+
+  {% if doc.adjustment_lines %}
+  <table class="lines-table">
+    <thead>
+      <tr>
+        <th>{% if ar %}نوع المستند{% else %}Document Type{% endif %}</th>
+        <th>{% if ar %}رقم المستند{% else %}Document No{% endif %}</th>
+        <th>{% if ar %}التاريخ{% else %}Date{% endif %}</th>
+        <th>{% if ar %}المستحق{% else %}Outstanding{% endif %}</th>
+        <th>{% if ar %}الدفع{% else %}Payment{% endif %}</th>
+        <th>{% if ar %}المتبقي{% else %}Remaining{% endif %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ln in doc.adjustment_lines %}
+      <tr>
+        <td>{{ ln.document_type or '—' }}</td>
+        <td>{{ ln.document_no or '—' }}</td>
+        <td>{{ ln.document_date or '—' }}</td>
+        <td>{{ '%.2f'|format(ln.outstanding_amount or 0) }}</td>
+        <td>{{ '%.2f'|format(ln.payment_amount or 0) }}</td>
+        <td>{{ '%.2f'|format(ln.remaining_amount or 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% elif doc.gl_lines %}
+  <table class="lines-table">
+    <thead>
+      <tr>
+        <th>{% if ar %}الرمز{% else %}Code{% endif %}</th>
+        <th>{% if ar %}الاسم{% else %}Name{% endif %}</th>
+        <th>{% if ar %}رقم المستند{% else %}Document No{% endif %}</th>
+        <th>{% if ar %}الغرض{% else %}Purpose{% endif %}</th>
+        <th>{% if ar %}المبلغ{% else %}Amount{% endif %}</th>
+        <th>{% if ar %}الضريبة{% else %}VAT{% endif %}</th>
+        <th>{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ln in doc.gl_lines %}
+      <tr>
+        <td>{{ ln.code or '—' }}</td>
+        <td>{{ ln.name or '—' }}</td>
+        <td>{{ ln.document_no or '—' }}</td>
+        <td>{{ ln.purpose or '—' }}</td>
+        <td>{{ '%.2f'|format(ln.amount or 0) }}</td>
+        <td>{{ '%.2f'|format(ln.vat or 0) }}</td>
+        <td>{{ '%.2f'|format(ln.total or 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="totals-grid">
+    <div></div>
+    <div>
+      <div class="total-line"><span class="tlabel">{% if ar %}المجموع الفرعي{% else %}Subtotal{% endif %}</span><span class="tvalue">{{ '%.2f'|format(doc.total_amount or 0) }}</span></div>
+      <div class="total-line"><span class="tlabel">{% if ar %}الضريبة{% else %}VAT{% endif %}</span><span class="tvalue">{{ '%.2f'|format(doc.total_vat or 0) }}</span></div>
+      <div class="total-line bold"><span class="tlabel">{% if ar %}الإجمالي شامل الضريبة{% else %}Total incl. VAT{% endif %}</span><span class="tvalue">{{ '%.2f'|format(doc.total_amount_including_vat or 0) }}</span></div>
+    </div>
+  </div>
+
+  {% if doc.narration %}
+  <div class="amount-words">{% if ar %}ملاحظة:{% else %}Note:{% endif %} {{ doc.narration }}</div>
+  {% endif %}
+
+  <div class="sign-row">
+    <div class="sign-box">{% if ar %}أعده{% else %}Prepared By{% endif %}<br>{{ doc.creator.username if doc.creator else '' }}</div>
+    <div class="sign-box">{% if ar %}اعتمده{% else %}Approved By{% endif %}</div>
+    <div class="sign-box">{% if ar %}رحّله{% else %}Posted By{% endif %}<br>{{ doc.updater.username if doc.updater else '' }}</div>
+  </div>
+
+</div>
+</body>
+</html>

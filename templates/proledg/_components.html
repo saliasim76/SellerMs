@@ -1,0 +1,34 @@
+{% from "proledg/_icons.html" import icon %}
+
+{% macro checklist(items) -%}
+<ul class="checklist">
+  {% for item in items %}
+  <li><span class="check-ico">{{ icon('check') }}</span><span>{{ item }}</span></li>
+  {% endfor %}
+</ul>
+{%- endmacro %}
+
+{% macro faq(items) -%}
+<div class="faq-list">
+  {% for q, a in items %}
+  <div class="faq-item">
+    <button type="button" class="faq-question">
+      <span>{{ q }}</span>
+      <span class="faq-icon"></span>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">{{ a }}</div></div>
+  </div>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro cta_banner(title, desc, primary_text, primary_href, secondary_text, secondary_href) -%}
+<div class="cta-banner">
+  <h2>{{ title }}</h2>
+  <p>{{ desc }}</p>
+  <div class="cta-actions">
+    <a href="{{ primary_href }}" class="btn btn-on-accent">{{ primary_text }} {{ icon('arrow-right') }}</a>
+    {% if secondary_text %}<a href="{{ secondary_href }}" class="btn btn-outline-on-accent">{{ secondary_text }}</a>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
