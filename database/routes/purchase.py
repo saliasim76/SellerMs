@@ -1375,9 +1375,12 @@ def pq_delete(id):
 @login_required
 @permission_required('purchase', 'purchase_order', 'view')
 def po_list():
+    from models import Owner
     pqs = [{'id': p.purchase_quotation_id, 'doc_no': p.doc_no}
            for p in PurchaseQuotation.query.filter_by(status='Approved').order_by(PurchaseQuotation.purchase_quotation_id.desc()).all()]
-    return render_template('purchase/po_list.html', suppliers=_supplier_list(), pqs=pqs)
+    owner = Owner.query.first()
+    return render_template('purchase/po_list.html', suppliers=_supplier_list(), pqs=pqs,
+                           owner_warehouses=_owner_warehouses(owner.id) if owner else [])
 
 @pur_bp.route('/purchase/orders/data')
 @login_required
@@ -1755,8 +1758,10 @@ def _apply_grn_fields(doc, f, is_new):
     """
     po_id = int(f.get('po_id')) if f.get('po_id') else None
     if is_new:
-        po = PurchaseOrder.query.get(po_id) if po_id else None
-        if po_id and (not po or po.status != 'Approved'):
+        if not po_id:
+            raise ValueError('An Approved Purchase Order must be selected')
+        po = PurchaseOrder.query.get(po_id)
+        if not po or po.status != 'Approved':
             raise ValueError('Selected Purchase Order is not Approved')
     doc.purchase_order_id = po_id
     doc.supplier_id      = int(f.get('supplier_id')) if f.get('supplier_id') else None
@@ -2121,9 +2126,12 @@ def grl_get(grn_id):
 @login_required
 @permission_required('purchase', 'purchase_invoice', 'view')
 def pinv_list():
+    from models import Owner
     grns = [{'id':g.goods_receipt_note_id,'doc_no':g.doc_no,'purchase_order_id':g.purchase_order_id}
             for g in GoodsReceiptNote.query.filter_by(status='Approved').order_by(GoodsReceiptNote.goods_receipt_note_id.desc()).all()]
-    return render_template('purchase/pinv_list.html', suppliers=_supplier_list(), grns=grns)
+    owner = Owner.query.first()
+    return render_template('purchase/pinv_list.html', suppliers=_supplier_list(), grns=grns,
+                           owner_warehouses=_owner_warehouses(owner.id) if owner else [])
 
 @pur_bp.route('/purchase/invoices/data')
 @login_required
@@ -2142,16 +2150,23 @@ def pinv_json(id):
     return jsonify(d)
 
 def _zatca_tlv(tag, value):
-    """One ZATCA TLV field: 1-byte tag, 1-byte length, UTF-8 value."""
-    value_bytes = (value or '').encode('utf-8')
+    """One ZATCA TLV field: 1-byte tag, 1-byte length, value. `value` may be
+    a string (UTF-8 encoded, tags 1-5's plain-text fields) or raw bytes
+    (tags 6-9's binary hash/signature/key fields, passed through as-is)."""
+    value_bytes = value if isinstance(value, (bytes, bytearray)) else (value or '').encode('utf-8')
     return bytes([tag]) + bytes([len(value_bytes)]) + value_bytes
 
 
-def _zatca_qr_payload(seller_name, vat_number, timestamp_iso, total, vat_amount):
-    """Base64 TLV payload for a ZATCA-compliant Simplified Tax Invoice QR
-    code -- the exact 5 fields KSA's e-invoicing spec requires, in order:
-    (1) seller name, (2) seller VAT registration number, (3) invoice
-    timestamp, (4) invoice total incl. VAT, (5) VAT total."""
+def _zatca_qr_payload(seller_name, vat_number, timestamp_iso, total, vat_amount, extra_tags=None):
+    """Base64 TLV payload for a ZATCA-compliant Tax Invoice QR code -- the
+    5 Phase-1 fields KSA's e-invoicing spec requires, in order: (1) seller
+    name, (2) seller VAT registration number, (3) invoice timestamp,
+    (4) invoice total incl. VAT, (5) VAT total.
+
+    `extra_tags`, when given, is a list of (tag, value) pairs appended
+    after tag 5 -- used for Phase 2's tags 6-9 (invoice hash, digital
+    signature, public key, certificate signature). Existing callers that
+    never pass `extra_tags` are completely unaffected."""
     import base64
     payload = (
         _zatca_tlv(1, seller_name) +
@@ -2160,6 +2175,8 @@ def _zatca_qr_payload(seller_name, vat_number, timestamp_iso, total, vat_amount)
         _zatca_tlv(4, f'{total:.2f}') +
         _zatca_tlv(5, f'{vat_amount:.2f}')
     )
+    for tag, value in (extra_tags or []):
+        payload += _zatca_tlv(tag, value)
     return base64.b64encode(payload).decode('ascii')
 
 
@@ -2243,16 +2260,18 @@ def _apply_pinv_fields(doc, f, is_new):
     """Header + line items + attachments, shared by the plain-Save routes
     (pinv_add/pinv_edit) and pinv_post_and_save(). Does NOT touch GRL/Journal
     Entry -- posting is a separate, explicit step (Post & Save only).
-    The Goods Receipt Note is the required driver; the Purchase Order is
-    always derived from it server-side (never trusted from the client) so
-    the two can never disagree. Raises ValueError (caller turns it into a
-    400) if the GRN is missing or isn't Approved.
+
+    Dual mechanism: the Goods Receipt Note is OPTIONAL. When one is linked,
+    it (and the Purchase Order derived from it server-side, never trusted
+    from the client) drives the Supplier and the two can never disagree.
+    When no GRN is linked, this is a standalone invoice and the Supplier the
+    user picked manually in the form is used instead. Raises ValueError
+    (caller turns it into a 400) only if a GRN WAS selected but isn't
+    Approved.
     """
     grn_id = int(f.get('grn_id')) if f.get('grn_id') else None
     grn = GoodsReceiptNote.query.get(grn_id) if grn_id else None
-    if is_new and (not grn_id or not grn):
-        raise ValueError('Select a Goods Receipt Note')
-    if is_new and grn.status != 'Approved':
+    if grn_id and (not grn or grn.status != 'Approved'):
         raise ValueError('Selected Goods Receipt Note is not Approved')
 
     po_id = grn.purchase_order_id if grn else doc.purchase_order_id
@@ -2270,8 +2289,17 @@ def _apply_pinv_fields(doc, f, is_new):
 
     doc.purchase_order_id = po_id
     doc.goods_receipt_note_id = grn_id
-    doc.supplier_id = (grn.supplier_id if grn
-                       else ((po.supplier_id if po else None) if is_new else doc.supplier_id))
+    # Dual mechanism: a linked GRN always drives the Supplier (unchanged,
+    # never trusted from the client -- mechanism 1). With no GRN, this is a
+    # standalone invoice and the Supplier the user picked manually in the
+    # form is used instead (mechanism 2).
+    manual_supplier_id = int(f.get('supplier_id')) if f.get('supplier_id') else None
+    if grn:
+        doc.supplier_id = grn.supplier_id
+    elif manual_supplier_id:
+        doc.supplier_id = manual_supplier_id
+    elif is_new:
+        doc.supplier_id = po.supplier_id if po else None
     doc.supplier_ref_no = f.get('supplier_ref_no', '').strip()
     doc.account_code = f.get('account_code', '').strip() or None
     doc.status = status
@@ -2316,7 +2344,11 @@ def pinv_add():
 @login_required
 @permission_required_json('purchase', 'purchase_invoice', 'edit')
 def pinv_edit(id):
-    """Save Purchase Invoice: the document only -- see pinv_add()."""
+    """Save Purchase Invoice: the document only -- see pinv_add().
+
+    A Purchase Invoice never owns a Store Transaction of its own, whether or
+    not a GRN is linked: Store is only ever maintained at the GRN level.
+    """
     try:
         doc = PurchaseInvoice.query.get_or_404(id)
         _apply_pinv_fields(doc, request.form, is_new=False)
@@ -2502,6 +2534,9 @@ def pinv_post_and_save():
             ))
 
         doc.posting_status = 'Posted'
+        # Store is only ever maintained at the GRN level -- a Purchase
+        # Invoice never moves stock of its own, whether or not a GRN is
+        # linked.
         db.session.commit()
         return jsonify({'ok': True, 'id': doc.purchase_invoice_id, 'doc_no': doc.doc_no, 'grl': grl.to_dict()})
     except ValueError as e:
@@ -2525,10 +2560,11 @@ def pinv_post_and_save():
 @permission_required_json('purchase', 'purchase_invoice', 'delete')
 def pinv_delete(id):
     try:
+        doc = PurchaseInvoice.query.get_or_404(id)
         PurchaseInvoiceLineItem.query.filter_by(purchase_invoice_id=id).delete()
         PurchaseAttachment.query.filter_by(doc_type='PINV', doc_id=id).delete()
         GRL.query.filter_by(purchase_invoice_id=id).delete()
-        db.session.delete(PurchaseInvoice.query.get_or_404(id))
+        db.session.delete(doc)
         db.session.commit()
         return jsonify({'ok':True})
     except Exception as e:
@@ -2681,7 +2717,7 @@ def grr_add():
             supplier_id=pinv.supplier_id if pinv else (int(f.get('supplier_id')) if f.get('supplier_id') else None),
             contact_person=f.get('contact_person','').strip(),
             supplier_ref_no=f.get('supplier_ref_no','').strip(),
-            account_code=f.get('account_code','').strip() or None,
+            account_code=(pinv.account_code if pinv else f.get('account_code','').strip() or None),
             status=f.get('status','Open'),
             kind=pinv.kind if pinv else f.get('kind','Goods'),
             purchase_type=resolve_purchase_type(
@@ -2725,7 +2761,7 @@ def grr_edit(id):
         doc.supplier_id=pinv.supplier_id if pinv else (int(f.get('supplier_id')) if f.get('supplier_id') else None)
         doc.contact_person=f.get('contact_person','').strip()
         doc.supplier_ref_no=f.get('supplier_ref_no','').strip()
-        doc.account_code = f.get('account_code','').strip() or None
+        doc.account_code = pinv.account_code if pinv else (f.get('account_code','').strip() or None)
         doc.status=f.get('status','Open')
         doc.kind=pinv.kind if pinv else f.get('kind','Goods')
         doc.purchase_type = resolve_purchase_type(doc.kind, pinv.purchase_type if pinv else f.get('purchase_type'))
@@ -2813,10 +2849,10 @@ def _apply_prn_fields(doc, f, is_new):
     doc.contact_person   = f.get('contact_person', '').strip()
     doc.supplier_ref      = f.get('supplier_ref', '').strip()
     doc.owner_id          = int(f.get('owner_id')) if f.get('owner_id') else None
-    doc.account_code      = f.get('account_code', '').strip() or None
+    doc.account_code      = grr.account_code if grr else (f.get('account_code', '').strip() or None)
     doc.status            = f.get('status', 'Open')
-    doc.kind              = f.get('kind', 'Goods')
-    doc.purchase_type     = resolve_purchase_type(doc.kind, f.get('purchase_type'))
+    doc.kind              = grr.kind if grr else f.get('kind', 'Goods')
+    doc.purchase_type     = resolve_purchase_type(doc.kind, grr.purchase_type if grr else f.get('purchase_type'))
     doc.posting_date      = pd(f.get('posting_date')) or date.today()
     doc.delivery_date     = pd(f.get('delivery_date'))
     doc.document_date     = date.today()
@@ -3108,10 +3144,10 @@ def _apply_pdm_fields(doc, f, is_new):
     doc.contact_person = f.get('contact_person', '').strip()
     doc.supplier_ref_no = f.get('supplier_ref_no', '').strip()
     doc.owner_id = int(f.get('owner_id')) if f.get('owner_id') else None
-    doc.account_code = f.get('account_code', '').strip() or None
+    doc.account_code = prn.account_code if prn else (f.get('account_code', '').strip() or None)
     doc.status = f.get('status', 'Open')
-    doc.kind = f.get('kind', 'Goods')
-    doc.purchase_type = resolve_purchase_type(doc.kind, f.get('purchase_type'))
+    doc.kind = prn.kind if prn else f.get('kind', 'Goods')
+    doc.purchase_type = resolve_purchase_type(doc.kind, prn.purchase_type if prn else f.get('purchase_type'))
     doc.payment_method = f.get('payment_method', 'Credit')
     doc.bank_account_id = int(f.get('bank_account_id')) if f.get('bank_account_id') else None
     doc.posting_date = pd(f.get('posting_date')) or date.today()

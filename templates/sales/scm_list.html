@@ -386,20 +386,20 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               {# ── Row 1: Return Request + Buyer Info ── #}
               <div class="f-grid3" style="margin-bottom:12px;">
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}رقم طلب الإرجاع{% else %}Return Request No{% endif %} <span class="f-req">*</span></div>
-                  <select id="scm_srr_id" class="f-inp" onchange="onSRRChange()">
-                    <option value="">-- {% if ar %}اختر طلب إرجاع معتمد{% else %}Select an Approved Return Request{% endif %} --</option>
-                    {% for srr in srrs %}<option value="{{ srr.id }}">{{ srr.doc_no }}</option>{% endfor %}
+                  <div class="f-lbl">{% if ar %}رقم إشعار الإرجاع{% else %}Return Note No{% endif %} <span class="f-req">*</span></div>
+                  <select id="scm_srn_id" class="f-inp" onchange="onSRNChange()">
+                    <option value="">-- {% if ar %}اختر إشعار إرجاع معتمد{% else %}Select an Approved Return Note{% endif %} --</option>
+                    {% for srn in srns %}<option value="{{ srn.id }}">{{ srn.doc_no }}</option>{% endfor %}
                   </select>
                   {# Kind has no visible field on this form -- it's always inherited
-                     silently from the selected Return Request (see onSRRChange()),
+                     silently from the selected Return Note (see onSRNChange()),
                      never chosen directly here. #}
                   <input type="hidden" id="scm_kind" value="Goods">
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}</div>
                   <input type="text" id="scm_buyer_name" class="f-inp" readonly
-                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من طلب الإرجاع{% else %}Derived from the Return Request{% endif %}">
+                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من إشعار الإرجاع{% else %}Derived from the Return Note{% endif %}">
                   <input type="hidden" id="scm_buyer">
                 </div>
                 <div class="f-item">
@@ -409,11 +409,11 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
               </div>
 
-              {# ── Row 1b: Sale Invoice (derived from the selected Sales Return Request) ── #}
+              {# ── Row 1b: Sale Invoice (derived from the selected Sales Return Note) ── #}
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}فاتورة البيع{% else %}Sale Invoice{% endif %}</div>
-                  <input type="text" id="scm_si_no" class="f-inp" readonly style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من طلب الإرجاع{% else %}Derived from the Return Request{% endif %}">
+                  <input type="text" id="scm_si_no" class="f-inp" readonly style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من إشعار الإرجاع{% else %}Derived from the Return Note{% endif %}">
                 </div>
                 <div class="f-item"></div>
                 <div class="f-item"></div>
@@ -476,7 +476,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
-                  <select id="scm_account_code" class="f-inp" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                  <select id="scm_account_code" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من إشعار الإرجاع{% else %}Derived from the Return Note{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                   </select>
                 </div>
@@ -504,7 +504,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <span style="font-size:11px;color:#6b7280;">
                   <i class="fas fa-lock me-1"></i>
-                  {% if ar %}البنود موروثة من طلب الإرجاع وغير قابلة للتعديل{% else %}Items are inherited from the Return Request and locked{% endif %}
+                  {% if ar %}البنود موروثة من إشعار الإرجاع وغير قابلة للتعديل{% else %}Items are inherited from the Return Note and locked{% endif %}
                 </span>
                 <span style="font-size:11px;color:#6b7280;">
                   <i class="fas fa-info-circle me-1"></i>
@@ -699,7 +699,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 {% if is_basic_mode %}disabled title="{% if ar %}الترحيل مقفل في الخطة الأساسية{% else %}Posting is locked on the Basic plan{% endif %}"{% endif %}>
           <i class="fas fa-check me-1"></i>{% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}
         </button>
-        <button class="btn-f btn-save" onclick="saveSCM()">
+        <button class="btn-f btn-save" id="scmSaveBtn" onclick="saveSCM()">
           <i class="fas fa-save me-1"></i>{% if ar %}حفظ مذكرة الخصم / Save{% else %}Save Credit Memo / حفظ{% endif %}
         </button>
       </div>
@@ -758,11 +758,25 @@ function grlCollapseSec(){
    once this SCM has already been posted (duplicate-posting prevention). */
 function grlUpdatePostBtnState(){
   const btn = document.getElementById('grlPostBtn');
-  if(!btn) return;
-  btn.disabled = _scmPosted;
-  btn.style.opacity = _scmPosted ? '0.55' : '1';
-  btn.style.cursor = _scmPosted ? 'not-allowed' : 'pointer';
-  btn.title = _scmPosted ? (IS_AR?'تم ترحيل إشعار دائن البيع هذا مسبقاً.':'This Sales Credit Memo has already been posted.') : '';
+  const saveBtn = document.getElementById('scmSaveBtn');
+  const statusEl = document.getElementById('scm_status');
+  const notApproved = !_scmPosted && statusEl && statusEl.value !== 'Approved';
+  if(btn){
+    btn.disabled = _scmPosted || notApproved;
+    btn.style.opacity = (_scmPosted || notApproved) ? '0.55' : '1';
+    btn.style.cursor = (_scmPosted || notApproved) ? 'not-allowed' : 'pointer';
+    btn.title = _scmPosted
+      ? (IS_AR?'تم ترحيل إشعار دائن البيع هذا مسبقاً.':'This Sales Credit Memo has already been posted.')
+      : notApproved
+        ? (IS_AR?'يجب أن تكون الحالة "معتمد" قبل الترحيل.':'Status must be Approved before posting.')
+        : '';
+  }
+  if(saveBtn){
+    saveBtn.disabled = _scmPosted;
+    saveBtn.style.opacity = _scmPosted ? '0.55' : '1';
+    saveBtn.style.cursor = _scmPosted ? 'not-allowed' : 'pointer';
+    saveBtn.title = _scmPosted ? (IS_AR?'تم ترحيل إشعار دائن البيع هذا مسبقاً.':'This Sales Credit Memo has already been posted.') : '';
+  }
 }
 
 /* ══ Document Number Fetch ══ */
@@ -803,50 +817,55 @@ function switchTab(tabId, btn) {
   btn.classList.add('active');
 }
 
-/* ══ Return Request selection → auto-fill buyer + LOCKED line items ══ */
-let _srrPullInProgress = false;
+/* ══ Return Note selection → auto-fill buyer + LOCKED line items ══ */
+let _srnPullInProgress = false;
 
-async function onSRRChange() {
-  const srrId = document.getElementById('scm_srr_id').value;
-  if (!srrId) {
+async function onSRNChange() {
+  const srnId = document.getElementById('scm_srn_id').value;
+  if (!srnId) {
     document.getElementById('scm_buyer').value = '';
     document.getElementById('scm_buyer_name').value = '';
     document.getElementById('scm_si_no').value = '';
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0; recalcSummary(); updLiCount();
-    if(typeof grlPreviewFromSRR==='function') grlPreviewFromSRR('');
+    if(typeof grlPreviewFromSRN==='function') grlPreviewFromSRN('');
     return;
   }
-  _srrPullInProgress = true;
+  _srnPullInProgress = true;
   try {
-    const res = await fetch('/sales/returns/' + srrId + '/summary');
-    if (!res.ok) throw new Error('Failed to fetch return request');
-    const srr = await res.json();
+    const res = await fetch('/sales/return-notes/' + srnId + '/summary');
+    if (!res.ok) throw new Error('Failed to fetch return note');
+    const srn = await res.json();
 
-    document.getElementById('scm_buyer').value = srr.buyer_id || '';
-    document.getElementById('scm_buyer_name').value = srr.buyer_name || '';
-    document.getElementById('scm_si_no').value = srr.si_no || '';
-    if (srr.buyer_ref_no) document.getElementById('scm_buyer_ref').value = srr.buyer_ref_no;
-    if (srr.contact_person) document.getElementById('scm_contact').value = srr.contact_person;
+    document.getElementById('scm_buyer').value = srn.buyer_id || '';
+    document.getElementById('scm_buyer_name').value = srn.buyer_name || '';
+    document.getElementById('scm_si_no').value = srn.si_no || '';
+    if (srn.buyer_ref) document.getElementById('scm_buyer_ref').value = srn.buyer_ref;
+    if (srn.contact_person) document.getElementById('scm_contact').value = srn.contact_person;
 
-    // ⭐ Kind comes from the selected Sales Return Request (there is no
+    // ⭐ Kind comes from the selected Sales Return Note (there is no
     // visible Kind field on this form -- it's carried through silently).
-    if (srr.kind) document.getElementById('scm_kind').value = srr.kind;
+    if (srn.kind) document.getElementById('scm_kind').value = srn.kind;
+
+    // ⭐ Account Code comes from the selected Sales Return Note, falling
+    // back to the S1 default only if the Return Note itself has none set.
+    const srnAccVal = srn.account_code || (TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+    document.getElementById('scm_account_code').innerHTML = accountCodeOptionsHtml(srnAccVal);
 
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0;
-    if (srr.items && srr.items.length > 0) {
-      srr.items.forEach(li => addLiRow(li));
+    if (srn.items && srn.items.length > 0) {
+      srn.items.forEach(li => addLiRow(li));
     } else {
       addLiRow();
     }
     recalcSummary(); updLiCount();
-    if(typeof grlPreviewFromSRR==='function') grlPreviewFromSRR(srrId);
+    if(typeof grlPreviewFromSRN==='function') grlPreviewFromSRN(srnId);
   } catch (e) {
-    console.error('Failed to load return request:', e);
-    alert(IS_AR ? 'فشل تحميل طلب الإرجاع' : 'Failed to load Sales Return Request');
+    console.error('Failed to load return note:', e);
+    alert(IS_AR ? 'فشل تحميل إشعار الإرجاع' : 'Failed to load Sales Return Note');
   } finally {
-    _srrPullInProgress = false;
+    _srnPullInProgress = false;
   }
 }
 
@@ -862,12 +881,13 @@ function onScmStatusChange() {
     postEl.disabled = true;
     postEl.value = '';
   }
+  grlUpdatePostBtnState();
 }
 
-/* ══ Account Code (header) — populated from the sales tax code master.
-   Line items are locked/inherited from the source Return Request, so there
-   is no cascade into line items here, only the header dropdown. ══ */
+/* ══ Account Code (header) — derived from the source Return Note (see
+   onSRNChange()); Line items are locked/inherited from it too. ══ */
 let TAX_CODES = [];
+const TAX_DEFAULT_CODE = 'S1';
 function taxCodeLabel(t) {
   return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
 }
@@ -1020,7 +1040,7 @@ async function openAddSCM() {
   document.getElementById('scm_status').value = 'Open';
   document.getElementById('scm_kind').value = 'Goods';
   document.getElementById('scm_buyer').value = '';
-  document.getElementById('scm_srr_id').value = '';
+  document.getElementById('scm_srn_id').value = '';
   document.getElementById('scm_si_no').value = '';
   document.getElementById('scm_doc_no').value = '';
   document.getElementById('scmDocBadge').textContent = '...';
@@ -1035,7 +1055,7 @@ async function openAddSCM() {
   const ownerSel = document.getElementById('scm_owner');
   ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
   const accSel = document.getElementById('scm_account_code');
-  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
 
   await fetchDocNo();
   if(typeof grlSyncMaster==='function') grlSyncMaster();
@@ -1084,8 +1104,9 @@ function openEditSCM(id) {
       document.getElementById('scm_doc_no').value = d.doc_no || '';
       document.getElementById('scmDocBadge').textContent = d.doc_no || '';
       document.getElementById('scm_status').value = d.status || 'Open';
+      grlUpdatePostBtnState();
       document.getElementById('scm_kind').value = d.kind || 'Goods';
-      document.getElementById('scm_srr_id').value = d.sales_return_request_id || '';
+      document.getElementById('scm_srn_id').value = d.sales_return_note_id || '';
       document.getElementById('scm_buyer').value = d.buyer_id || '';
       document.getElementById('scm_buyer_ref').value = d.buyer_ref_no || '';
       document.getElementById('scm_contact').value = d.contact_person || '';
@@ -1155,22 +1176,22 @@ async function saveSCM() {
     }
   }
   
-  if (!document.getElementById('scm_srr_id').value) {
-    alert(IS_AR ? 'يجب اختيار طلب إرجاع معتمد' : 'An Approved Sales Return Request must be selected');
+  if (!document.getElementById('scm_srn_id').value) {
+    alert(IS_AR ? 'يجب اختيار إشعار إرجاع معتمد' : 'An Approved Sales Return Note must be selected');
     return;
   }
-  if (_srrPullInProgress) {
-    alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات طلب الإرجاع' : 'Please wait — still loading data from the Return Request');
+  if (_srnPullInProgress) {
+    alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات إشعار الإرجاع' : 'Please wait — still loading data from the Return Note');
     return;
   }
-  
+
   const id  = document.getElementById('scm_id').value;
   const url = id ? `/sales/credit-memos/${id}/edit` : '/sales/credit-memos/add';
   const fd  = new FormData();
-  
+
   fd.set('csrf_token', CSRF);
   fd.set('status',         document.getElementById('scm_status').value);
-  fd.set('srr_id',          document.getElementById('scm_srr_id')?.value || '');
+  fd.set('srn_id',          document.getElementById('scm_srn_id')?.value || '');
   fd.set('kind',            document.getElementById('scm_kind')?.value || 'Goods');
   fd.set('buyer_id',      document.getElementById('scm_buyer').value);
   fd.set('contact_person', document.getElementById('scm_contact').value);
@@ -1370,15 +1391,15 @@ const cols = [
   {headerName:IS_AR?'رقم المستند':'Doc No',field:'doc_no',width:125,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'النوع':'Kind',field:'kind',width:100,filter:'agSetColumnFilter',filterParams:{values:['Goods','Services'],buttons:['apply','reset','clear']}},
   {headerName:IS_AR?'طريقة الدفع':'Payment Method',field:'payment_method',width:130,filter:'agSetColumnFilter',filterParams:{values:['Credit','Cash'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'رقم الإرجاع':'Return No',field:'srr_no',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'رقم الإرجاع':'Return No',field:'srn_no',width:120,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'المشتري':'Buyer',field:'buyer_name',minWidth:180,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'رقم مرجع المشتري':'Buyer Ref No',field:'buyer_ref_no',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'شخص الاتصال':'Contact Person',field:'contact_person',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
   {headerName:IS_AR?'حالة الترحيل':'Posting Status',field:'posting_status',width:120,cellRenderer:rPostingStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Saved','Posted'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
@@ -1703,14 +1724,14 @@ async function grlRenderTwoRecords(ln, silent){
    from the selected Sales Return Request's own line items (which the SCM's
    line items get pulled from 1:1) -- matching how GRL No / Je No already
    preview. */
-function grlPreviewFromSRR(srrId){
-  if(!srrId){
+function grlPreviewFromSRN(srnId){
+  if(!srnId){
     const body=document.getElementById('grlDetailBody');
     if(body) body.innerHTML=_grlEmptyDetailHtml();
     grlRecalc();
     return;
   }
-  fetch('/sales/returns/'+srrId+'/grl-preview?form=sales_credit_memo').then(r=>r.json()).then(async d=>{
+  fetch('/sales/return-notes/'+srnId+'/grl-preview?form=sales_credit_memo').then(r=>r.json()).then(async d=>{
     if(!d.ok || !d.lines || !d.lines.length) return;
     await grlRenderTwoRecords(d.lines[0], true);
   }).catch(e=>console.error('GRL preview failed:', e));
@@ -1730,19 +1751,19 @@ async function _buildSCMFormData() {
     }
   }
 
-  if (!document.getElementById('scm_srr_id').value) {
-    alert(IS_AR ? 'يجب اختيار طلب إرجاع معتمد' : 'An Approved Sales Return Request must be selected');
+  if (!document.getElementById('scm_srn_id').value) {
+    alert(IS_AR ? 'يجب اختيار إشعار إرجاع معتمد' : 'An Approved Sales Return Note must be selected');
     return null;
   }
-  if (_srrPullInProgress) {
-    alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات طلب الإرجاع' : 'Please wait — still loading data from the Return Request');
+  if (_srnPullInProgress) {
+    alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات إشعار الإرجاع' : 'Please wait — still loading data from the Return Note');
     return null;
   }
 
   const fd  = new FormData();
   fd.set('csrf_token', CSRF);
   fd.set('status',         document.getElementById('scm_status').value);
-  fd.set('srr_id',          document.getElementById('scm_srr_id')?.value || '');
+  fd.set('srn_id',          document.getElementById('scm_srn_id')?.value || '');
   fd.set('kind',            document.getElementById('scm_kind')?.value || 'Goods');
   fd.set('buyer_id',      document.getElementById('scm_buyer').value);
   fd.set('contact_person', document.getElementById('scm_contact').value);
@@ -1787,7 +1808,7 @@ async function grlPost(){
     return;
   }
   if(grlRowCount()===0){
-    alert(IS_AR?'لا توجد سجلات GRL لترحيلها. اختر طلب إرجاع بيع معتمد أولاً.':'No GRL detail records to post. Select an approved Sales Return Request first.');
+    alert(IS_AR?'لا توجد سجلات GRL لترحيلها. اختر إشعار إرجاع بيع معتمد أولاً.':'No GRL detail records to post. Select an approved Sales Return Note first.');
     return;
   }
   if(!grlValidate()) return;
@@ -1835,7 +1856,7 @@ async function grlPost(){
 }
 
 /* Not-yet-posted SCM (opened in Edit mode): preview the two GRL records
-   from its own already-saved line items -- mirrors grlPreviewFromSRR(),
+   from its own already-saved line items -- mirrors grlPreviewFromSRN(),
    used when adding, so Post & Save has something to submit either way. */
 async function grlPreviewFromSCM(scmId){
   try{

@@ -4,6 +4,7 @@ Save to: database/routes/employee_import.py
 """
 
 import io
+import csv
 import re
 import logging
 from datetime import datetime, date, timedelta
@@ -15,6 +16,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 from models import db, Employee, ProfessionMaster, EmployeeProfession
+from database.routes.shared import xlsx_safe
 
 emp_import_bp = Blueprint('emp_import', __name__)
 log = logging.getLogger('employee_import')
@@ -98,7 +100,7 @@ BOOL_FLDS = {'auto_code', 'is_active', 'is_muslim'}
 EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
 MOBILE_RE = re.compile(r'^\+?[\d\s\-\(\)]{7,20}$')
 
-ALLOWED_EXT = {'.xlsx', '.xls'}
+ALLOWED_EXT = {'.xlsx', '.xls', '.csv'}
 
 
 def _t(en, ar):
@@ -311,7 +313,28 @@ def load_lookups():
 @login_required
 @admin_required
 def download_template():
-    """Download sample Excel template with headers + example row."""
+    """Download sample Excel (default) or CSV (?fmt=csv) template with
+    headers + example row."""
+    sample = {
+        'Employee Code': '', 'Auto Code': 'No', 'Active': 'Yes', 'Muslim': 'Yes',
+        'Employee Name': 'Ahmed Ali', 'Employee Name Arabic': 'أحمد علي',
+        'Nationality': 'Pakistani', 'Profession': 'Welder',
+        'Birth Date': '1990-05-20',
+        'Mobile': '0501234567', 'Email': 'ahmed@example.com',
+        'Salary Type': 'salary', 'Basic Salary': 3000, 'Working Hours': 8,
+        'Overtime Ratio': 1.5, 'Passport Location': 'IN',
+    }
+
+    if (request.args.get('fmt') or '').lower() == 'csv':
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(HEADERS)
+        w.writerow([sample.get(h, '') for h in HEADERS])
+        data = buf.getvalue().encode('utf-8-sig')
+        return send_file(io.BytesIO(data), as_attachment=True,
+                         download_name='employee_import_template.csv',
+                         mimetype='text/csv')
+
     wb = Workbook()
     ws = wb.active
     ws.title = 'Employees'
@@ -325,15 +348,6 @@ def download_template():
         ws.column_dimensions[get_column_letter(i)].width = max(14, len(h) + 3)
     ws.freeze_panes = 'A2'
 
-    sample = {
-        'Employee Code': '', 'Auto Code': 'No', 'Active': 'Yes', 'Muslim': 'Yes',
-        'Employee Name': 'Ahmed Ali', 'Employee Name Arabic': 'أحمد علي',
-        'Nationality': 'Pakistani', 'Profession': 'Welder',
-        'Birth Date': '1990-05-20',
-        'Mobile': '0501234567', 'Email': 'ahmed@example.com',
-        'Salary Type': 'salary', 'Basic Salary': 3000, 'Working Hours': 8,
-        'Overtime Ratio': 1.5, 'Passport Location': 'IN',
-    }
     for i, h in enumerate(HEADERS, 1):
         ws.cell(row=2, column=i, value=sample.get(h, ''))
 
@@ -357,18 +371,27 @@ def import_employees():
     ext = ('.' + f.filename.rsplit('.', 1)[-1].lower()) if '.' in f.filename else ''
     if ext not in ALLOWED_EXT:
         return jsonify({'ok': False,
-                        'error': _t('Only .xlsx / .xls files are allowed.',
-                                    'يسمح فقط بملفات .xlsx / .xls')}), 400
+                        'error': _t('Only .xlsx / .xls / .csv files are allowed.',
+                                    'يسمح فقط بملفات .xlsx / .xls / .csv')}), 400
 
-    try:
-        wb = load_workbook(f, data_only=True, read_only=True)
-    except Exception:
-        return jsonify({'ok': False,
-                        'error': _t('Could not read the Excel file.',
-                                    'تعذر قراءة ملف الإكسل')}), 400
-
-    ws = wb.active
-    rows_iter = ws.iter_rows(values_only=True)
+    if ext == '.csv':
+        try:
+            text = f.read().decode('utf-8-sig', errors='replace')
+            all_rows = list(csv.reader(io.StringIO(text)))
+        except Exception:
+            return jsonify({'ok': False,
+                            'error': _t('Could not read the CSV file.',
+                                        'تعذر قراءة ملف CSV')}), 400
+        rows_iter = iter(all_rows)
+    else:
+        try:
+            wb = load_workbook(f, data_only=True, read_only=True)
+        except Exception:
+            return jsonify({'ok': False,
+                            'error': _t('Could not read the Excel file.',
+                                        'تعذر قراءة ملف الإكسل')}), 400
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
 
     try:
         header_row = next(rows_iter)
@@ -531,8 +554,8 @@ def download_failed():
 
     for r, fr in enumerate(payload['rows'], 2):
         for c, v in enumerate(fr['raw'], 1):
-            ws.cell(row=r, column=c, value=v)
-        ws.cell(row=r, column=len(headers), value=fr['error'])
+            ws.cell(row=r, column=c, value=xlsx_safe(v))
+        ws.cell(row=r, column=len(headers), value=xlsx_safe(fr['error']))
 
     buf = io.BytesIO()
     wb.save(buf)

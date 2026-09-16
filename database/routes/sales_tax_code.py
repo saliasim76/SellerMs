@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required
 from models import db, SalesTaxCode
+from database.routes.shared import block_trial_write_json
 import re
 
 sales_tax_bp = Blueprint('sales_tax', __name__)
@@ -30,6 +31,7 @@ def sales_tax_data():
 # ── Create ──────────────────────────────────────────────────────
 @sales_tax_bp.route('/sales-tax-codes/add', methods=['POST'])
 @login_required
+@block_trial_write_json
 def sales_tax_add():
     f = request.form
     account_code = f.get('account_code', '').strip()
@@ -95,6 +97,7 @@ def sales_tax_edit(id):
 # ── Delete ──────────────────────────────────────────────────────
 @sales_tax_bp.route('/sales-tax-codes/<int:id>/delete', methods=['POST'])
 @login_required
+@block_trial_write_json
 def sales_tax_delete(id):
     from database.routes.recycle_bin import soft_delete
     try:

@@ -137,6 +137,12 @@
 .ag-ab-del:hover { background:#dc2626; }
 .ag-ab-print { background:#2563eb; color:white; }
 .ag-ab-print:hover { background:#1d4ed8; }
+.ag-ab-pdf { background:#b91c1c; color:white; }
+.ag-ab-pdf:hover { background:#991b1b; }
+.ag-ab-zatca { background:#1e3a5f; color:white; }
+.ag-ab-zatca:hover { background:#15294a; }
+.ag-ab-zatca-xml { background:#15803d; color:white; }
+.ag-ab-zatca-xml:hover { background:#116932; }
 
 /* Status pill */
 .st-pill {
@@ -261,6 +267,15 @@
 .f-inp{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;transition:border-color .15s;font-family:inherit;box-sizing:border-box;}
 .f-inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
 .f-inp[readonly]{background:#f8fafc;color:#374151;}
+.party-detail-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin-top:12px;overflow:hidden;}
+.party-detail-title{font-size:12.5px;font-weight:700;color:#374151;margin-bottom:10px;}
+.party-detail-row{display:grid;grid-template-columns:90px minmax(0,1fr) minmax(0,1fr) 170px;gap:8px;padding:6px 0;border-bottom:1px dashed #e2e8f0;font-size:13px;align-items:center;}
+.party-detail-row:last-child{border-bottom:none;}
+.party-detail-lbl,.party-detail-val,.party-detail-lbl-ar,.party-detail-val-ar{min-width:0;overflow-wrap:break-word;word-break:break-word;}
+.party-detail-lbl{color:#6b7280;font-weight:600;}
+.party-detail-val{color:#111827;font-weight:600;}
+.party-detail-lbl-ar{color:#6b7280;font-weight:600;text-align:right;direction:rtl;}
+.party-detail-val-ar{color:#111827;font-weight:600;text-align:right;direction:rtl;}
 select.f-inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
 .po-selected-banner{background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;font-size:13px;}
 .po-selected-banner i{color:#16a34a;font-size:16px;}
@@ -383,8 +398,36 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
             </button>
             <div class="pur-section-body open">
 
-              {# ── Kind / Payment / Owner / Owner Bank ── #}
-              <div class="f-grid4" style="margin-bottom:14px;">
+              {# ── Row 1: Transaction Type / Kind / Payment ── #}
+              <div class="f-grid3" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}نوع المعاملة{% else %}Transaction Type{% endif %}</div>
+                  <select id="sinv_transaction_type" class="f-inp" onchange="onTxnTypeChange(); fetchDocNoForTxnType();"
+                          title="{% if ar %}يحدد بادئة رقم المستند وقائمة الفواتير المرجعية (قياسي / مبسط){% else %}Determines the document number's prefix and which saved invoices you can reference (standard / simplified){% endif %}">
+                    <option value="">-- {% if ar %}اختر{% else %}Select{% endif %} --</option>
+                    <optgroup label="{% if ar %}قياسي{% else %}Standard{% endif %}">
+                      <option value="STD-INV">{% if ar %}فاتورة قياسية (STD-INV){% else %}Standard Invoice (STD-INV){% endif %}</option>
+                      <option value="STD-DR">{% if ar %}مدين قياسي (STD-DR){% else %}Standard Debit Note (STD-DR){% endif %}</option>
+                      <option value="STD-CR">{% if ar %}دائن قياسي (STD-CR){% else %}Standard Credit Note (STD-CR){% endif %}</option>
+                    </optgroup>
+                    <optgroup label="{% if ar %}مبسط{% else %}Simplified{% endif %}">
+                      <option value="SIM-INV">{% if ar %}فاتورة مبسطة (SIM-INV){% else %}Simplified Invoice (SIM-INV){% endif %}</option>
+                      <option value="SIM-DR">{% if ar %}مدين مبسط (SIM-DR){% else %}Simplified Debit Note (SIM-DR){% endif %}</option>
+                      <option value="SIM-CR">{% if ar %}دائن مبسط (SIM-CR){% else %}Simplified Credit Note (SIM-CR){% endif %}</option>
+                    </optgroup>
+                    {# Legacy values kept selectable-but-hidden so an invoice created
+                       before the dropdown was consolidated still shows its real,
+                       original transaction type when opened for edit, instead of a
+                       blank selection -- never offered to a new document. #}
+                    <option value="STD_INV" hidden>{% if ar %}فاتورة قياسية (قديم){% else %}Standard Invoice (legacy){% endif %}</option>
+                    <option value="STD_CR" hidden>{% if ar %}دائن قياسي (قديم){% else %}Standard Credit (legacy){% endif %}</option>
+                    <option value="STD_DR" hidden>{% if ar %}مدين قياسي (قديم){% else %}Standard Debit (legacy){% endif %}</option>
+                    <option value="SMP_INV" hidden>{% if ar %}فاتورة مبسطة (قديم){% else %}Simplified Invoice (legacy){% endif %}</option>
+                    <option value="SMP_CR" hidden>{% if ar %}دائن مبسط (قديم){% else %}Simplified Credit (legacy){% endif %}</option>
+                    <option value="SMP_DR" hidden>{% if ar %}مدين مبسط (قديم){% else %}Simplified Debit (legacy){% endif %}</option>
+                  </select>
+                  <input type="hidden" id="sinv_invoice_category">
+                </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
                   <select id="sinv_kind" class="f-inp" onchange="onSinvKindChange()">
@@ -394,28 +437,27 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}طريقة الدفع{% else %}Payment{% endif %}<span class="f-req">*</span></div>
-                  <select id="sinv_payment" class="f-inp" onchange="onSinvPaymentChange()">
+                  <select id="sinv_payment" class="f-inp">
                     <option value="Credit">Credit / آجل</option>
                     <option value="Cash">Cash / نقدي</option>
                   </select>
                 </div>
-                <div class="f-item">
-                  <div class="f-lbl">{% if ar %}المالك{% else %}Owner{% endif %}</div>
-                  <select id="sinv_owner" class="f-inp" onchange="loadSinvOwnerBanks(this.value); loadOwnerWarehouses(this.value);">
-                    <option value="">-- {% if ar %}اختر المالك{% else %}Select owner{% endif %} --</option>
-                    {% for s in owners %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-                  </select>
-                </div>
-                <div class="f-item">
-                  <div class="f-lbl">{% if ar %}حساب بنك المالك{% else %}Owner Bank Account{% endif %}</div>
-                  <select id="sinv_bank_account" class="f-inp" onchange="onSinvBankAccountChange()">
-                    <option value="">-- {% if ar %}اختر المالك أولاً{% else %}Select owner first{% endif %} --</option>
-                  </select>
-                </div>
               </div>
 
-              {# ── SO selector with required badge ── #}
-              <div class="f-grid2" style="margin-bottom:14px;">
+              {# ── Row 2: No / Document Date / Sales Order No ── #}
+              <div class="f-grid3" style="margin-bottom:14px;">
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}رقم الفاتورة{% else %}Invoice No{% endif %}</div>
+                  <input type="text" id="sinv_doc_no" class="f-inp" readonly
+                         style="background:#f0fdf4;color:#15803d;font-weight:700;font-size:14px;letter-spacing:.5px;"
+                         placeholder="{% if ar %}تلقائي{% else %}Auto{% endif %}">
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}تاريخ الفاتورة{% else %}Invoice Date{% endif %}</div>
+                  <input type="date" id="sinv_doc_date" class="f-inp" dir="ltr" readonly
+                         style="background:#f8fafc;color:#374151;"
+                         title="{% if ar %}دائماً تاريخ اليوم{% else %}Always today's date{% endif %}">
+                </div>
                 <div class="f-item">
                   <div class="f-lbl">
                     {% if ar %}رقم أمر البيع{% else %}Sales Order No{% endif %}
@@ -424,22 +466,11 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                       <i class="fas fa-check-circle me-1"></i><span id="so_status_text"></span>
                     </span>
                   </div>
-                  <select id="sinv_so_id" class="f-inp required-field" onchange="onSOChange()" required>
+                  <select id="sinv_so_id" class="f-inp required-field" onchange="onSOChange()" required
+                          title="{% if ar %}مطلوب — اختر أمر البيع لملء الحقول تلقائياً{% else %}Required — selecting a SO will auto-fill all fields below{% endif %}">
                     <option value="">-- {% if ar %}اختر أمر بيع معتمد{% else %}Select an Approved SO{% endif %} --</option>
                     {% for so in sos %}<option value="{{ so.id }}">{{ so.doc_no }}</option>{% endfor %}
                   </select>
-                  <div id="so_hint" style="font-size:11px;color:#9ca3af;margin-top:4px;">
-                    {% if ar %}مطلوب — اختر أمر البيع لملء الحقول تلقائياً{% else %}Required — selecting a SO will auto-fill all fields below{% endif %}
-                  </div>
-                </div>
-                <div class="f-item">
-                  <div class="f-lbl">{% if ar %}إيصال الاستلام{% else %}Delivery Note{% endif %}</div>
-                  <select id="sinv_dn_id" class="f-inp" onchange="onDnChange()">
-                    <option value="">-- {% if ar %}اختياري{% else %}Optional{% endif %} --</option>
-                  </select>
-                  <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
-                    {% if ar %}يظهر فقط إيصالات الاستلام الخاصة بأمر البيع المحدد{% else %}Only DNs linked to the selected SO are listed{% endif %}
-                  </div>
                 </div>
               </div>
 
@@ -455,28 +486,29 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </button>
               </div>
 
-              {# ── Buyer row ── #}
-              <div class="f-grid3" style="margin-bottom:12px;">
+              {# ── Row 3: Invoice Month / From Date / To Date ── #}
+              <div class="f-grid3" style="margin-bottom:14px;">
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}</div>
-                  <input type="text" id="sinv_buyer_name" class="f-inp" readonly
-                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من أمر البيع{% else %}Derived from the Sales Order{% endif %}">
-                  <input type="hidden" id="sinv_buyer">
+                  <div class="f-lbl">{% if ar %}شهر الفاتورة{% else %}Invoice Month{% endif %}</div>
+                  <input type="text" id="sinv_month" class="f-inp" readonly
+                         style="background:#f8fafc;color:#374151;"
+                         placeholder="{% if ar %}يُحدد من (إلى تاريخ){% else %}Derived from To Date{% endif %}">
                 </div>
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}رقم مرجع المشتري{% else %}Buyer Ref No{% endif %}</div>
-                  <input type="text" id="sinv_buyer_ref" class="f-inp">
+                  <div class="f-lbl">{% if ar %}من تاريخ{% else %}From Date{% endif %}</div>
+                  <input type="date" id="sinv_from_date" class="f-inp" dir="ltr" onchange="onSinvPeriodChange()">
                 </div>
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}رقم المستند{% else %}No{% endif %}</div>
-                  <input type="text" id="sinv_doc_no" class="f-inp" readonly
-                         style="background:#f0fdf4;color:#15803d;font-weight:700;font-size:14px;letter-spacing:.5px;"
-                         placeholder="{% if ar %}تلقائي{% else %}Auto{% endif %}">
+                  <div class="f-lbl">{% if ar %}إلى تاريخ{% else %}To Date{% endif %}</div>
+                  <input type="date" id="sinv_to_date" class="f-inp" dir="ltr" onchange="onSinvPeriodChange()">
+                  <div id="err_sinv_period" style="display:none;color:#dc2626;font-size:11px;margin-top:4px;">
+                    {% if ar %}يجب أن يكون "من تاريخ" قبل أو يساوي "إلى تاريخ"{% else %}From Date must be on or before To Date{% endif %}
+                  </div>
                 </div>
               </div>
 
-              {# ── Reference Invoice + Transaction Type ── #}
-              <div class="f-grid2" style="margin-bottom:12px;">
+              {# ── Row 4: Reference Invoice / Delivery Note / Project Reference ── #}
+              <div class="f-grid3" style="margin-bottom:14px;">
                 <div class="f-item" id="sinv_ref_wrap">
                   <div class="f-lbl">{% if ar %}الفاتورة المرجعية{% else %}Reference Invoice{% endif %}</div>
                   <div style="display:flex;gap:8px;align-items:flex-start;">
@@ -491,29 +523,20 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                   <div id="sinv_ref_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"></div>
                 </div>
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}نوع المعاملة{% else %}Transaction Type{% endif %}</div>
-                  <select id="sinv_transaction_type" class="f-inp" onchange="onTxnTypeChange()">
-                    <option value="">-- {% if ar %}اختر{% else %}Select{% endif %} --</option>
-                    <optgroup label="{% if ar %}قياسي{% else %}Standard{% endif %}">
-                      <option value="STD_INV">{% if ar %}فاتورة قياسية (I){% else %}Standard Invoice (I){% endif %}</option>
-                      <option value="STD_CR">{% if ar %}دائن قياسي (CR){% else %}Standard Credit (CR){% endif %}</option>
-                      <option value="STD_DR">{% if ar %}مدين قياسي (DR){% else %}Standard Debit (DR){% endif %}</option>
-                    </optgroup>
-                    <optgroup label="{% if ar %}مبسط{% else %}Simplified{% endif %}">
-                      <option value="SMP_INV">{% if ar %}فاتورة مبسطة (I){% else %}Simplified Invoice (I){% endif %}</option>
-                      <option value="SMP_CR">{% if ar %}دائن مبسط (CR){% else %}Simplified Credit (CR){% endif %}</option>
-                      <option value="SMP_DR">{% if ar %}مدين مبسط (DR){% else %}Simplified Debit (DR){% endif %}</option>
-                    </optgroup>
+                  <div class="f-lbl">{% if ar %}إيصال الاستلام{% else %}Delivery Note{% endif %}</div>
+                  <select id="sinv_dn_id" class="f-inp" onchange="onDnChange()"
+                          title="{% if ar %}يظهر فقط إيصالات الاستلام الخاصة بأمر البيع المحدد{% else %}Only DNs linked to the selected SO are listed{% endif %}">
+                    <option value="">-- {% if ar %}اختياري{% else %}Optional{% endif %} --</option>
                   </select>
-                  <input type="hidden" id="sinv_invoice_category">
-                  <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
-                    {% if ar %}يحدد قائمة الفواتير المرجعية (قياسي / مبسط){% else %}Determines which saved invoices you can reference (standard / simplified){% endif %}
-                  </div>
+                </div>
+                <div class="f-item">
+                  <div class="f-lbl">{% if ar %}المرجع للمشروع{% else %}Project Reference{% endif %}</div>
+                  <input type="text" id="sinv_project_ref" class="f-inp">
                 </div>
               </div>
 
               {# ── Status + Dates ── #}
-              <div class="f-grid4" style="margin-bottom:12px;">
+              <div class="f-grid3" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div>
                   <select id="sinv_status" class="f-inp" onchange="onSinvStatusChange()">
@@ -533,12 +556,6 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                   <div class="f-lbl">{% if ar %}تاريخ التسليم{% else %}Delivery Date{% endif %}</div>
                   <input type="date" id="sinv_delivery_date" class="f-inp" dir="ltr">
                 </div>
-                <div class="f-item">
-                  <div class="f-lbl">{% if ar %}تاريخ المستند{% else %}Document Date{% endif %}</div>
-                  <input type="date" id="sinv_doc_date" class="f-inp" dir="ltr" readonly
-                         style="background:#f8fafc;color:#374151;"
-                         title="{% if ar %}دائماً تاريخ اليوم{% else %}Always today's date{% endif %}">
-                </div>
               </div>
               <div class="f-item" style="margin-bottom:12px;max-width:260px;">
                 <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
@@ -546,10 +563,90 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                   <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                 </select>
               </div>
-              <div class="f-grid2" style="margin-bottom:0;">
-                <div class="f-item">
-                  <div class="f-lbl">{% if ar %}ملاحظات{% else %}Remarks{% endif %}</div>
-                  <textarea id="sinv_remarks" class="f-inp" rows="2" style="resize:vertical;"></textarea>
+            </div>
+          </div>
+
+          {# ── Section: Seller ── #}
+          <div class="pur-section" style="margin-top:10px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-building"></i>
+                {% if ar %}معلومات البائع{% else %}Seller Information{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div class="f-item" style="margin-bottom:12px;max-width:500px;">
+                <div class="f-lbl">{% if ar %}البائع{% else %}Seller{% endif %}<span class="f-req">*</span></div>
+                <select id="sinv_owner" class="f-inp" onchange="onSinvOwnerChange(this.value)">
+                  <option value="">-- {% if ar %}اختر البائع{% else %}Select Seller{% endif %} --</option>
+                  {% for s in owners %}<option value="{{ s.id }}">{{ s.name }}{% if s.name_ar %} / {{ s.name_ar }}{% endif %}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="party-detail-card" id="sinv_seller_details_card" style="display:none;">
+                <div class="party-detail-title">Selected Seller Details / تفاصيل البائع</div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">Name:</span><span class="party-detail-val" id="sinv_seller_name_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_seller_name_ar_val"></span><span class="party-detail-lbl-ar">الاسم:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">Street:</span><span class="party-detail-val" id="sinv_seller_street_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_seller_street_ar_val"></span><span class="party-detail-lbl-ar">اسم الشارع:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">City:</span><span class="party-detail-val" id="sinv_seller_city_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_seller_city_ar_val"></span><span class="party-detail-lbl-ar">المدينة:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">VAT Number:</span><span class="party-detail-val" id="sinv_seller_vat_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_seller_vat_ar_val"></span><span class="party-detail-lbl-ar">رقم ضريبة القيمة المضافة:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">CRN:</span><span class="party-detail-val" id="sinv_seller_crn_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_seller_crn_ar_val"></span><span class="party-detail-lbl-ar">رقم السجل التجاري:</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# ── Section: Buyer ── #}
+          <div class="pur-section" style="margin-top:10px;">
+            <button type="button" class="pur-section-hdr open" onclick="togSec(this)">
+              <div style="display:flex;align-items:center;">
+                <i class="pur-sec-icon fas fa-store"></i>
+                {% if ar %}معلومات المشتري{% else %}Buyer Information{% endif %}
+              </div>
+              <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
+            </button>
+            <div class="pur-section-body open">
+              <div class="f-item" style="margin-bottom:12px;max-width:500px;">
+                <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}<span class="f-req">*</span></div>
+                <select id="sinv_buyer" class="f-inp" onchange="onSinvBuyerChange(this.value)">
+                  <option value="">-- {% if ar %}اختر المشتري{% else %}Select Buyer{% endif %} --</option>
+                  {% for v in buyers %}<option value="{{ v.id }}">{{ v.name }}{% if v.name_ar %} / {{ v.name_ar }}{% endif %}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="party-detail-card" id="sinv_buyer_details_card" style="display:none;">
+                <div class="party-detail-title">Selected Buyer Details / تفاصيل المشتري</div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">Name:</span><span class="party-detail-val" id="sinv_buyer_name_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_buyer_name_ar_val"></span><span class="party-detail-lbl-ar">الاسم:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">Street:</span><span class="party-detail-val" id="sinv_buyer_street_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_buyer_street_ar_val"></span><span class="party-detail-lbl-ar">اسم الشارع:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">City:</span><span class="party-detail-val" id="sinv_buyer_city_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_buyer_city_ar_val"></span><span class="party-detail-lbl-ar">المدينة:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">VAT Number:</span><span class="party-detail-val" id="sinv_buyer_vat_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_buyer_vat_ar_val"></span><span class="party-detail-lbl-ar">رقم ضريبة القيمة المضافة:</span>
+                </div>
+                <div class="party-detail-row">
+                  <span class="party-detail-lbl">CRN:</span><span class="party-detail-val" id="sinv_buyer_crn_val"></span>
+                  <span class="party-detail-val-ar" id="sinv_buyer_crn_ar_val"></span><span class="party-detail-lbl-ar">رقم السجل التجاري:</span>
                 </div>
               </div>
             </div>
@@ -750,7 +847,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 {% if is_basic_mode %}disabled title="{% if ar %}الترحيل مقفل في الخطة الأساسية{% else %}Posting is locked on the Basic plan{% endif %}"{% endif %}>
           <i class="fas fa-check me-1"></i>{% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}
         </button>
-        <button class="btn-f btn-save" onclick="saveSINV()">
+        <button class="btn-f btn-save" id="sinvSaveBtn" onclick="saveSINV()">
           <i class="fas fa-save me-1"></i>{% if ar %}حفظ فاتورة البيع / Save{% else %}Save Sales Invoice / حفظ{% endif %}
         </button>
       </div>
@@ -862,19 +959,48 @@ function grlCollapseSec(){
    once this SINV has already been posted (duplicate-posting prevention). */
 function grlUpdatePostBtnState(){
   const btn = document.getElementById('grlPostBtn');
-  if(!btn) return;
-  btn.disabled = _sinvPosted;
-  btn.style.opacity = _sinvPosted ? '0.55' : '1';
-  btn.style.cursor = _sinvPosted ? 'not-allowed' : 'pointer';
-  btn.title = _sinvPosted ? (IS_AR?'تم ترحيل فاتورة البيع هذه مسبقاً.':'This Sales Invoice has already been posted.') : '';
+  const saveBtn = document.getElementById('sinvSaveBtn');
+  const statusEl = document.getElementById('sinv_status');
+  const notApproved = !_sinvPosted && statusEl && statusEl.value !== 'Approved';
+  if(btn){
+    btn.disabled = _sinvPosted || notApproved;
+    btn.style.opacity = (_sinvPosted || notApproved) ? '0.55' : '1';
+    btn.style.cursor = (_sinvPosted || notApproved) ? 'not-allowed' : 'pointer';
+    btn.title = _sinvPosted
+      ? (IS_AR?'تم ترحيل فاتورة البيع هذه مسبقاً.':'This Sales Invoice has already been posted.')
+      : notApproved
+        ? (IS_AR?'يجب أن تكون الحالة "معتمد" قبل الترحيل.':'Status must be Approved before posting.')
+        : '';
+  }
+  if(saveBtn){
+    saveBtn.disabled = _sinvPosted;
+    saveBtn.style.opacity = _sinvPosted ? '0.55' : '1';
+    saveBtn.style.cursor = _sinvPosted ? 'not-allowed' : 'pointer';
+    saveBtn.title = _sinvPosted ? (IS_AR?'تم ترحيل فاتورة البيع هذه مسبقاً.':'This Sales Invoice has already been posted.') : '';
+  }
 }
 
-/* ══ Document Number Fetch - FIXED: Ensures proper increment ══ */
+/* ══ Document Number Fetch - FIXED: Ensures proper increment ══
+   Sales Invoice numbering is keyed by Transaction Type (each of the 6
+   dropdown values keeps its own independent per-year sequence, using
+   itself as the number's prefix -- e.g. STD-INV-2026-1), so nothing can
+   be previewed until a transaction type is actually selected. This is
+   only ever a live PREVIEW for the user's benefit -- the server always
+   computes the real, authoritative number itself at save time from
+   whatever transaction type is actually submitted, so a stale preview
+   here can never cause a wrong/duplicate number to be saved. */
 async function fetchDocNo() {
+  const txn = document.getElementById('sinv_transaction_type')?.value || '';
+  if (!txn) {
+    document.getElementById('sinv_doc_no').value = '';
+    document.getElementById('sinvDocBadge').textContent = '...';
+    return;
+  }
   if (_isFetchingDocNo) return;
   _isFetchingDocNo = true;
   try {
-    const url = '/sales/next-doc-no?type=SINV&force_new=true&_=' + Date.now();
+    const url = '/sales/next-doc-no?type=SINV&transaction_type=' + encodeURIComponent(txn)
+              + '&force_new=true&_=' + Date.now();
     const res = await fetch(url);
     const d = await res.json();
     if (d.doc_no) {
@@ -886,6 +1012,15 @@ async function fetchDocNo() {
   } finally {
     _isFetchingDocNo = false;
   }
+}
+
+/* Wired to the Transaction Type <select>'s onchange event specifically
+   (not called when the dropdown is populated programmatically, e.g. while
+   loading an existing invoice for edit -- see onTxnTypeChange()'s other
+   call sites) so picking a type live-refreshes the previewed document
+   number, without ever overwriting an already-saved invoice's real one. */
+async function fetchDocNoForTxnType() {
+  await fetchDocNo();
 }
 
 /* ══ GRN/DN list (for cascading SO → DN dropdown) ══ */
@@ -930,45 +1065,79 @@ async function onDnChange() {
   }
 }
 
-/* ══ Owner bank accounts → bank dropdown ══ */
-function loadSinvOwnerBanks(ownerId, selectedId) {
-  const sel = document.getElementById('sinv_bank_account');
-  if (!sel) return;
-  if (!ownerId) { sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'اختر المالك أولاً' : 'Select owner first') + ' --</option>'; return; }
-  fetch('/sales/owners/' + ownerId + '/banks').then(r=>r.json()).then(banks=>{
-    let html = '<option value="">-- ' + (IS_AR ? 'اختر حساباً' : 'Select account') + ' --</option>';
-    (banks||[]).forEach(b=>{
-      const label=(b.bank_name||b.bank_name_en||'')+(b.account_number?' — '+b.account_number:'');
-      html += '<option value="'+b.id+'"'+(String(b.id)===String(selectedId)?' selected':'')+'>'+label+'</option>';
-    });
-    sel.innerHTML=html;
-  }).catch(()=>{ sel.innerHTML='<option value="">-- '+(IS_AR?'لا توجد حسابات':'No accounts')+' --</option>'; });
+/* ══ Seller (Owner) section: selecting an Owner auto-fills its bank
+   accounts, warehouses, and read-only VAT/CRN/Address display -- these are
+   never re-typed, only ever derived from the selected Owner record. ══ */
+function onSinvOwnerChange(ownerId) {
+  loadOwnerWarehouses(ownerId);
+  loadOwnerDetails(ownerId);
 }
 
-/* ══ Picking a Bank Account implies a Cash payment, and picking Credit
-   implies no specific bank account is used yet -- mirrors the same rule
-   on the Purchase Invoice/Debit Memo screens. ══ */
-function onSinvBankAccountChange() {
-  if (document.getElementById('sinv_bank_account').value) {
-    document.getElementById('sinv_payment').value = 'Cash';
+/* ══ Western 0-9 → Arabic-Indic ٠-٩, used only for the Arabic-side VAT/CRN
+   display -- the values themselves are still plain Western-digit strings
+   everywhere else (form submission, English column, DB). ══ */
+function toArabicDigits(s) {
+  const map = {'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};
+  return String(s == null ? '' : s).replace(/[0-9]/g, d => map[d]);
+}
+
+function _setPartyDetailCard(prefix, d) {
+  const card = document.getElementById(prefix + '_details_card');
+  if (!d) { if (card) card.style.display = 'none'; return; }
+  const set = (suffix, val) => { const e = document.getElementById(prefix + suffix); if (e) e.textContent = val || '—'; };
+  set('_name_val', d.name); set('_name_ar_val', d.name_ar);
+  set('_street_val', d.street); set('_street_ar_val', d.street_ar);
+  set('_city_val', d.city); set('_city_ar_val', d.city_ar);
+  set('_vat_val', d.vat_number); set('_vat_ar_val', d.vat_number ? toArabicDigits(d.vat_number) : '');
+  set('_crn_val', d.crn); set('_crn_ar_val', d.crn ? toArabicDigits(d.crn) : '');
+  if (card) card.style.display = 'block';
+}
+
+async function loadOwnerDetails(ownerId) {
+  if (!ownerId) { _setPartyDetailCard('sinv_seller', null); return; }
+  try {
+    const res = await fetch('/sales/owners/' + ownerId + '/details');
+    const d = await res.json();
+    _setPartyDetailCard('sinv_seller', d);
+  } catch (e) {
+    console.error('Failed to load owner details:', e);
   }
 }
 
-function onSinvPaymentChange() {
-  if (document.getElementById('sinv_payment').value === 'Credit') {
-    document.getElementById('sinv_bank_account').value = '';
+/* ══ Buyer section: selecting a Buyer auto-fills its read-only
+   VAT/CRN/Address display -- also called from onSOChange() below, since
+   selecting a Sales Order still auto-fills the Buyer dropdown for
+   convenience (the user can still change it manually afterward). ══ */
+function onSinvBuyerChange(buyerId) {
+  loadBuyerDetails(buyerId);
+}
+
+async function loadBuyerDetails(buyerId) {
+  if (!buyerId) { _setPartyDetailCard('sinv_buyer', null); return; }
+  try {
+    const res = await fetch('/sales/buyers/' + buyerId + '/details');
+    const d = await res.json();
+    _setPartyDetailCard('sinv_buyer', d);
+  } catch (e) {
+    console.error('Failed to load buyer details:', e);
   }
 }
 
-/* ══ Transaction type + Reference invoice picker ══ */
+/* ══ Transaction type + Reference invoice picker ══
+   Matches by prefix rather than an exact-value list, so both the current
+   hyphenated dropdown values (STD-INV, SIM-CR, ...) and the legacy
+   underscore ones still on file for older invoices (STD_INV, SMP_CR, ...)
+   resolve the same way. */
 function txnCategory(txn) {
-  if (txn === 'STD_CR' || txn === 'STD_DR' || txn === 'STD_INV') return 'standard';
-  if (txn === 'SMP_CR' || txn === 'SMP_DR' || txn === 'SMP_INV') return 'simplified';
+  txn = (txn || '').toUpperCase();
+  if (txn.startsWith('STD')) return 'standard';
+  if (txn.startsWith('SIM') || txn.startsWith('SMP')) return 'simplified';
   return '';
 }
 
 function txnNeedsReference(txn) {
-  return txn === 'STD_CR' || txn === 'STD_DR' || txn === 'SMP_CR' || txn === 'SMP_DR';
+  txn = (txn || '').toUpperCase();
+  return txn.endsWith('-CR') || txn.endsWith('-DR') || txn.endsWith('_CR') || txn.endsWith('_DR');
 }
 
 function onTxnTypeChange() {
@@ -1109,6 +1278,7 @@ function onSinvStatusChange() {
     postEl.disabled = true;
     postEl.value = '';
   }
+  grlUpdatePostBtnState();
 }
 
 /* ══ SO SELECTION → AUTO-FILL ALL FIELDS (buyer locked, lines locked) ══ */
@@ -1204,7 +1374,6 @@ async function onSOChange() {
   const sel   = document.getElementById('sinv_so_id');
   const banner = document.getElementById('so_filled_banner');
   const badge  = document.getElementById('so_status_badge');
-  const hint   = document.getElementById('so_hint');
 
   sel.classList.toggle('required-field', !soId);
   refreshDnOptions(soId);
@@ -1212,7 +1381,6 @@ async function onSOChange() {
   if (!soId) {
     banner.style.display = 'none';
     badge.style.display  = 'none';
-    hint.style.display   = 'block';
     if(typeof grlPreviewFromSO==='function') grlPreviewFromSO('');
     return;
   }
@@ -1231,12 +1399,11 @@ async function onSOChange() {
   }
   _soPullInProgress = false;
 
-  // ⭐ Auto-fill buyer
+  // ⭐ Auto-fill buyer (still user-changeable afterward -- the Buyer
+  // section's dropdown is a real, independent selection, not locked to
+  // whatever the Sales Order carries)
   document.getElementById('sinv_buyer').value = so.buyer_id || '';
-  document.getElementById('sinv_buyer_name').value = so.buyer_name || '';
-
-  const vref = document.getElementById('sinv_buyer_ref');
-  if (vref && so.buyer_ref_no) vref.value = so.buyer_ref_no;
+  loadBuyerDetails(so.buyer_id || '');
 
   // ⭐ Kind comes from the selected Sales Order by default -- overridden by
   // the Delivery Note's own Kind below if/when a specific DN is picked
@@ -1277,7 +1444,6 @@ async function onSOChange() {
   document.getElementById('so_status_text').textContent  = so.status || '';
   banner.style.display = 'flex';
   badge.style.display  = 'inline-flex';
-  hint.style.display   = 'none';
   sel.style.borderColor = '#86efac';
   if(typeof grlPreviewFromSO==='function') grlPreviewFromSO(soId);
 }
@@ -1286,19 +1452,41 @@ function clearSO() {
   document.getElementById('sinv_so_id').value = '';
   document.getElementById('so_filled_banner').style.display = 'none';
   document.getElementById('so_status_badge').style.display  = 'none';
-  document.getElementById('so_hint').style.display          = 'block';
   document.getElementById('sinv_so_id').classList.add('required-field');
   document.getElementById('sinv_so_id').style.borderColor = '';
-  ['sinv_buyer_name','sinv_buyer_ref'].forEach(id => {
-    const e = document.getElementById(id); if (e) e.value = '';
-  });
   document.getElementById('sinv_buyer').value = '';
+  loadBuyerDetails('');
   refreshDnOptions('');
   document.getElementById('liBody').innerHTML = '';
   _liIdx = 0;
   addLiRow();
   recalcSummary(); updLiCount();
   if(typeof grlPreviewFromSO==='function') grlPreviewFromSO('');
+}
+
+/* ══ Invoice Period: Month is always derived display-only from To Date --
+   never entered directly, shown as an abbreviated "Sep-26" style caption --
+   and From Date must never be after To Date. ══ */
+function updateSinvMonth() {
+  const toVal = document.getElementById('sinv_to_date').value;
+  const monthEl = document.getElementById('sinv_month');
+  if (!toVal) { monthEl.value = ''; return; }
+  const d = new Date(toVal + 'T00:00:00');
+  const monthAbbr = d.toLocaleDateString('en-US', { month: 'short' });
+  const yy = String(d.getFullYear()).slice(-2);
+  monthEl.value = monthAbbr + '-' + yy;
+}
+function validateSinvPeriod() {
+  const from = document.getElementById('sinv_from_date').value;
+  const to   = document.getElementById('sinv_to_date').value;
+  const errEl = document.getElementById('err_sinv_period');
+  const bad = from && to && from > to;
+  errEl.style.display = bad ? 'block' : 'none';
+  return !bad;
+}
+function onSinvPeriodChange() {
+  updateSinvMonth();
+  validateSinvPeriod();
 }
 
 /* ══ Section toggle ══ */
@@ -1356,8 +1544,17 @@ async function loadOwnerWarehouses(ownerId) {
    SINV's own line-item Tax Code is a fixed inherited value, so there is no
    cascade into line items here, only the header dropdown. ══ */
 let TAX_CODES = [];
+const TAX_DEFAULT_CODE = 'S1';
 function taxCodeLabel(t) {
   return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
+}
+/* A new Sales Invoice always defaults its Account Code to S1 (Standard
+   rated supplies) when that master code exists, rather than whichever
+   code happens to load first -- falls back to the first Active code only
+   if S1 itself isn't configured. */
+function _defaultSalesAccountCode() {
+  if (TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE)) return TAX_DEFAULT_CODE;
+  return TAX_CODES.length ? TAX_CODES[0].account_code : '';
 }
 function accountCodeOptionsHtml(selected) {
   let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
@@ -1564,13 +1761,11 @@ async function openAddSINV() {
   poSel.classList.add('required-field');
   document.getElementById('so_filled_banner').style.display = 'none';
   document.getElementById('so_status_badge').style.display  = 'none';
-  document.getElementById('so_hint').style.display          = 'block';
   refreshDnOptions('');
   
-  ['sinv_buyer_name','sinv_buyer_ref','sinv_remarks'].forEach(id => {
-    const e = document.getElementById(id); if (e) e.value = '';
-  });
   document.getElementById('sinv_buyer').value = '';
+  loadBuyerDetails('');
+  const projRefEl = document.getElementById('sinv_project_ref'); if (projRefEl) projRefEl.value = '';
   document.getElementById('sinv_doc_no').value = '';
   
   document.getElementById('sinv_transaction_type').value = '';
@@ -1594,15 +1789,19 @@ async function openAddSINV() {
   document.getElementById('sinv_payment').value = 'Credit';
   const ownerSel = document.getElementById('sinv_owner');
   ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
-  loadSinvOwnerBanks(ownerSel.value);
+  loadOwnerDetails(ownerSel.value);
   const accSel = document.getElementById('sinv_account_code');
-  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  accSel.innerHTML = accountCodeOptionsHtml(_defaultSalesAccountCode());
   await loadOwnerWarehouses(ownerSel.value);
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('sinv_posting_date').value = '';
   document.getElementById('sinv_posting_date').disabled = true;
   document.getElementById('sinv_delivery_date').value = today;
   document.getElementById('sinv_doc_date').value = today;
+  document.getElementById('sinv_from_date').value = '';
+  document.getElementById('sinv_to_date').value = '';
+  document.getElementById('sinv_month').value = '';
+  document.getElementById('err_sinv_period').style.display = 'none';
   document.getElementById('liBody').innerHTML = '';
   document.getElementById('attList').innerHTML = '';
   document.getElementById('existAttList').innerHTML = '';
@@ -1654,26 +1853,25 @@ function openEditSINV(id) {
       poSel.classList.toggle('required-field', !poIdValue);
       document.getElementById('so_filled_banner').style.display = poIdValue ? 'flex' : 'none';
       document.getElementById('so_filled_docno').textContent = d.so_no || d.so_doc_no || '';
-      document.getElementById('so_hint').style.display = poIdValue ? 'none' : 'block';
       refreshDnOptions(poIdValue);
       document.getElementById('sinv_dn_id').value = d.delivery_note_id || '';
       
       document.getElementById('sinv_doc_no').value = d.doc_no || '';
       document.getElementById('sinvDocBadge').textContent = d.doc_no || '';
       document.getElementById('sinv_status').value = d.status || 'Open';
+      grlUpdatePostBtnState();
       document.getElementById('sinv_kind').value = d.kind || 'Goods';
       document.getElementById('sinv_payment').value = d.payment_method || 'Credit';
       const ownerSel = document.getElementById('sinv_owner');
       ownerSel.value = d.owner_id || '';
       if (!ownerSel.value && ownerSel.options.length > 1) ownerSel.selectedIndex = 1;
-      loadSinvOwnerBanks(ownerSel.value, d.bank_account_id || '');
-      const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
+      loadOwnerDetails(ownerSel.value);
+      const accVal = d.account_code || _defaultSalesAccountCode();
       document.getElementById('sinv_account_code').innerHTML = accountCodeOptionsHtml(accVal);
       await loadOwnerWarehouses(ownerSel.value);
       document.getElementById('sinv_buyer').value = d.buyer_id || '';
-      document.getElementById('sinv_buyer_name').value = d.buyer_name || '';
-      const vr = document.getElementById('sinv_buyer_ref');  if(vr) vr.value = d.buyer_ref_no||'';
-      const rm = document.getElementById('sinv_remarks');     if(rm) rm.value = d.remarks||'';
+      loadBuyerDetails(d.buyer_id || '');
+      const projRefEl = document.getElementById('sinv_project_ref'); if (projRefEl) projRefEl.value = d.project_ref || '';
       
       document.getElementById('sinv_transaction_type').value = d.transaction_type || '';
       onTxnTypeChange();
@@ -1685,7 +1883,11 @@ function openEditSINV(id) {
       document.getElementById('sinv_posting_date').value  = d.posting_date  || '';
       document.getElementById('sinv_delivery_date').value = d.delivery_date || '';
       document.getElementById('sinv_doc_date').value      = new Date().toISOString().split('T')[0];
-      
+      document.getElementById('sinv_from_date').value = d.from_date || '';
+      document.getElementById('sinv_to_date').value   = d.to_date || '';
+      document.getElementById('err_sinv_period').style.display = 'none';
+      updateSinvMonth();
+
       document.getElementById('liBody').innerHTML = '';
       await loadLevelFive();
       loadItemsCache().then(() => {
@@ -1740,6 +1942,10 @@ function openEditSINV(id) {
 
 /* ══ Save ══ */
 async function saveSINV() {
+  if (!document.getElementById('sinv_transaction_type').value) {
+    alert(IS_AR ? 'يرجى اختيار نوع المعاملة أولاً' : 'Please select a Transaction Type first');
+    return;
+  }
   // ⭐ Ensure we have a document number
   const docNo = document.getElementById('sinv_doc_no').value;
   if (!docNo || docNo === '...' || docNo === 'NEW' || docNo === '') {
@@ -1764,11 +1970,15 @@ async function saveSINV() {
     alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات أمر البيع' : 'Please wait — still loading data from the Sales Order');
     return;
   }
-  
+  if (!validateSinvPeriod()) {
+    document.getElementById('sinv_to_date').focus();
+    return;
+  }
+
   const id  = document.getElementById('sinv_id').value;
   const url = id ? `/sales/invoices/${id}/edit` : '/sales/invoices/add';
   const fd  = new FormData();
-  
+
   fd.append('csrf_token', CSRF);
   fd.append('so_id', soId);
   fd.append('dn_id', document.getElementById('sinv_dn_id')?.value || '');
@@ -1777,17 +1987,17 @@ async function saveSINV() {
   fd.append('payment_method', document.getElementById('sinv_payment').value);
   fd.append('owner_id', document.getElementById('sinv_owner').value || '');
   fd.append('account_code', document.getElementById('sinv_account_code').value || '');
-  fd.append('bank_account_id', document.getElementById('sinv_bank_account').value || '');
   fd.append('buyer_id', document.getElementById('sinv_buyer').value || '');
-  fd.append('buyer_ref_no', document.getElementById('sinv_buyer_ref')?.value || '');
   fd.append('transaction_type', document.getElementById('sinv_transaction_type')?.value || '');
   fd.append('invoice_category', document.getElementById('sinv_invoice_category')?.value || '');
   fd.append('reference_invoices', document.getElementById('sinv_reference_invoices')?.value || '');
-  fd.append('remarks', document.getElementById('sinv_remarks')?.value || '');
+  fd.append('project_ref', document.getElementById('sinv_project_ref')?.value || '');
   fd.append('posting_date', document.getElementById('sinv_posting_date').value || '');
   fd.append('delivery_date', document.getElementById('sinv_delivery_date').value || '');
   fd.append('document_date', document.getElementById('sinv_doc_date').value || '');
-  
+  fd.append('from_date', document.getElementById('sinv_from_date').value || '');
+  fd.append('to_date', document.getElementById('sinv_to_date').value || '');
+
   const rows = document.querySelectorAll('#liBody tr');
   console.log('Number of line items:', rows.length);
   
@@ -1895,6 +2105,21 @@ function rPostingStatus(p) {
   </span>`;
 }
 
+function rZatcaStatus(p) {
+  const v = p.value || 'not_generated';
+  const map = {
+    not_generated: {cls: 'st-open', en: 'Not Generated', ar: 'لم يُنشأ'},
+    generated:     {cls: 'st-approved', en: 'Generated', ar: 'تم الإنشاء'},
+    cleared:       {cls: 'st-approved', en: 'Cleared', ar: 'مُصدَّق'},
+    failed:        {cls: 'st-cancelled', en: 'Failed', ar: 'فشل'},
+  };
+  const m = map[v] || map.not_generated;
+  return `<span class="st-pill ${m.cls}">
+      <i class="fas fa-circle" style="font-size:6px;"></i>
+      ${IS_AR ? m.ar : m.en}
+  </span>`;
+}
+
 function rSAR(p) {
   return p.value != null
     ? `<span style="font-weight:600;font-variant-numeric:tabular-nums;">${parseFloat(p.value).toLocaleString('en-SA',{minimumFractionDigits:2})}</span>`
@@ -1907,13 +2132,44 @@ class ActR {
     this.g.style.cssText = 'display:flex;align-items:center;gap:4px;height:100%;';
     const d = p.data;
     const docNo = (d.doc_no || '').replace(/'/g, "\\'");
+    const zStatus = d.zatca_status || 'not_generated';
+    let zatcaBtn = '';
+    if (d.posting_status === 'Posted') {
+      if (zStatus === 'not_generated' || zStatus === 'failed') {
+        // 'failed' is retryable -- the backend allows regenerating a
+        // rejected ZATCA invoice (it never consumed a valid ICV), so the
+        // action button must stay available rather than vanishing.
+        zatcaBtn = `<button class="ag-ab ag-ab-zatca" onclick="createZatcaInvoiceFromGrid(${d.id})" title="${IS_AR?'إنشاء فاتورة زاتكا':'Create ZATCA Invoice'}"><i class="fas fa-shield-halved"></i></button>`;
+      } else if (d.zatca_attachment_id) {
+        zatcaBtn = `<button class="ag-ab ag-ab-zatca-xml" onclick="window.open('/sales/attachments/${d.zatca_attachment_id}/download','_blank')" title="${IS_AR?'تنزيل XML زاتكا':'Download ZATCA XML'}"><i class="fas fa-file-code"></i></button>`;
+      }
+    }
     this.g.innerHTML = `
       <button class="ag-ab ag-ab-view" onclick="window.location='/sales/invoices/${d.id}/view'" title="${IS_AR?'عرض':'View'}"><i class="fas fa-eye"></i></button>
       <button class="ag-ab ag-ab-edit" onclick="openEditSINV(${d.id})" title="${IS_AR?'تعديل':'Edit'}"><i class="fas fa-pencil-alt"></i></button>
       <button class="ag-ab ag-ab-print" onclick="window.open('/sales/invoices/${d.id}/print','_blank')" title="${IS_AR?'طباعة':'Print'}"><i class="fas fa-print"></i></button>
+      <button class="ag-ab ag-ab-pdf" onclick="window.open('/sales/invoices/${d.id}/pdf','_blank')" title="${IS_AR?'تنزيل PDF':'Download PDF'}"><i class="fas fa-file-pdf"></i></button>
+      ${zatcaBtn}
       <button class="ag-ab ag-ab-del"  onclick="confDelSINV(${d.id},'${docNo}')" title="${IS_AR?'حذف':'Delete'}"><i class="fas fa-trash"></i></button>`;
   }
   getGui() { return this.g; }
+}
+
+function createZatcaInvoiceFromGrid(id) {
+  if (!confirm(IS_AR ? 'هل تريد إنشاء فاتورة زاتكا لهذا المستند؟ لا يمكن التراجع عن هذا الإجراء.' : 'Create a ZATCA invoice for this document? This cannot be undone.')) return;
+  fetch('/sales/invoices/' + id + '/zatca/generate', {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF},
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      loadData();
+      alert(IS_AR ? 'تم إنشاء فاتورة زاتكا بنجاح' : 'ZATCA invoice created successfully');
+    } else {
+      let msg = d.error || (IS_AR ? 'فشل إنشاء فاتورة زاتكا' : 'Failed to create ZATCA invoice');
+      if (d.onboarding_required) msg += '\n\n' + (IS_AR ? 'اذهب إلى إعدادات زاتكا لإكمال التسجيل.' : 'Go to ZATCA Settings to complete onboarding.');
+      alert(msg);
+    }
+  }).catch(e => alert('Error: ' + e.message));
 }
 
 const AG_LOCALE = IS_AR ? {
@@ -1984,9 +2240,10 @@ const cols = [
   {headerName:IS_AR?'فئة الفاتورة':'Invoice Category',field:'invoice_category',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
   {headerName:IS_AR?'حالة الترحيل':'Posting Status',field:'posting_status',width:120,cellRenderer:rPostingStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Saved','Posted'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'حالة زاتكا':'ZATCA Status',field:'zatca_status',width:130,cellRenderer:rZatcaStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['not_generated','generated','cleared','failed'],buttons:['apply','reset','clear']}},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
@@ -2335,6 +2592,10 @@ function grlPreviewFromSO(soId){
    saveSINV()'s own field collection exactly, plus the grl_narration field
    Post needs. */
 async function _buildSINVFormData() {
+  if (!document.getElementById('sinv_transaction_type').value) {
+    alert(IS_AR ? 'يرجى اختيار نوع المعاملة أولاً' : 'Please select a Transaction Type first');
+    return null;
+  }
   const docNo = document.getElementById('sinv_doc_no').value;
   if (!docNo || docNo === '...' || docNo === 'NEW' || docNo === '') {
     alert(IS_AR ? 'جاري تحميل رقم المستند... يرجى الانتظار' : 'Loading document number... please wait');
@@ -2358,6 +2619,10 @@ async function _buildSINVFormData() {
     alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات أمر البيع' : 'Please wait — still loading data from the Sales Order');
     return null;
   }
+  if (!validateSinvPeriod()) {
+    document.getElementById('sinv_to_date').focus();
+    return null;
+  }
 
   const fd = new FormData();
   fd.append('csrf_token', CSRF);
@@ -2368,16 +2633,16 @@ async function _buildSINVFormData() {
   fd.append('payment_method', document.getElementById('sinv_payment').value);
   fd.append('owner_id', document.getElementById('sinv_owner').value || '');
   fd.append('account_code', document.getElementById('sinv_account_code').value || '');
-  fd.append('bank_account_id', document.getElementById('sinv_bank_account').value || '');
   fd.append('buyer_id', document.getElementById('sinv_buyer').value || '');
-  fd.append('buyer_ref_no', document.getElementById('sinv_buyer_ref')?.value || '');
   fd.append('transaction_type', document.getElementById('sinv_transaction_type')?.value || '');
   fd.append('invoice_category', document.getElementById('sinv_invoice_category')?.value || '');
   fd.append('reference_invoices', document.getElementById('sinv_reference_invoices')?.value || '');
-  fd.append('remarks', document.getElementById('sinv_remarks')?.value || '');
+  fd.append('project_ref', document.getElementById('sinv_project_ref')?.value || '');
   fd.append('posting_date', document.getElementById('sinv_posting_date').value || '');
   fd.append('delivery_date', document.getElementById('sinv_delivery_date').value || '');
   fd.append('document_date', document.getElementById('sinv_doc_date').value || '');
+  fd.append('from_date', document.getElementById('sinv_from_date').value || '');
+  fd.append('to_date', document.getElementById('sinv_to_date').value || '');
   fd.append('grl_narration', document.getElementById('grl_narration')?.value || '');
 
   document.querySelectorAll('#liBody tr').forEach(row => {

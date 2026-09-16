@@ -428,7 +428,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="pinv_kind" class="f-inp">
+                  <select id="pinv_kind" class="f-inp" onchange="onPinvKindChange()">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
@@ -436,18 +436,14 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 <div class="f-item">
                   <div class="f-lbl">
                     {% if ar %}إيصال الاستلام{% else %}Goods Receipt Note{% endif %}
-                    <span class="f-req">*</span>
                     <span id="po_status_badge" style="display:none;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:10px;margin-left:8px;font-weight:700;text-transform:none;letter-spacing:0;">
                       <i class="fas fa-check-circle me-1"></i><span id="po_status_text"></span>
                     </span>
                   </div>
-                  <select id="pinv_grn_id" class="f-inp required-field" onchange="onGRNChange()" required>
-                    <option value="">-- {% if ar %}اختر إيصال استلام معتمد{% else %}Select an Approved GRN{% endif %} --</option>
+                  <select id="pinv_grn_id" class="f-inp" onchange="onGRNChange()">
+                    <option value="">-- {% if ar %}بدون إيصال استلام (فاتورة مستقلة){% else %}No GRN (standalone invoice){% endif %} --</option>
                     {% for g in grns %}<option value="{{ g.id }}">{{ g.doc_no }}</option>{% endfor %}
                   </select>
-                  <div id="po_hint" style="font-size:11px;color:#9ca3af;margin-top:4px;">
-                    {% if ar %}مطلوب — اختر إيصال الاستلام لملء الحقول تلقائياً{% else %}Required — selecting a GRN will auto-fill all fields below{% endif %}
-                  </div>
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رقم المستند{% else %}No{% endif %}</div>
@@ -494,27 +490,22 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </button>
               </div>
 
-              {# ── Row 3: Supplier / Supplier Ref / Supplier Bank / Payment ── #}
+              {# ── Row 3: Supplier / Supplier Ref / Payment ── #}
               <div class="f-grid4" style="margin-bottom:14px;">
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}المورد{% else %}Supplier{% endif %}</div>
-                  <input type="text" id="pinv_supplier_name" class="f-inp" readonly
-                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من أمر الشراء{% else %}Derived from the Purchase Order{% endif %}">
-                  <input type="hidden" id="pinv_supplier">
+                  <div class="f-lbl">{% if ar %}المورد{% else %}Supplier{% endif %}<span class="f-req">*</span></div>
+                  <select id="pinv_supplier" class="f-inp">
+                    <option value="">-- {% if ar %}اختر المورد{% else %}Select Supplier{% endif %} --</option>
+                    {% for v in suppliers %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
+                  </select>
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رقم مرجع المورد{% else %}Supplier Ref No{% endif %}</div>
                   <input type="text" id="pinv_supplier_ref" class="f-inp">
                 </div>
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}حساب بنك المورد{% else %}Supplier Bank Account{% endif %}</div>
-                  <select id="pinv_bank_account" class="f-inp" onchange="onPinvBankAccountChange()">
-                    <option value="">-- {% if ar %}اختر المورد أولاً{% else %}Select supplier first{% endif %} --</option>
-                  </select>
-                </div>
-                <div class="f-item">
                   <div class="f-lbl">{% if ar %}طريقة الدفع{% else %}Payment{% endif %}<span class="f-req">*</span></div>
-                  <select id="pinv_payment" class="f-inp" onchange="onPinvPaymentChange()">
+                  <select id="pinv_payment" class="f-inp">
                     <option value="Credit">Credit / آجل</option>
                     <option value="Cash">Cash / نقدي</option>
                   </select>
@@ -555,10 +546,16 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
             </button>
             <div class="pur-section-body open">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-size:11px;color:#6b7280;">
-                  <i class="fas fa-lock me-1"></i>
-                  {% if ar %}البنود موروثة من أمر الشراء وغير قابلة للتعديل{% else %}Items are inherited from the Purchase Order and locked{% endif %}
-                </span>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <button type="button" id="pinvAddItemBtn" onclick="addLiRow()"
+                          style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:#2563eb;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">
+                    <i class="fas fa-plus"></i>{% if ar %}إضافة صنف{% else %}Add Item{% endif %}
+                  </button>
+                  <span id="pinvItemsLockNote" style="display:none;font-size:11px;color:#9ca3af;">
+                    <i class="fas fa-lock me-1"></i>
+                    {% if ar %}مقفلة — موروثة من إيصال الاستلام المرتبط{% else %}Locked — inherited from the linked Goods Receipt Note{% endif %}
+                  </span>
+                </div>
                 <span style="font-size:11px;color:#6b7280;">
                   <i class="fas fa-info-circle me-1"></i>
                   {% if ar %}المبلغ الخاضع = (الكمية × السعر − الخصم) + الشحن{% else %}Taxable = (Qty × Rate − Discount) + Freight{% endif %}
@@ -580,6 +577,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                     <th style="width:80px;">{% if ar %}كود الضريبة{% else %}Tax Code{% endif %}</th>
                     <th style="width:65px;">{% if ar %}الضريبة{% else %}Tax Amt{% endif %}</th>
                     <th style="width:80px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+                    <th style="width:30px;"></th>
                   </tr></thead>
                   <tbody id="liBody"></tbody>
                   <tfoot>
@@ -736,7 +734,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 {% if is_basic_mode %}disabled title="{% if ar %}الترحيل مقفل في الخطة الأساسية{% else %}Posting is locked on the Basic plan{% endif %}"{% endif %}>
           <i class="fas fa-check me-1"></i>{% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}
         </button>
-        <button class="btn-f btn-save" onclick="savePINV()">
+        <button class="btn-f btn-save" id="pinvSaveBtn" onclick="savePINV()">
           <i class="fas fa-save me-1"></i>{% if ar %}حفظ فاتورة الشراء / Save{% else %}Save Purchase Invoice / حفظ{% endif %}
         </button>
       </div>
@@ -763,10 +761,15 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
 <script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.2/dist/ag-grid-enterprise.min.js"></script>
 <script>
 const IS_AR = {{ 'true' if ar else 'false' }};
+const OWNER_WAREHOUSES = {{ owner_warehouses | tojson }};
 const CSRF  = '{{ csrf_token() }}';
 let _liIdx = 0;
 let _attachments = [];
 let _pinvModal = null;
+let _itemMaster = [];
+let _itemMasterLoaded = false;
+let _levelFive = [];
+let _levelFiveLoaded = false;
 let _isFetchingDocNo = false;
 let _pinvPosted = false;   // true once this PINV's posting_status is 'Posted' -- blocks re-Post
 
@@ -795,11 +798,25 @@ function grlCollapseSec(){
    once this Purchase Invoice has already been posted (duplicate-posting prevention). */
 function grlUpdatePostBtnState(){
   const btn = document.getElementById('grlPostBtn');
-  if(!btn) return;
-  btn.disabled = _pinvPosted;
-  btn.style.opacity = _pinvPosted ? '0.55' : '1';
-  btn.style.cursor = _pinvPosted ? 'not-allowed' : 'pointer';
-  btn.title = _pinvPosted ? (IS_AR?'تم ترحيل فاتورة الشراء هذه مسبقاً.':'This Purchase Invoice has already been posted.') : '';
+  const saveBtn = document.getElementById('pinvSaveBtn');
+  const statusEl = document.getElementById('pinv_status');
+  const notApproved = !_pinvPosted && statusEl && statusEl.value !== 'Approved';
+  if(btn){
+    btn.disabled = _pinvPosted || notApproved;
+    btn.style.opacity = (_pinvPosted || notApproved) ? '0.55' : '1';
+    btn.style.cursor = (_pinvPosted || notApproved) ? 'not-allowed' : 'pointer';
+    btn.title = _pinvPosted
+      ? (IS_AR?'تم ترحيل فاتورة الشراء هذه مسبقاً.':'This Purchase Invoice has already been posted.')
+      : notApproved
+        ? (IS_AR?'يجب أن تكون الحالة "معتمد" قبل الترحيل.':'Status must be Approved before posting.')
+        : '';
+  }
+  if(saveBtn){
+    saveBtn.disabled = _pinvPosted;
+    saveBtn.style.opacity = _pinvPosted ? '0.55' : '1';
+    saveBtn.style.cursor = _pinvPosted ? 'not-allowed' : 'pointer';
+    saveBtn.title = _pinvPosted ? (IS_AR?'تم ترحيل فاتورة الشراء هذه مسبقاً.':'This Purchase Invoice has already been posted.') : '';
+  }
 }
 
 /* ══ Document Number Fetch - FIXED: Ensures proper increment ══ */
@@ -824,21 +841,70 @@ async function fetchDocNo() {
 /* ══ GRN SELECTION → AUTO-FILL EVERYTHING (Purchase Order is now purely derived) ══ */
 let _poPullInProgress = false;
 
+// Account Code is inherited from the linked GRN and locked while that link
+// is active -- it only becomes freely editable again for a standalone
+// invoice (no GRN selected).
+function _setPinvAccountCodeLocked(locked) {
+  const el = document.getElementById('pinv_account_code');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f8fafc' : '';
+  el.title = locked
+    ? (IS_AR ? 'يُحدَّد تلقائيًا من إيصال الاستلام المرتبط' : 'Derived from the linked Goods Receipt Note')
+    : (IS_AR ? 'رمز الحساب' : 'Account Code');
+}
+
+// Purchase Type, Kind and Supplier are inherited from the linked GRN and
+// locked while that link is active -- freely editable again only for a
+// standalone invoice (no GRN selected).
+function _setPinvHeaderFieldsLocked(locked) {
+  [['pinv_ptype', IS_AR ? 'نوع الشراء' : 'Purchase Type'],
+   ['pinv_kind',  IS_AR ? 'النوع' : 'Kind'],
+   ['pinv_supplier', IS_AR ? 'المورد' : 'Supplier']].forEach(([id, label]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = locked;
+    el.style.background = locked ? '#f8fafc' : '';
+    el.title = locked
+      ? (IS_AR ? 'يُحدَّد تلقائيًا من إيصال الاستلام المرتبط' : 'Derived from the linked Goods Receipt Note')
+      : label;
+  });
+}
+
+// Line items are inherited from the linked GRN and locked while that link
+// is active -- editing/adding/removing lines only becomes possible again
+// for a standalone invoice (no GRN selected).
+let _pinvItemsLocked = false;
+function _setPinvLineItemsLocked(locked) {
+  _pinvItemsLocked = locked;
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    row.querySelectorAll('select, input:not([readonly]), button').forEach(el => { el.disabled = locked; });
+  });
+  const addBtn = document.getElementById('pinvAddItemBtn');
+  if (addBtn) addBtn.disabled = locked;
+  const note = document.getElementById('pinvItemsLockNote');
+  if (note) note.style.display = locked ? 'inline' : 'none';
+}
+
 async function onGRNChange() {
   const grnId  = document.getElementById('pinv_grn_id').value;
   const sel    = document.getElementById('pinv_grn_id');
   const banner = document.getElementById('po_filled_banner');
   const badge  = document.getElementById('po_status_badge');
-  const hint   = document.getElementById('po_hint');
-
-  sel.classList.toggle('required-field', !grnId);
 
   if (!grnId) {
+    // Deselecting the GRN does not clear anything already entered -- this
+    // is now a standalone invoice, so the manually-picked Supplier and any
+    // line items stay exactly as the user left them. Account Code and the
+    // line items unlock again since nothing is being derived anymore.
     banner.style.display = 'none';
     badge.style.display  = 'none';
-    hint.style.display   = 'block';
     document.getElementById('pinv_po_id').value = '';
     document.getElementById('pinv_po_no').value = '';
+    sel.style.borderColor = '';
+    _setPinvAccountCodeLocked(false);
+    _setPinvHeaderFieldsLocked(false);
+    _setPinvLineItemsLocked(false);
     if(typeof grlPreviewFromPO==='function') grlPreviewFromPO('');
     return;
   }
@@ -866,10 +932,9 @@ async function onGRNChange() {
   document.getElementById('pinv_ptype').value = doc.purchase_type || '';
   document.getElementById('pinv_kind').value  = doc.kind || 'Goods';
 
-  // ── Auto-fill (supplier derived, not user-selectable) ──
+  // ── Auto-fill (supplier derived from the GRN -- mechanism 1) ──
   document.getElementById('pinv_supplier').value = doc.supplier_id || '';
-  document.getElementById('pinv_supplier_name').value = doc.supplier_name || '';
-  loadPinvSupplierBanks(doc.supplier_id || '');
+  _setPinvHeaderFieldsLocked(true);
 
   const vref = document.getElementById('pinv_supplier_ref');
   if (vref) vref.value = doc.supplier_ref_no || '';
@@ -877,12 +942,13 @@ async function onGRNChange() {
   const dd = document.getElementById('pinv_delivery_date');
   if (dd && doc.delivery_date) dd.value = doc.delivery_date;
 
-  // Account Code — derived from the GRN (falls back to the P1 default if none)
+  // Account Code — derived from the GRN (falls back to the P1 default if none) and locked
   const accSel = document.getElementById('pinv_account_code');
   const accVal = doc.account_code || (TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
   accSel.innerHTML = accountCodeOptionsHtml(accVal);
+  _setPinvAccountCodeLocked(true);
 
-  // Line items — copy from the GRN, locked
+  // Line items — copied from the GRN and locked while the link is active
   document.getElementById('liBody').innerHTML = '';
   _liIdx = 0;
   if (doc.items && doc.items.length > 0) {
@@ -892,13 +958,13 @@ async function onGRNChange() {
   }
   recalcSummary();
   updLiCount();
+  _setPinvLineItemsLocked(true);
 
   // Show banner
   document.getElementById('po_filled_docno').textContent = doc.doc_no || '';
   document.getElementById('po_status_text').textContent  = doc.status || '';
   banner.style.display = 'flex';
   badge.style.display  = 'inline-flex';
-  hint.style.display   = 'none';
 
   sel.style.borderColor = '#86efac';
   if(typeof grlPreviewFromPO==='function') grlPreviewFromPO(doc.purchase_order_id || '');
@@ -916,6 +982,7 @@ function onPinvStatusChange() {
     postEl.disabled = true;
     postEl.value = '';
   }
+  grlUpdatePostBtnState();
 }
 
 /* ══ Section toggle ══ */
@@ -937,74 +1004,208 @@ function switchTab(tabId, btn) {
   btn.classList.add('active');
 }
 
-/* ══ Supplier bank accounts → populate bank dropdown ══ */
-function loadPinvSupplierBanks(supplierId, selectedId) {
-  const sel = document.getElementById('pinv_bank_account');
-  if (!sel) return;
-  if (!supplierId) {
-    sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'اختر المورد أولاً' : 'Select supplier first') + ' --</option>';
-    return;
-  }
-  fetch('/purchase/suppliers/' + supplierId + '/banks')
-    .then(r => r.json())
-    .then(banks => {
-      let html = '<option value="">-- ' + (IS_AR ? 'اختر حساباً' : 'Select account') + ' --</option>';
-      (banks || []).forEach(b => {
-        const label = (b.bank_name_en || b.bank_name || '') +
-                      (b.account_number ? ' — ' + b.account_number : '');
-        const selAttr = (String(b.id) === String(selectedId)) ? ' selected' : '';
-        html += '<option value="' + b.id + '"' + selAttr + '>' + label + '</option>';
-      });
-      sel.innerHTML = html;
-    })
-    .catch(() => {
-      sel.innerHTML = '<option value="">-- ' + (IS_AR ? 'لا توجد حسابات' : 'No accounts') + ' --</option>';
-    });
-}
-
-/* ══ Picking a Supplier Bank Account implies a Cash payment, and picking
-   Credit implies no specific bank account is used yet -- the two fields
-   stay mutually consistent in both directions. ══ */
-function onPinvBankAccountChange() {
-  if (document.getElementById('pinv_bank_account').value) {
-    document.getElementById('pinv_payment').value = 'Cash';
-  }
-}
-
-function onPinvPaymentChange() {
-  if (document.getElementById('pinv_payment').value === 'Credit') {
-    document.getElementById('pinv_bank_account').value = '';
-  }
-}
-
 function clearGRN() {
   document.getElementById('pinv_grn_id').value = '';
   document.getElementById('pinv_po_id').value = '';
   document.getElementById('pinv_po_no').value = '';
   document.getElementById('po_filled_banner').style.display = 'none';
   document.getElementById('po_status_badge').style.display  = 'none';
-  document.getElementById('po_hint').style.display          = 'block';
-  document.getElementById('pinv_grn_id').classList.add('required-field');
   document.getElementById('pinv_grn_id').style.borderColor = '';
-  // Clear auto-filled fields
-  ['pinv_supplier_name','pinv_supplier_ref'].forEach(id => {
-    const e = document.getElementById(id); if (e) e.value = '';
-  });
+  // Clear auto-filled fields -- back to a standalone invoice
+  document.getElementById('pinv_supplier_ref').value = '';
   document.getElementById('pinv_supplier').value = '';
   document.getElementById('pinv_ptype').value = '';
   document.getElementById('pinv_kind').value = 'Goods';
   document.getElementById('pinv_account_code').innerHTML =
     accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+  _setPinvAccountCodeLocked(false);
+  _setPinvHeaderFieldsLocked(false);
   document.getElementById('liBody').innerHTML = '';
   _liIdx = 0;
   addLiRow();
+  _setPinvLineItemsLocked(false);
   recalcSummary(); updLiCount();
   if(typeof grlPreviewFromPO==='function') grlPreviewFromPO('');
 }
 
-/* ══ Account Code (header) — populated from the purchase tax code master.
-   Line items are locked/inherited from the source PO, so there is no
-   cascade into line items here, only the header dropdown. ══ */
+async function loadItemMaster() {
+  try {
+    const res = await fetch('/items/data');
+    const all = await res.json();
+    _itemMaster = (all || []).filter(it => it.is_active === undefined || it.is_active);
+    _itemMasterLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Item Master:', e);
+    _itemMaster = [];
+  }
+}
+
+/* Kind = Services: line items pick a Chart-of-Accounts (Level Five) code
+   directly instead of an Item Master item. Kind = Goods keeps the existing
+   Item Master mechanism untouched. */
+async function loadLevelFive() {
+  try {
+    const res = await fetch('/coa/level-five/data');
+    const all = await res.json();
+    _levelFive = (all || []).filter(a => (a.status || 'active') === 'active');
+    _levelFiveLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Level Five accounts:', e);
+    _levelFive = [];
+  }
+}
+
+function _isServicesKind() {
+  const el = document.getElementById('pinv_kind');
+  return !!el && el.value === 'Services';
+}
+
+/* ══ Item Master dropdown helpers ══ */
+function _itemCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    return `<option value="${it.item_code}"${sel}>${it.item_code}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _itemNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    const label = it.name_en + (it.name_ar ? ' / ' + it.name_ar : '');
+    return `<option value="${it.item_code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown item'})</option>`;
+  }
+  return html;
+}
+
+/* Services-kind counterparts of _itemCodeOptionsHtml/_itemNameOptionsHtml
+   above -- same shape, sourced from Level Five (Chart of Accounts) instead
+   of Item Master. */
+function _glCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    return `<option value="${a.code}"${sel}>${a.code}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _glNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    const label = a.drawers + (a.drawers_ar ? ' / ' + a.drawers_ar : '');
+    return `<option value="${a.code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown account'})</option>`;
+  }
+  return html;
+}
+
+function _defaultDescFor(code, servicesKind, item) {
+  if (servicesKind) {
+    const acc = _levelFive.find(a => a.code === code);
+    return acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+  }
+  return item ? (item.name_en + (item.name_ar ? ' / ' + item.name_ar : '')) : '';
+}
+
+function _uomOptionsHtml(item, selectedUom) {
+  const list = (item && item.uoms && item.uoms.length) ? item.uoms : null;
+  if (!list) {
+    const fallback = selectedUom || (item && item.uom) || 'unit';
+    return `<option value="${fallback}" selected>${fallback}</option>`;
+  }
+  return list.map(u => {
+    const val = u.unit_name;
+    const sel = (selectedUom ? selectedUom === val : u.is_default) ? ' selected' : '';
+    return `<option value="${val}"${sel}>${val}</option>`;
+  }).join('');
+}
+function _defaultUomOf(item) {
+  const list = (item && item.uoms && item.uoms.length) ? item.uoms : null;
+  if (!list) return (item && item.uom) || 'unit';
+  return (list.find(u => u.is_default) || list[0]).unit_name;
+}
+
+function onLiItemChange(idx, source) {
+  const codeSel = document.getElementById('plic_' + idx);
+  const nameSel = document.getElementById('plname_' + idx);
+  const code = source === 'name' ? (nameSel ? nameSel.value : '') : (codeSel ? codeSel.value : '');
+
+  if (codeSel && codeSel.value !== code) codeSel.value = code;
+  if (nameSel && nameSel.value !== code) nameSel.value = code;
+
+  const descEl = document.getElementById('plid_' + idx);
+  const uomEl  = document.getElementById('pluom_' + idx);
+  const rateEl = document.getElementById('plrt_' + idx);
+
+  if (_isServicesKind()) {
+    const acc = _levelFive.find(a => a.code === code);
+    if (descEl) descEl.value = acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+    if (uomEl)  { uomEl.innerHTML = _uomOptionsHtml(null, 'unit'); uomEl.value = 'unit'; }
+    if (rateEl) rateEl.value = (0).toFixed(2);
+    recalcLi(idx);
+    return;
+  }
+
+  const item = _itemMaster.find(it => it.item_code === code);
+  if (item) {
+    if (descEl) descEl.value = item.name_en + (item.name_ar ? ' / ' + item.name_ar : '');
+    if (uomEl)  { uomEl.innerHTML = _uomOptionsHtml(item, null); uomEl.value = _defaultUomOf(item); }
+    if (rateEl) rateEl.value = (item.main_rate || 0).toFixed(2);
+  } else {
+    if (descEl) descEl.value = '';
+    if (uomEl)  { uomEl.innerHTML = _uomOptionsHtml(null, 'unit'); uomEl.value = 'unit'; }
+    if (rateEl) rateEl.value = (0).toFixed(2);
+  }
+  recalcLi(idx);
+}
+
+function onPinvKindChange() {
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const m = (row.id || '').match(/^plr_(\d+)$/);
+    if (!m) return;
+    const idx = parseInt(m[1]);
+    const codeSel = document.getElementById('plic_' + idx);
+    const nameSel = document.getElementById('plname_' + idx);
+    if (!codeSel || !nameSel) return;
+    const servicesKind = _isServicesKind();
+    codeSel.innerHTML = servicesKind ? _glCodeOptionsHtml('') : _itemCodeOptionsHtml('');
+    nameSel.innerHTML = servicesKind ? _glNameOptionsHtml('') : _itemNameOptionsHtml('');
+    onLiItemChange(idx, 'code');
+  });
+}
+
+/* ══ Warehouse options (sourced directly from the Owner's warehouses; first = default) ══ */
+const _ownerWarehouses = OWNER_WAREHOUSES;
+function _warehouseOptionsHtml(selected) {
+  const sel = selected || (_ownerWarehouses.length ? _ownerWarehouses[0].warehouse_name : '');
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += _ownerWarehouses.map(w => {
+    const label = (IS_AR && w.warehouse_name_ar) ? w.warehouse_name_ar : w.warehouse_name;
+    const optSel = w.warehouse_name === sel ? ' selected' : '';
+    return `<option value="${w.warehouse_name}"${optSel}>${label}</option>`;
+  }).join('');
+  if (sel && !_ownerWarehouses.some(w => w.warehouse_name === sel)) {
+    html += `<option value="${sel}" selected>${sel}</option>`;
+  }
+  return html;
+}
+
+/* ══ Account Code (header) — populated from the purchase tax code master. ══ */
 let TAX_CODES = [];
 const TAX_DEFAULT_CODE = 'P1';
 function taxCodeLabel(t) {
@@ -1017,44 +1218,93 @@ function accountCodeOptionsHtml(selected) {
   ).join('');
   return html;
 }
+// Line-item Tax Code column: show only the rate/text ("15%", "Exempt", ...).
+function taxRateText(t) {
+  return t.tax_code || t.account_code;
+}
+function taxOptionsHtml(selected) {
+  const sel = selected || (document.getElementById('pinv_account_code')?.value) || TAX_DEFAULT_CODE;
+  if (!TAX_CODES.length) {
+    return `<option value="${sel}" selected>${sel}</option>`;
+  }
+  let html = TAX_CODES.map(t =>
+    `<option value="${t.account_code}"${t.account_code === sel ? ' selected' : ''}>${taxRateText(t)}</option>`
+  ).join('');
+  // Keep a legacy/unknown saved code selectable so editing an old document
+  // never silently changes its tax code.
+  if (sel && !TAX_CODES.some(t => t.account_code === sel)) {
+    html = `<option value="${sel}" selected>${sel}</option>` + html;
+  }
+  return html;
+}
 function loadTaxCodes() {
   return fetch('/purchase-tax-codes/data')
     .then(r => r.json())
     .then(d => {
       TAX_CODES = (d || []).filter(t => (t.status || 'Active') === 'Active');
+      // Refresh any dropdowns already on screen.
+      document.querySelectorAll('select[name="li_tax_code[]"]').forEach(sel => {
+        const cur = sel.value;
+        sel.innerHTML = taxOptionsHtml(cur);
+        sel.value = cur || TAX_DEFAULT_CODE;
+      });
       const accEl = document.getElementById('pinv_account_code');
       if (accEl) {
         const cur = accEl.value;
         accEl.innerHTML = accountCodeOptionsHtml(cur);
         accEl.value = cur;
       }
+      // Recalculate every visible line with the real rates.
+      document.querySelectorAll('select[name="li_tax_code[]"]').forEach(sel => {
+        const m = (sel.id || '').match(/pltc_(\d+)/);
+        if (m && typeof recalcLi === 'function') recalcLi(parseInt(m[1]));
+      });
+      if (typeof recalcSummary === 'function') recalcSummary();
     })
     .catch(() => { TAX_CODES = []; });
 }
 document.addEventListener('DOMContentLoaded', loadTaxCodes);
 
-/* ══ Line Items — locked/inherited from PO, read-only ══ */
+/* ══ Line Items ══ */
 function addLiRow(d) {
   const idx = _liIdx++;
   d = d || {};
+  const servicesKind = _isServicesKind();
+  const item = (!servicesKind && d.item_code) ? _itemMaster.find(it => it.item_code === d.item_code) : null;
+  const codeOptsHtml = servicesKind ? _glCodeOptionsHtml(d.item_code||'') : _itemCodeOptionsHtml(d.item_code||'');
+  const nameOptsHtml = servicesKind ? _glNameOptionsHtml(d.item_code||'') : _itemNameOptionsHtml(d.item_code||'');
   const row = `<tr id="plr_${idx}">
     <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
-    <td><input type="text"   class="li-inp" name="li_item_code[]" value="${d.item_code||''}" readonly style="width:80px;background:#f3f4f6;"></td>
-    <td><input type="text"   class="li-inp" name="li_item_desc[]" value="${d.item_desc||''}" readonly style="min-width:130px;background:#f3f4f6;"></td>
-    <td><input type="text"   class="li-inp" name="li_warehouse[]" value="${d.warehouse||''}" readonly style="min-width:90px;background:#f3f4f6;"></td>
-    <td><input type="text"   class="li-inp" name="li_uom[]" value="${d.uom||'unit'}" readonly style="width:90px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  readonly style="width:62px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||0}"      readonly style="width:62px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  readonly style="width:58px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   readonly style="width:58px;background:#f3f4f6;"></td>
+    <td><select class="li-inp" name="li_item_code[]" id="plic_${idx}" onchange="onLiItemChange(${idx},'code')" style="width:110px;">${codeOptsHtml}</select></td>
+    <td>
+      <select class="li-inp" id="plname_${idx}" onchange="onLiItemChange(${idx},'name')" style="min-width:160px;">${nameOptsHtml}</select>
+      <input type="hidden" name="li_item_desc[]" id="plid_${idx}" value="${d.item_desc||d.description||_defaultDescFor(d.item_code||'', servicesKind, item)}">
+    </td>
+    <td><select class="li-inp" name="li_warehouse[]" id="plwh_${idx}" style="min-width:100px;">${_warehouseOptionsHtml(d.warehouse||'')}</select></td>
+    <td><select class="li-inp" name="li_uom[]" id="pluom_${idx}" style="width:90px;">${_uomOptionsHtml(item, d.uom)}</select></td>
+    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||(item?item.main_rate:0)||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
     <td><input type="number" class="li-inp" id="plt_${idx}"  name="li_taxable_disp[]" value="${d.taxable||0}" readonly
-         style="width:76px;background:#fffbeb;color:#92400e;font-weight:600;"></td>
-    <td><input type="text" class="li-inp" name="li_tax_code[]" id="pltc_${idx}" value="${d.tax_code||'VAT15'}" readonly style="width:78px;background:#f3f4f6;"></td>
+         style="width:76px;background:#fffbeb;color:#92400e;font-weight:600;" title="Qty × Rate − Discount"></td>
+    <td><select class="li-inp" name="li_tax_code[]" id="pltc_${idx}" onchange="recalcLi(${idx})" style="width:78px;">${taxOptionsHtml(d.tax_code)}
+    </select></td>
     <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${d.tax_amount||0}" readonly style="width:62px;background:#f3f4f6;"></td>
     <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${d.total||0}" readonly style="width:76px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+    <td><button type="button" onclick="removeLi(${idx})"
+                style="width:22px;height:22px;border-radius:5px;border:none;background:#fee2e2;color:#b91c1c;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">
+      <i class="fas fa-times" style="font-size:9px;"></i></button></td>
   </tr>`;
   document.getElementById('liBody').insertAdjacentHTML('beforeend', row);
   recalcLi(idx);
+  updLiCount();
+}
+
+function removeLi(idx) {
+  const r = document.getElementById('plr_'+idx);
+  if (r) r.remove();
+  recalcSummary();
   updLiCount();
 }
 
@@ -1064,6 +1314,11 @@ function addLiRow(d) {
 // plain `=== 'VAT15'` check would wrongly show/recompute 0% when editing
 // one instead of reading back the real rate.
 function taxRateOf(code) {
+  const t = TAX_CODES.find(x => x.account_code === code);
+  if (t) {
+    const m = String(t.tax_code || '').match(/(\d+(?:\.\d+)?)\s*%/);
+    return m ? parseFloat(m[1]) : 0;
+  }
   if (code === 'VAT15') return 15;
   if (code === 'VAT0' || code === 'EXEMPT') return 0;
   const m = String(code || '').match(/(\d+(?:\.\d+)?)\s*%/);
@@ -1156,19 +1411,17 @@ async function openAddPINV() {
   grlUpdatePostBtnState();
   document.getElementById('pinvTitle').innerHTML = '<i class="fas fa-file-invoice me-2"></i>' + (IS_AR ? 'إضافة فاتورة شراء' : 'Add Purchase Invoice');
   
-  // Reset GRN selector to required state (Purchase Order is now purely derived)
+  // Reset GRN selector -- optional, so a fresh invoice starts as standalone
   const grnSel = document.getElementById('pinv_grn_id');
   grnSel.value = '';
   grnSel.style.borderColor = '';
-  grnSel.classList.add('required-field');
   document.getElementById('pinv_po_id').value = '';
   document.getElementById('pinv_po_no').value = '';
   document.getElementById('po_filled_banner').style.display = 'none';
   document.getElementById('po_status_badge').style.display  = 'none';
-  document.getElementById('po_hint').style.display          = 'block';
 
   // Clear fields
-  ['pinv_supplier_name','pinv_supplier_ref','pinv_remarks'].forEach(id => {
+  ['pinv_supplier_ref','pinv_remarks'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = '';
   });
   document.getElementById('pinv_supplier').value = '';
@@ -1177,6 +1430,8 @@ async function openAddPINV() {
 
   const accSel = document.getElementById('pinv_account_code');
   accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+  _setPinvAccountCodeLocked(false);
+  _setPinvHeaderFieldsLocked(false);
 
   // ⭐ Fetch fresh document number
   await fetchDocNo();
@@ -1188,7 +1443,6 @@ async function openAddPINV() {
   document.getElementById('pinv_kind').value = 'Goods';
   document.getElementById('pinv_ptype').value = '';
   document.getElementById('pinv_payment').value = 'Credit';
-  loadPinvSupplierBanks('');
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('pinv_posting_date').value = '';
   document.getElementById('pinv_posting_date').disabled = true;
@@ -1210,8 +1464,11 @@ async function openAddPINV() {
     const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
     if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
   });
+  await loadItemMaster();
+  await loadLevelFive();
   addLiRow();
-  
+  _setPinvLineItemsLocked(false);
+
   if (!_pinvModal) {
     const modalEl = document.getElementById('pinvModal');
     if (modalEl) {
@@ -1230,7 +1487,7 @@ function openEditPINV(id) {
       if (!r.ok) throw new Error('Failed to fetch invoice data');
       return r.json();
     })
-    .then(d => {
+    .then(async d => {
       console.log('Edit data:', d);
       _liIdx = 0; _attachments = [];
       document.getElementById('pinv_id').value = id;
@@ -1245,23 +1502,20 @@ function openEditPINV(id) {
       const grnIdValue = d.goods_receipt_note_id || '';
       grnSel.value = grnIdValue;
       grnSel.style.borderColor = grnIdValue ? '#86efac' : '';
-      grnSel.classList.toggle('required-field', !grnIdValue);
       document.getElementById('pinv_po_id').value = d.purchase_order_id || '';
       document.getElementById('pinv_po_no').value = d.po_no || '';
       document.getElementById('po_filled_banner').style.display = grnIdValue ? 'flex' : 'none';
       document.getElementById('po_filled_docno').textContent = d.grn_no || '';
-      document.getElementById('po_hint').style.display = grnIdValue ? 'none' : 'block';
-      
+
       // Other fields
       document.getElementById('pinv_doc_no').value = d.doc_no || '';
       document.getElementById('pinvDocBadge').textContent = d.doc_no || '';
       document.getElementById('pinv_status').value = d.status || 'Open';
+      grlUpdatePostBtnState();
       document.getElementById('pinv_kind').value = d.kind || 'Goods';
       document.getElementById('pinv_ptype').value = d.purchase_type || '';
       document.getElementById('pinv_payment').value = d.payment_method || 'Credit';
       document.getElementById('pinv_supplier').value = d.supplier_id || '';
-      document.getElementById('pinv_supplier_name').value = d.supplier_name || '';
-      loadPinvSupplierBanks(d.supplier_id || '', d.bank_account_id || '');
       const vr = document.getElementById('pinv_supplier_ref');  if(vr) vr.value = d.supplier_ref_no||'';
       const rm = document.getElementById('pinv_remarks');     if(rm) rm.value = d.remarks||'';
       document.getElementById('pinv_posting_date').disabled = (d.status === 'Open');
@@ -1275,14 +1529,19 @@ function openEditPINV(id) {
 
       const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
       document.getElementById('pinv_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+      _setPinvAccountCodeLocked(!!grnIdValue);
+      _setPinvHeaderFieldsLocked(!!grnIdValue);
 
+      await loadItemMaster();
+      await loadLevelFive();
       document.getElementById('liBody').innerHTML = '';
       if (d.items && d.items.length > 0) {
         d.items.forEach(li => addLiRow(li));
       } else {
         addLiRow();
       }
-      
+      _setPinvLineItemsLocked(!!grnIdValue);
+
       document.getElementById('attList').innerHTML = '';
       document.getElementById('existAttList').innerHTML = '';
       if (d.attachments) {
@@ -1339,6 +1598,32 @@ function onPinvPeriodChange() {
   validatePinvPeriod();
 }
 
+function validatePinvLineItems() {
+  const rows = document.querySelectorAll('#liBody tr');
+  if (!rows.length) {
+    alert(IS_AR ? 'أضف صنفاً واحداً على الأقل.' : 'Add at least one line item.');
+    return false;
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+    const n = i + 1;
+    if (!g('li_item_code').trim()) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب اختيار كود الصنف واسمه.' : ': Item Code and Item Name must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_qty')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال كمية أكبر من صفر.' : ': Quantity must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_rate')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال سعر أكبر من صفر.' : ': Rate must be selected.'));
+      return false;
+    }
+  }
+  return true;
+}
+
 /* Validates + builds the FormData shared by plain Save and Post & Save.
    Returns null (having already alerted) if validation fails. */
 async function _buildPINVFormData() {
@@ -1354,13 +1639,13 @@ async function _buildPINVFormData() {
     }
   }
 
-  // Validate GRN is required (Purchase Order is now derived from it)
+  // GRN is optional (mechanism 2: a standalone invoice needs no GRN), but a
+  // Supplier must always be picked -- either derived from the GRN or chosen
+  // manually.
   const grnId = document.getElementById('pinv_grn_id').value;
-  if (!grnId) {
-    document.getElementById('pinv_grn_id').classList.add('required-field');
-    document.getElementById('pinv_grn_id').focus();
-    document.getElementById('pinv_grn_id').style.borderColor = '#ef4444';
-    alert(IS_AR ? 'الرجاء اختيار إيصال الاستلام أولاً' : 'Please select a Goods Receipt Note first');
+  if (!document.getElementById('pinv_supplier').value) {
+    document.getElementById('pinv_supplier').focus();
+    alert(IS_AR ? 'يجب اختيار المورد' : 'Supplier must be selected');
     return null;
   }
   if (_poPullInProgress) {
@@ -1371,6 +1656,7 @@ async function _buildPINVFormData() {
     document.getElementById('pinv_to_date').focus();
     return null;
   }
+  if (!validatePinvLineItems()) { return null; }
 
   const fd  = new FormData();
 
@@ -1381,7 +1667,6 @@ async function _buildPINVFormData() {
   fd.append('kind', document.getElementById('pinv_kind').value);
   fd.append('purchase_type', document.getElementById('pinv_ptype').value);
   fd.append('payment_method', document.getElementById('pinv_payment').value);
-  fd.append('bank_account_id', document.getElementById('pinv_bank_account').value || '');
   fd.append('supplier_id', document.getElementById('pinv_supplier').value || '');
   fd.append('supplier_ref_no', document.getElementById('pinv_supplier_ref')?.value || '');
   fd.append('account_code', document.getElementById('pinv_account_code').value || '');
@@ -1590,9 +1875,9 @@ const cols = [
   {headerName:IS_AR?'المورد':'Supplier',field:'supplier_name',minWidth:170,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'رقم المرجع':'Supplier Ref No',field:'supplier_ref_no',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},

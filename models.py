@@ -53,6 +53,31 @@ class User(UserMixin, db.Model):
     def check_password(self, pw): return check_password_hash(self.password_hash, pw)
     def is_admin(self):           return self.role == 'admin'
 
+    @property
+    def has_super_admin_role(self):
+        """True if this row's ROLE is Super Admin (so role_permissions
+        grants it every permission -- see seed_rbac_catalog()), regardless
+        of the separate is_super_admin flag. That flag is only ever True
+        for the one real platform account; a SaaS tenant's own local
+        SuperAdmin keeps this role but has the flag deliberately set to
+        False (see tenant_provisioning.py), so it's never mistaken for
+        real platform-level access from outside that tenant's own
+        database. Use effectively_super_admin (below) for a within-this-
+        database "should this user have full, unrestricted access" check."""
+        return bool(self.role_ref and self.role_ref.code == 'super_admin')
+
+    @property
+    def effectively_super_admin(self):
+        """Full, unrestricted access WITHIN whichever database this row
+        lives in -- the real platform Super Admin (is_super_admin=True)
+        or a tenant's own local SuperAdmin (has_super_admin_role, flag
+        off). Use this for any in-app restriction a Super Admin should
+        always bypass (e.g. is_basic_mode() in shared.py). Never use it
+        for a genuinely platform-wide gate (SaaS Admin screens, whole-
+        database Backup/Restore) that a tenant's own SuperAdmin must not
+        reach -- those stay keyed on is_super_admin alone."""
+        return bool(self.is_super_admin or self.has_super_admin_role)
+
     def get_id(self):
         """Flask-Login persists whatever this returns into both the session
         cookie and the long-lived remember-cookie. Encoding the active
@@ -97,6 +122,14 @@ class Owner(db.Model):
     stamp_path          = db.Column(db.String(500))
     sq_default_terms_conditions = db.Column(db.Text)  # Sales Quotation: default Terms & Conditions content for new documents
     sq_default_sign_stamp       = db.Column(db.Text)  # Sales Quotation: default Sign & Stamp content for new documents
+    # Which Sales Invoice print/PDF template is active: 'formal' (the
+    # default -- detailed bilingual tables, Owner logo/watermark/color),
+    # 'classic' (the original bilingual-card design), 'letterhead' (uses
+    # header_path/footer_path images instead of the built-in header),
+    # 'compact' (a denser single-column layout). Both Print and the PDF
+    # download read this same field via sales.py's _sinv_print_html(), so
+    # they can never show a different template from one another.
+    sinv_print_template = db.Column(db.String(20), default='formal')
     street_name         = db.Column(db.String(200))
     building_number     = db.Column(db.String(50))
     additional_number   = db.Column(db.String(50))
@@ -183,6 +216,168 @@ class OwnerDocument(db.Model):
 
     # Relationship to User who uploaded
     uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy=True)
+
+
+# ─────────────────────────────────────────────────────────────────
+# ZATCA (Saudi e-invoicing) INTEGRATION — Phase 2 onboarding + chain state.
+# Singleton settings row (one per company, mirrors the Owner singleton
+# pattern) + a certificate history audit trail. See database/zatca/engine.py
+# for the cryptography/XML logic and database/routes/zatca.py for the
+# onboarding screen that populates this. Values here NEVER get hardcoded
+# defaults that look like real credentials -- an empty/None field always
+# means "onboarding not done yet", checked explicitly wherever it matters.
+# ─────────────────────────────────────────────────────────────────
+class ZatcaSettings(db.Model):
+    __tablename__ = 'zatca_settings'
+    id                          = db.Column(db.Integer, primary_key=True)
+    owner_id                    = db.Column(db.Integer, db.ForeignKey('owners.id'))
+    environment                 = db.Column(db.String(20), default='sandbox')  # sandbox | simulation | production
+    onboarding_stage            = db.Column(db.String(30), default='not_started')
+    # not_started -> csr_generated -> compliance_csid_issued ->
+    # compliance_checks_passed -> production_csid_issued
+
+    # CSR subject fields (organization_identity/organization_name are always
+    # re-derived from Owner.vat_number/Owner.name when a CSR is generated --
+    # kept as columns here only so the generated CSR can be displayed/audited
+    # without re-joining Owner every time).
+    csr_common_name             = db.Column(db.String(200))
+    csr_serial_number           = db.Column(db.String(100))
+    csr_organization_identity   = db.Column(db.String(20))
+    csr_organization_unit       = db.Column(db.String(200))
+    csr_organization_name       = db.Column(db.String(200))
+    csr_country                 = db.Column(db.String(2), default='SA')
+    csr_invoice_type            = db.Column(db.String(10), default='1100')
+    csr_location                = db.Column(db.String(200))
+    csr_industry                = db.Column(db.String(200))
+
+    # Keypair / CSR material. The private key is Fernet-encrypted at rest
+    # (see database/zatca/engine.py encrypt_secret/decrypt_secret) -- a
+    # deliberate departure from this codebase's existing cleartext-secret
+    # convention (e.g. Owner.smtp_password), justified because this key
+    # underwrites the legal cryptographic signature on every invoice.
+    private_key_pem_enc         = db.Column(db.Text)
+    public_key_pem              = db.Column(db.Text)
+    csr_pem                     = db.Column(db.Text)
+
+    # Compliance CSID (sandbox onboarding step 1).
+    compliance_request_id       = db.Column(db.String(100))
+    compliance_csid_binary      = db.Column(db.Text)
+    compliance_csid_secret_enc  = db.Column(db.Text)
+    compliance_issued_at        = db.Column(db.DateTime)
+    compliance_checks_passed    = db.Column(db.Boolean, default=False)
+
+    # Production CSID -- populated only once Phase 2 (live calls) is enabled
+    # and compliance checks have passed.
+    production_request_id       = db.Column(db.String(100))
+    production_csid_binary      = db.Column(db.Text)
+    production_csid_secret_enc  = db.Column(db.Text)
+    production_issued_at        = db.Column(db.DateTime)
+
+    # Cached from the active certificate -- feed QR tags 8/9 without
+    # re-parsing the certificate on every invoice print.
+    cert_public_key_b64         = db.Column(db.Text)
+    cert_ca_signature_b64       = db.Column(db.Text)
+
+    # Invoice hash chain state -- last_icv is the running Invoice Counter
+    # Value (never reused, never reset); last_invoice_hash is the chain tip
+    # (None means "use the genesis hash" for the very next invoice).
+    last_icv                    = db.Column(db.BigInteger, default=0)
+    last_invoice_hash           = db.Column(db.String(200))
+
+    created_at                  = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at                  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by                  = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    def active_csid(self):
+        """The CSID currently usable for signing: production if issued,
+        else compliance, else None (onboarding not far enough along)."""
+        if self.production_csid_binary:
+            return 'production', self.production_csid_binary, self.production_csid_secret_enc
+        if self.compliance_csid_binary:
+            return 'compliance', self.compliance_csid_binary, self.compliance_csid_secret_enc
+        return None, None, None
+
+    # Real properties (not just to_dict() keys) so templates that render the
+    # ORM object directly -- e.g. zatca/settings.html, which is handed
+    # `settings` itself, not settings.to_dict() -- can use settings.has_csr
+    # etc. and actually get a real True/False rather than Jinja's silently
+    # falsy Undefined for a nonexistent attribute.
+    @property
+    def has_csr(self):
+        return bool(self.csr_pem)
+
+    @property
+    def has_compliance_csid(self):
+        return bool(self.compliance_csid_binary)
+
+    @property
+    def has_production_csid(self):
+        return bool(self.production_csid_binary)
+
+    def to_dict(self):
+        cert_type, _, _ = self.active_csid()
+        return {
+            'id': self.id, 'environment': self.environment or 'sandbox',
+            'onboarding_stage': self.onboarding_stage or 'not_started',
+            'csr_common_name': self.csr_common_name or '',
+            'csr_organization_identity': self.csr_organization_identity or '',
+            'csr_organization_name': self.csr_organization_name or '',
+            'csr_organization_unit': self.csr_organization_unit or '',
+            'csr_country': self.csr_country or 'SA',
+            'csr_invoice_type': self.csr_invoice_type or '1100',
+            'csr_location': self.csr_location or '',
+            'csr_industry': self.csr_industry or '',
+            'has_csr': self.has_csr,
+            'has_compliance_csid': self.has_compliance_csid,
+            'has_production_csid': self.has_production_csid,
+            'active_csid_type': cert_type,
+            'compliance_checks_passed': bool(self.compliance_checks_passed),
+            'last_icv': int(self.last_icv or 0),
+            'updated_at': self.updated_at.strftime('%d/%m/%Y %H:%M') if self.updated_at else '',
+        }
+
+
+class ZatcaCertificateHistory(db.Model):
+    """Audit trail of every CSID (re)issued against ZatcaSettings -- expected
+    to accumulate repeatedly during sandbox testing/onboarding retries, kept
+    forever rather than overwritten so a past certificate's provenance is
+    never lost."""
+    __tablename__ = 'zatca_certificate_history'
+    id                  = db.Column(db.Integer, primary_key=True)
+    zatca_settings_id   = db.Column(db.Integer, db.ForeignKey('zatca_settings.id'), nullable=False)
+    cert_type           = db.Column(db.String(20), nullable=False)  # compliance | production
+    environment         = db.Column(db.String(20))
+    request_id          = db.Column(db.String(100))
+    csid_binary         = db.Column(db.Text)
+    csid_secret_enc     = db.Column(db.Text)
+    csr_pem_snapshot    = db.Column(db.Text)
+    issued_at           = db.Column(db.DateTime, default=datetime.utcnow)
+    revoked_at          = db.Column(db.DateTime)
+    status              = db.Column(db.String(20), default='active')  # active | superseded | revoked
+    notes               = db.Column(db.Text)
+    created_by          = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    @property
+    def common_name(self):
+        """The certificate's Subject Common Name, parsed from the stored
+        binary token -- lets a certificate history list show a real,
+        human-meaningful label (e.g. "1234567890 - 05172026 - Live")
+        instead of just its type and date. None if csid_binary is empty
+        or doesn't parse as a certificate."""
+        if not self.csid_binary:
+            return None
+        from database.zatca import engine as zengine
+        return zengine.certificate_common_name(self.csid_binary)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'cert_type': self.cert_type, 'environment': self.environment or '',
+            'request_id': self.request_id or '', 'status': self.status or 'active',
+            'issued_at': self.issued_at.strftime('%d/%m/%Y %H:%M') if self.issued_at else '',
+            'revoked_at': self.revoked_at.strftime('%d/%m/%Y %H:%M') if self.revoked_at else '',
+            'notes': self.notes or '', 'common_name': self.common_name or '',
+            'has_binary': bool(self.csid_binary),
+        }
 
 
 class ActivityLog(db.Model):
@@ -342,7 +537,7 @@ class AutoCodeSelection(db.Model):
             'nature': self.nature or 'Debit',
             'status': self.status or 'Approved',
             'payment_mode': self.payment_mode or '',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
         }
 
 
@@ -375,8 +570,8 @@ class RecycleBin(db.Model):
             'record_pk': self.record_pk, 'record_label': self.record_label or '',
             'deleted_by': self.deleted_by,
             'deleted_by_name': (self.deleter.username if self.deleter else ''),
-            'deleted_at': self.deleted_at.strftime('%Y-%m-%d %H:%M') if self.deleted_at else '',
-            'purge_at': self.purge_at.strftime('%Y-%m-%d %H:%M') if self.purge_at else '',
+            'deleted_at': self.deleted_at.strftime('%d/%m/%Y %H:%M') if self.deleted_at else '',
+            'purge_at': self.purge_at.strftime('%d/%m/%Y %H:%M') if self.purge_at else '',
             'status': self.status,
         }
 
@@ -754,7 +949,7 @@ class EmployeeDocument(db.Model):
             'document_type': self.document_type or '',
             'file_path': self.file_path,
             'original_name': self.original_name or '',
-            'uploaded_at': self.uploaded_at.strftime('%Y-%m-%d %H:%M') if self.uploaded_at else '',
+            'uploaded_at': self.uploaded_at.strftime('%d/%m/%Y %H:%M') if self.uploaded_at else '',
             'uploaded_by': self.uploaded_by,
             'employee_code': self.employee_code or '',
             'employee_name': self.employee_name or '',
@@ -875,8 +1070,8 @@ class PaymentMode(db.Model):
             'gl_account_id': self.gl_account_id or '',
             'gl_account_name': (account.drawers if account else '') or '',
             'active': bool(self.active),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
-            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M') if self.updated_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
+            'updated_at': self.updated_at.strftime('%d/%m/%Y %H:%M') if self.updated_at else '',
         }
 
 
@@ -971,7 +1166,7 @@ class OutgoingPayment(db.Model):
             'total_amount_including_vat': float(self.total_amount_including_vat or 0),
             'journal_entry_id': self.journal_entry_id,
             'grl_id': self.grl_id,
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by_name': self.creator.username if self.creator else '',
             'adjustment_lines': [ln.to_dict() for ln in self.adjustment_lines],
             'gl_lines': [ln.to_dict() for ln in self.gl_lines],
@@ -1139,7 +1334,7 @@ class IncomingPayment(db.Model):
             'total_amount_including_vat': float(self.total_amount_including_vat or 0),
             'journal_entry_id': self.journal_entry_id,
             'grl_id': self.grl_id,
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by_name': self.creator.username if self.creator else '',
             'adjustment_lines': [ln.to_dict() for ln in self.adjustment_lines],
             'gl_lines': [ln.to_dict() for ln in self.gl_lines],
@@ -1254,7 +1449,7 @@ class SupplierDocument(db.Model):
             'file_size_kb': round((self.file_size or 0) / 1024, 1),
             'uploaded_by': self.uploaded_by,
             'uploaded_by_name': self.uploader.username if self.uploader else '',
-            'uploaded_at': self.uploaded_at.strftime('%Y-%m-%d %H:%M') if self.uploaded_at else '',
+            'uploaded_at': self.uploaded_at.strftime('%d/%m/%Y %H:%M') if self.uploaded_at else '',
         }
 
 
@@ -1291,7 +1486,7 @@ class BuyerDocument(db.Model):
             'file_size_kb': round((self.file_size or 0) / 1024, 1),
             'uploaded_by': self.uploaded_by,
             'uploaded_by_name': self.uploader.username if self.uploader else '',
-            'uploaded_at': self.uploaded_at.strftime('%Y-%m-%d %H:%M') if self.uploaded_at else '',
+            'uploaded_at': self.uploaded_at.strftime('%d/%m/%Y %H:%M') if self.uploaded_at else '',
         }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1355,7 +1550,7 @@ class PurchaseRequest(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -1468,7 +1663,7 @@ class PurchaseQuotation(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -1574,7 +1769,7 @@ class PurchaseOrder(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -1714,7 +1909,7 @@ class GoodsReceiptNote(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -1840,7 +2035,7 @@ class PurchaseInvoice(db.Model):
             'total_incl_vat': float(self.total_incl_vat or 0),
             'paid_amount': float(self.paid_amount or 0),
             'balance_due': float(self.total_incl_vat or 0) - float(self.paid_amount or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -1966,7 +2161,7 @@ class GoodsReturnRequest(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -2083,7 +2278,7 @@ class PurchaseReturnNote(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -2202,7 +2397,7 @@ class PurchaseDebitMemo(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -2448,6 +2643,15 @@ class StoreTransaction(db.Model):
     buyer_id                    = db.Column(db.Integer, db.ForeignKey('buyers.id', ondelete='SET NULL'))
     buyer_name                  = db.Column(db.String(200))
 
+    # ── Standalone Purchase Invoice stock receipt (no GRN in the chain) --
+    #    set ONLY when a Purchase Invoice with no linked GRN is Posted, since
+    #    that is then the sole document ever receiving the goods. A
+    #    GRN-linked invoice never sets these -- its GRN already owns the
+    #    stock movement, so posting the invoice must not add stock again. ──
+    purchase_invoice_id           = db.Column(db.Integer, db.ForeignKey('purchase_invoices.purchase_invoice_id', ondelete='SET NULL'))
+    purchase_invoice_doc_no       = db.Column(db.String(20))
+    purchase_invoice_line_item_id = db.Column(db.Integer, db.ForeignKey('purchase_invoice_line_items.purchase_invoice_line_item_id', ondelete='SET NULL'))
+
     store   = db.relationship('Store')
     item    = db.relationship('ItemMaster')
     creator = db.relationship('User', foreign_keys=[created_by])
@@ -2469,6 +2673,15 @@ class StoreTransaction(db.Model):
             'goods_receipt_note_id': self.goods_receipt_note_id,
             'goods_receipt_note_doc_no': self.goods_receipt_note_doc_no or '',
             'goods_receipt_line_item_id': self.goods_receipt_line_item_id,
+            'purchase_invoice_id': self.purchase_invoice_id,
+            # Set directly when THIS row was created by a standalone (no-GRN)
+            # Purchase Invoice being Posted; otherwise (a GRN-linked receipt)
+            # derived by looking up whichever invoice(s) later got linked to
+            # the same GRN, purely informational and never a stock owner.
+            'purchase_invoice_doc_no': self.purchase_invoice_doc_no or (', '.join(
+                pi.doc_no for pi in PurchaseInvoice.query.filter_by(goods_receipt_note_id=self.goods_receipt_note_id).all() if pi.doc_no
+            ) if self.goods_receipt_note_id else ''),
+            'purchase_invoice_line_item_id': self.purchase_invoice_line_item_id,
             'supplier_id': self.supplier_id,
             'supplier_name': self.supplier_name or '',
             'sales_order_id': self.sales_order_id,
@@ -2486,7 +2699,7 @@ class StoreTransaction(db.Model):
             'posting_date': str(self.posting_date) if self.posting_date else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'status': self.status,
         }
 
@@ -2574,7 +2787,7 @@ class SalesRequest(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -2699,7 +2912,7 @@ class SalesQuotation(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -2806,7 +3019,7 @@ class SalesOrder(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -2889,6 +3102,15 @@ class SalesOrderLineItem(db.Model):
                                      'Partially Delivered' if delivered > 0 else 'Open')
             item = ItemMaster.query.filter_by(item_code=self.item_code).first() if self.item_code else None
             d['store_type'] = (item.store or '') if item else ''
+            # Current on-hand stock balance for this item -- same query shape
+            # as _check_dn_stock_availability() in database/routes/sales.py,
+            # so the Delivery Note UI can show/cap against it up front
+            # instead of the user only finding out at Save/Post time.
+            balance = (db.session.query(db.func.coalesce(db.func.sum(StoreTransaction.quantity), 0))
+                       .filter(StoreTransaction.item_code == self.item_code,
+                               StoreTransaction.status == 'Active')
+                       .scalar()) if self.item_code else 0
+            d['stock_available'] = float(balance or 0)
         return d
 # 4. GOODS RECEIPT NOTE
 #      FK: sales_order_id → sales_orders
@@ -2950,7 +3172,7 @@ class DeliveryNote(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -3007,7 +3229,10 @@ class DeliveryLineItem(db.Model):
 class SalesInvoice(db.Model):
     __tablename__ = 'sales_invoices'
     sales_invoice_id   = db.Column(db.Integer, primary_key=True)
-    doc_no                = db.Column(db.String(20), unique=True)
+    # Widened from the original VARCHAR(20): document numbers now embed the
+    # full transaction_type as their prefix (e.g. STD-INV-2026-1000), which
+    # a plain SLI-2026-1000 number never needed as much room for.
+    doc_no                = db.Column(db.String(40), unique=True)
     kind                  = db.Column(db.String(20), default='Goods')
     payment_method        = db.Column(db.String(20), default='Credit')
     bank_account_id       = db.Column(db.Integer)
@@ -3016,9 +3241,14 @@ class SalesInvoice(db.Model):
     delivery_note_id = db.Column(db.Integer, db.ForeignKey('sale_delivery_notes.delivery_note_id'))
     buyer_id             = db.Column(db.Integer, db.ForeignKey('buyers.id'))
     buyer_ref_no         = db.Column(db.String(100))
-    transaction_type     = db.Column(db.String(20))   # STD_CR, STD_DR, SMP_CR, SMP_DR
-    invoice_category     = db.Column(db.String(20))   # standard | simplified
+    # STD-INV, STD-DR, STD-CR, SIM-INV, SIM-DR, SIM-CR (current dropdown
+    # values -- see database/zatca/engine.py's SINV_TRANSACTION_TYPES);
+    # older invoices may still carry the legacy STD_INV/STD_CR/STD_DR/
+    # SMP_INV/SMP_CR/SMP_DR underscore-separated values, never migrated.
+    transaction_type     = db.Column(db.String(20))
+    invoice_category     = db.Column(db.String(20))   # standard | simplified -- derived from transaction_type, not independently user-editable
     reference_invoices   = db.Column(db.String(300))  # comma-separated sales_invoice_id list
+    project_ref          = db.Column(db.String(150))
     tax_code              = db.Column(db.String(20))
     account_code          = db.Column(db.String(20))
     status                = db.Column(db.String(20), default='Open')
@@ -3026,6 +3256,8 @@ class SalesInvoice(db.Model):
     posting_date          = db.Column(db.Date)
     delivery_date         = db.Column(db.Date)
     document_date         = db.Column(db.Date)
+    from_date             = db.Column(db.Date)   # Invoice Period start
+    to_date               = db.Column(db.Date)   # Invoice Period end -- its month is shown as the invoice's billing month
     total_before_discount = db.Column(db.Numeric(14, 2), default=0)
     total_discount        = db.Column(db.Numeric(14, 2), default=0)
     total_freight         = db.Column(db.Numeric(14, 2), default=0)
@@ -3035,6 +3267,21 @@ class SalesInvoice(db.Model):
     paid_amount           = db.Column(db.Numeric(14, 2), default=0)   # cumulative Incoming Payments settled against this invoice
     created_at            = db.Column(db.DateTime, default=datetime.utcnow)
     created_by            = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # ── ZATCA Phase 2 chain state (see database/zatca/engine.py) ──
+    zatca_uuid             = db.Column(db.String(36))
+    zatca_icv              = db.Column(db.BigInteger)
+    zatca_pih              = db.Column(db.String(200))
+    zatca_invoice_hash     = db.Column(db.String(200))
+    zatca_xml_signature    = db.Column(db.Text)
+    zatca_qr_code          = db.Column(db.Text)
+    zatca_status           = db.Column(db.String(20), default='not_generated')
+    zatca_submission_type  = db.Column(db.String(20))
+    zatca_cleared_xml_path = db.Column(db.String(500))
+    zatca_response_message = db.Column(db.Text)
+    zatca_generated_at     = db.Column(db.DateTime)
+    zatca_submitted_at     = db.Column(db.DateTime)
+    zatca_attachment_id    = db.Column(db.Integer)
 
     buyer = db.relationship('BuyerMaster', backref=db.backref('sales_invoices', lazy=True))
     sales_order = db.relationship('SalesOrder', backref=db.backref('sales_invoices_link', lazy=True))
@@ -3064,10 +3311,13 @@ class SalesInvoice(db.Model):
             'transaction_type': self.transaction_type or '',
             'invoice_category': self.invoice_category or '',
             'reference_invoices': self.reference_invoices or '',
+            'project_ref': self.project_ref or '',
             'posting_status': self.posting_status or 'Saved',
             'posting_date':  str(self.posting_date)  if self.posting_date  else '',
             'delivery_date': str(self.delivery_date) if self.delivery_date else '',
             'document_date': str(self.document_date) if self.document_date else '',
+            'from_date': str(self.from_date) if self.from_date else '',
+            'to_date': str(self.to_date) if self.to_date else '',
             'total_before_discount': float(self.total_before_discount or 0),
             'total_discount': float(self.total_discount or 0),
             'total_freight':  float(self.total_freight  or 0),
@@ -3075,9 +3325,16 @@ class SalesInvoice(db.Model):
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
             'paid_amount': float(self.paid_amount or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
+            'zatca_uuid': self.zatca_uuid or '',
+            'zatca_icv': self.zatca_icv,
+            'zatca_status': self.zatca_status or 'not_generated',
+            'zatca_submission_type': self.zatca_submission_type or '',
+            'zatca_response_message': self.zatca_response_message or '',
+            'zatca_attachment_id': self.zatca_attachment_id,
+            'zatca_generated_at': self.zatca_generated_at.strftime('%d/%m/%Y %H:%M') if self.zatca_generated_at else '',
         }
 
 
@@ -3181,7 +3438,7 @@ class SalesReturnRequest(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -3296,7 +3553,7 @@ class SalesReturnNote(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -3419,7 +3676,7 @@ class SalesCreditMemo(db.Model):
             'total_excl_vat': float(self.total_excl_vat or 0),
             'vat_amount':     float(self.vat_amount     or 0),
             'total_incl_vat': float(self.total_incl_vat or 0),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'created_by': self.created_by,
             'created_by_name': self.creator.username if self.creator else '',
         }
@@ -3529,7 +3786,7 @@ class LevelOne(db.Model):
             'description': self.description,
             'description_ar': self.description_ar or '',
             'status': self.status or 'active',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'level_two_count': len(self.level_twos) if self.level_twos is not None else 0,
         }
 
@@ -3567,7 +3824,7 @@ class LevelTwo(db.Model):
             'description': self.description,
             'description_ar': self.description_ar or '',
             'status': self.status or 'active',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
         }
 
 
@@ -3676,7 +3933,7 @@ class LevelThree(db.Model):
             'code': self.code, 'drawers': self.drawers, 'drawers_ar': self.drawers_ar or '',
             'description': self.description, 'description_ar': self.description_ar or '',
             'status': self.status or 'active',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'child_count': len(self.level_fours) if self.level_fours is not None else 0,
         }
 
@@ -3706,7 +3963,7 @@ class LevelFour(db.Model):
             'code': self.code, 'drawers': self.drawers, 'drawers_ar': self.drawers_ar or '',
             'description': self.description, 'description_ar': self.description_ar or '',
             'status': self.status or 'active',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'child_count': len(self.level_fives) if self.level_fives is not None else 0,
         }
 
@@ -3736,7 +3993,7 @@ class LevelFive(db.Model):
             'description': self.description, 'description_ar': self.description_ar or '',
             'control_account': self.control_account or 'No',
             'status': self.status or 'active',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
         }
 
 
@@ -3992,12 +4249,18 @@ class SalesTaxCode(db.Model):
     status       = db.Column(db.String(10), default='Active')
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at   = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # ZATCA UBL tax-category classification, admin-set once per code --
+    # see database/zatca/engine.py::ubl_tax_category().
+    zatca_category         = db.Column(db.String(2))   # S | Z | E | O
+    zatca_exemption_reason = db.Column(db.String(20))  # e.g. VATEX-SA-29
 
     def to_dict(self):
         return {
             'id': self.id, 'account_code': self.account_code,
             'tax_code': self.tax_code, 'section': self.section,
             'status': self.status or 'Active',
+            'zatca_category': self.zatca_category or '',
+            'zatca_exemption_reason': self.zatca_exemption_reason or '',
         }
 
 
@@ -4032,6 +4295,82 @@ def seed_tax_codes():
             db.session.add(SalesTaxCode(account_code=code, tax_code=acc,
                                         section=section, status='Active'))
             added += 1
+    if added:
+        db.session.commit()
+    return added
+
+
+# Default Auto Code Selection mappings for the 8 standard Purchase/Sale
+# forms that consume one -- see database/routes/shared.py's
+# _grl_lines_from() and database/routes/auto_code_selection.py's
+# PURCHASE_AUTO_CODE_FORMS/SALE_AUTO_CODE_FORMS. Without a mapping, that
+# form's auto-journal posting writes a blank offsetting account, so a
+# brand-new tenant needs *something* here to post at all.
+#
+# `nature` is NOT a free styling choice: _grl_lines_from()'s `r1_credit`
+# already fixes each form's own first GRL record (the item's account) to
+# a specific Debit or Credit side, so this offsetting record must always
+# be the opposite of that or the two-line entry will never balance --
+# Purchase Invoice/Delivery Note/Sales Return Note/Sales Credit Memo post
+# record 1 as Credit (so this must be Debit); every other form here posts
+# record 1 as Debit (so this must be Credit).
+#
+# Level Five accounts are matched by drawer NAME below (not a
+# hand-typed code), since seed_coa_levels_3_4_5() generates codes at seed
+# time from insertion order -- looking up by the exact name it seeds is
+# far less fragile than guessing the resulting code string. These are
+# generic holding/clearing accounts already present in that seed data
+# (see coa_seed_data.py) chosen as a reasonable starting default, not a
+# purpose-built account per form (e.g. no dedicated COGS or Unbilled
+# Sales account exists in that data) -- review/adjust per form via the
+# Auto Code Selection screen once real business needs are known.
+AUTO_CODE_SELECTION_DEFAULTS = [
+    # (module_code, form_code, level_five_drawer_name, nature)
+    ('purchase', 'goods_receipt_note',   'Other Credit - Other Payables', 'Credit'),
+    ('purchase', 'purchase_invoice',     'Other Credit - Other Payables', 'Debit'),
+    ('purchase', 'purchase_return_note', 'Other Credit - Other Payables', 'Credit'),
+    ('purchase', 'purchase_debit_memo',  'Other Credit - Other Payables', 'Credit'),
+    ('sale', 'delivery_note',            'Other Debit - Receipts Clearing Account', 'Debit'),
+    ('sale', 'sales_invoice',            'Other Income', 'Credit'),
+    ('sale', 'sales_return_note',        'Other Debit - Receipts Clearing Account', 'Debit'),
+    ('sale', 'sales_credit_memo',        'Other Debit - Receipts Clearing Account', 'Debit'),
+]
+
+
+def seed_auto_code_selection():
+    """Idempotently insert the default module/form -> Level Five mappings
+    above. Deliberately NOT called from app.py's init_db() -- only from
+    tenant_provisioning.py's provision_tenant(), since a brand-new SaaS
+    tenant needs a working default here while the main app's own
+    installation is configured by hand through the Auto Code Selection
+    screen. Silently skips any row whose module/form/account can't be
+    found (e.g. Chart of Accounts wasn't seeded first)."""
+    added = 0
+    for module_code, form_code, l5_drawer, nature in AUTO_CODE_SELECTION_DEFAULTS:
+        module = Module.query.filter_by(code=module_code).first()
+        if not module:
+            continue
+        form = SystemForm.query.filter_by(module_id=module.id, code=form_code).first()
+        if not form:
+            continue
+        if AutoCodeSelection.query.filter_by(module_id=module.id, form_id=form.id).first():
+            continue
+        l5 = LevelFive.query.filter_by(drawers=l5_drawer).first()
+        if not l5:
+            continue
+        l4 = LevelFour.query.get(l5.level_four_id)
+        db.session.add(AutoCodeSelection(
+            module_id=module.id, form_id=form.id,
+            levelfour_code=l4.code if l4 else None,
+            levelfour_drawer_en=l4.drawers if l4 else None,
+            levelfour_drawer_ar=l4.drawers_ar if l4 else None,
+            levelfive_code=l5.code,
+            levelfive_drawer_en=l5.drawers,
+            levelfive_drawer_ar=l5.drawers_ar,
+            nature=nature,
+            status='Approved',
+        ))
+        added += 1
     if added:
         db.session.commit()
     return added
@@ -4177,7 +4516,7 @@ class OpeningBalance(db.Model):
             'narration': self.narration or '',
             'total_debit': round(total_debit, 2),
             'total_credit': round(total_credit, 2),
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
             'lines': [l.to_dict() for l in self.lines],
         }
 
@@ -4249,6 +4588,16 @@ class SalaryConsolidation(db.Model):
     salary_order          = db.Column(db.String(30))
     month_from            = db.Column(db.Date)
     month_to              = db.Column(db.Date)
+    # Per-employee payable period, distinct from month_from/month_to (which
+    # always stay the payroll BATCH's master period, unchanged, on every
+    # row -- other code such as the payroll list summary's min/max period
+    # and the "add employee to an existing payroll" flow depend on that).
+    # emp_from_date defaults to MAX(month_from, employee's latest
+    # EmployeeWorkAllocation joining date) so a mid-period joiner is only
+    # paid from their actual joining date, editable by the user afterwards.
+    # emp_to_date normally just mirrors month_to.
+    emp_from_date         = db.Column(db.Date)
+    emp_to_date           = db.Column(db.Date)
     month                 = db.Column(db.String(20))                     # e.g. July-2026
     kafeel                = db.Column(db.String(200))
     buyer_id              = db.Column(db.Integer)                        # internal filter/link, not in spec grid
@@ -4309,6 +4658,8 @@ class SalaryConsolidation(db.Model):
             'salary_order': self.salary_order or '',
             'month_from': self.month_from.strftime('%d-%b-%y') if self.month_from else '',
             'month_to': self.month_to.strftime('%d-%b-%y') if self.month_to else '',
+            'emp_from_date': self.emp_from_date.strftime('%Y-%m-%d') if self.emp_from_date else '',
+            'emp_to_date': self.emp_to_date.strftime('%Y-%m-%d') if self.emp_to_date else '',
             'month': self.month or '',
             'kafeel': self.kafeel or '',
             'buyer_id': self.buyer_id,
@@ -4348,7 +4699,7 @@ class SalaryConsolidation(db.Model):
             'balance': _f(self.balance),
             'employ_payroll_status': self.employ_payroll_status or 'Single',
             'payment_status': self.payment_status or 'Ready',
-            'iqama_expiry': self.iqama_expiry.strftime('%Y-%m-%d') if self.iqama_expiry else '',
+            'iqama_expiry': self.iqama_expiry.strftime('%d-%b-%y') if self.iqama_expiry else '',
             'status': self.status or '',
             'bank_code': self.bank_code or '',
             'iban_no': self.iban_no or '',
@@ -4859,8 +5210,8 @@ class SupportTicket(db.Model):
             'message': self.message,
             'status': self.status,
             'admin_notes': self.admin_notes or '',
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
-            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M') if self.updated_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
+            'updated_at': self.updated_at.strftime('%d/%m/%Y %H:%M') if self.updated_at else '',
         }
 
 
@@ -4887,7 +5238,7 @@ class SupportTicketMessage(db.Model):
             'id': self.id, 'ticket_id': self.ticket_id,
             'sender_type': self.sender_type, 'sender_name': self.sender_name or '',
             'message': self.message,
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else '',
         }
 
 
@@ -5113,6 +5464,10 @@ def ensure_schema():
         ('store_transactions', 'delivery_line_item_id',    'INTEGER'),
         ('store_transactions', 'buyer_id',                 'INTEGER'),
         ('store_transactions', 'buyer_name',                'VARCHAR(200)'),
+        # Standalone (no-GRN) Purchase Invoice stock receipt.
+        ('store_transactions', 'purchase_invoice_id',            'INTEGER'),
+        ('store_transactions', 'purchase_invoice_doc_no',        'VARCHAR(20)'),
+        ('store_transactions', 'purchase_invoice_line_item_id',  'INTEGER'),
         ('item_master', 'print_name_en',       'VARCHAR(200)'),
         ('item_master', 'print_name_ar',       'VARCHAR(200)'),
         ('purchase_goods_receipt_notes_line_item', 'purchase_order_line_item_id', 'INTEGER'),
@@ -5132,6 +5487,7 @@ def ensure_schema():
         ('sales_quotations', 'item_summary_display', "VARCHAR(10) DEFAULT 'on'"),
         ('owners', 'sq_default_terms_conditions', 'TEXT'),
         ('owners', 'sq_default_sign_stamp', 'TEXT'),
+        ('owners', 'sinv_print_template', "VARCHAR(20) DEFAULT 'formal'"),
         # ── Role & Permission system (additive on the pre-existing users/activity_logs tables) ──
         ('users', 'role_id',            'INTEGER'),
         ('users', 'is_super_admin',     'TINYINT(1) DEFAULT 0'),
@@ -5180,6 +5536,40 @@ def ensure_schema():
         ('auto_code_selection', 'levelfour_drawer_ar',  'VARCHAR(200)'),
         ('auto_code_selection', 'status',              "VARCHAR(20) NOT NULL DEFAULT 'Approved'"),
         ('auto_code_selection', 'payment_mode',        'VARCHAR(20)'),
+        # ── Payroll: per-employee payable period (joining-date-aware
+        #    eligibility/attendance), distinct from the batch's month_from/
+        #    month_to which stay the master period on every row ──
+        ('salary_consolidation', 'emp_from_date', 'DATE', 'month_to'),
+        ('salary_consolidation', 'emp_to_date',   'DATE', 'emp_from_date'),
+        # ── ZATCA Phase 2: per-invoice cryptographic chain state, generated
+        #    only once a Sales Invoice is Posted and "Create ZATCA Invoice"
+        #    is run -- see database/zatca/engine.py and
+        #    database/routes/zatca.py. ──
+        ('sales_invoices', 'zatca_uuid',             'VARCHAR(36)'),
+        ('sales_invoices', 'zatca_icv',              'BIGINT'),
+        ('sales_invoices', 'zatca_pih',               'VARCHAR(200)'),
+        ('sales_invoices', 'zatca_invoice_hash',     'VARCHAR(200)'),
+        ('sales_invoices', 'zatca_xml_signature',    'LONGTEXT'),
+        ('sales_invoices', 'zatca_qr_code',          'LONGTEXT'),
+        ('sales_invoices', 'zatca_status',           "VARCHAR(20) DEFAULT 'not_generated'"),
+        ('sales_invoices', 'zatca_submission_type',  'VARCHAR(20)'),
+        ('sales_invoices', 'zatca_cleared_xml_path', 'VARCHAR(500)'),
+        ('sales_invoices', 'zatca_response_message', 'TEXT'),
+        ('sales_invoices', 'zatca_generated_at',     'DATETIME'),
+        ('sales_invoices', 'zatca_submitted_at',     'DATETIME'),
+        ('sales_invoices', 'zatca_attachment_id',    'INTEGER'),
+        # ── ZATCA UBL tax-category classification: the existing tax_code
+        #    column is free text ("VAT 15%") and cannot be reliably reverse-
+        #    mapped to a UBL tax category by pattern-matching alone. These
+        #    let an admin classify each tax code once. ──
+        ('sales_tax_code', 'zatca_category',         'VARCHAR(2)'),
+        ('sales_tax_code', 'zatca_exemption_reason', 'VARCHAR(20)'),
+        # ── Sales Invoice: Invoice Period (From Date/To Date), mirroring
+        #    the same fields already on purchase_invoices -- the invoice's
+        #    billing month is always derived display-only from To Date. ──
+        ('sales_invoices', 'from_date', 'DATE'),
+        ('sales_invoices', 'to_date',   'DATE'),
+        ('sales_invoices', 'project_ref', 'VARCHAR(150)'),
     ]
 
     def table_exists(table):
@@ -5224,6 +5614,25 @@ def ensure_schema():
         except Exception as e:
             db.session.rollback()
             print(f'ensure_schema: could not add {table}.{column}: {e}')
+
+    # sales_invoices.doc_no predates the per-transaction-type numbering
+    # scheme (STD-INV-2026-1000 etc., embedding the full transaction_type
+    # as its prefix) and was created VARCHAR(20), too narrow for the new
+    # longer format -- widen it on existing databases rather than risk a
+    # silent truncation error the first time a sequence runs long.
+    try:
+        if table_exists('sales_invoices'):
+            row = db.session.execute(text(
+                "SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='sales_invoices' AND COLUMN_NAME='doc_no'"
+            )).fetchone()
+            if row and row[0] is not None and row[0] < 40:
+                db.session.execute(text('ALTER TABLE sales_invoices MODIFY COLUMN doc_no VARCHAR(40)'))
+                db.session.commit()
+                print('ensure_schema: widened sales_invoices.doc_no to VARCHAR(40)')
+    except Exception as e:
+        db.session.rollback()
+        print(f'ensure_schema: could not widen sales_invoices.doc_no: {e}')
 
     # activity_logs.user_id predates the RBAC audit log and was created
     # NOT NULL; a failed login against a nonexistent username has no real

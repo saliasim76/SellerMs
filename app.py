@@ -60,6 +60,34 @@ def create_app(config_name='default'):
             )
 
     db.init_app(app)
+
+    # Phusion Passenger (cPanel's Python App hosting) uses fork-based "smart
+    # spawning" by default: it loads this module ONCE, creating the engines
+    # above and their live pooled DB connections, then forks additional
+    # worker processes from that same loaded state. Every forked child
+    # inherits the exact same open TCP sockets as the parent, so as soon as
+    # two processes read/write the same connection the MySQL protocol
+    # desyncs -- surfacing as random "MySQL server has gone away" /
+    # BrokenPipeError crashes that pool_pre_ping cannot catch (the socket
+    # looks alive right up until another process touches it). Disposing
+    # each engine's pool immediately after a fork (child side only) forces
+    # every child to open its own fresh connections instead of sharing the
+    # parent's. This is SQLAlchemy's own documented fix for pooling across
+    # os.fork() -- see "Using Connection Pools with Multiprocessing or
+    # os.fork()" in the SQLAlchemy pooling docs. os.fork()/register_at_fork
+    # don't exist on Windows, so this is a no-op for local dev.
+    if hasattr(os, 'register_at_fork'):
+        with app.app_context():
+            _engines_to_dispose_after_fork = list(db.engines.values())
+
+        def _dispose_db_engines_after_fork():
+            for _engine in _engines_to_dispose_after_fork:
+                try:
+                    _engine.dispose(close=False)
+                except Exception:
+                    pass
+        os.register_at_fork(after_in_child=_dispose_db_engines_after_fork)
+
     login_manager.init_app(app)
     csrf.init_app(app)
     if migrate is not None:
@@ -184,6 +212,8 @@ def create_app(config_name='default'):
     # Phase 4: Proledg landing page + trial signup, merged into this same
     # application/process.
     from database.routes.proledg_site import proledg_bp
+    # ZATCA e-Invoicing (Phase 2): onboarding/settings screen.
+    from database.routes.zatca import zatca_bp
 
     app.register_blueprint(emp_import_bp)
     app.register_blueprint(auth_bp)
@@ -217,6 +247,7 @@ def create_app(config_name='default'):
     app.register_blueprint(cash_bank_bp)
     app.register_blueprint(saas_customers_bp)
     app.register_blueprint(proledg_bp)
+    app.register_blueprint(zatca_bp)
 
     # Generic import/export for master pages (excludes purchases & sales).
     from database.routes.io_tools import io_bp
@@ -248,6 +279,20 @@ def create_app(config_name='default'):
             return f'{value/1024:.1f} KB'
         else:
             return f'{value/(1024*1024):.1f} MB'
+
+    _AR_DIGIT_MAP = str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩')
+
+    @app.template_filter('ar_digits')
+    def ar_digits_filter(value):
+        """Renders any Western digits in `value` as Arabic-Indic numerals
+        (٠-٩) -- for numbers shown next to an Arabic caption/label, e.g. a
+        VAT or CRN number on a bilingual document's Arabic side. Mirrors
+        sinv_list.html's own client-side toArabicDigits() JS helper, used
+        for the Seller/Buyer detail cards, but as a server-side Jinja
+        filter for use in print templates instead."""
+        if value is None:
+            return '—'
+        return str(value).translate(_AR_DIGIT_MAP)
 
     # Recycle Bin + Audit Log: daily auto-purge of records past their 7-day
     # retention (both screens also do a lazy sweep on load as a backup).

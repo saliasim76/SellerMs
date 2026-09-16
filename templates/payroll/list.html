@@ -196,6 +196,7 @@
     <button class="pr-btn pr-btn-blue" id="btnLoad"><i class="fas fa-search"></i> {% if ar %}تحميل{% else %}Load{% endif %}</button>
     <button class="pr-btn pr-btn-amber" id="btnRefreshAll"><i class="fas fa-sync"></i> {% if ar %}تحديث من ملف الموظف{% else %}Refresh from Employee{% endif %}</button>
     <button class="pr-btn pr-btn-purple" id="btnAddEmployee"><i class="fas fa-user-plus"></i> {% if ar %}إضافة موظف{% else %}Add Employee{% endif %}</button>
+    <button class="pr-btn pr-btn-red" id="btnDeletePayroll" disabled title="{% if ar %}يحذف كامل الكشف بجميع صفوفه -- متاح فقط في حالة أولي{% else %}Deletes the whole payroll and every row in it -- Initial status only{% endif %}"><i class="fas fa-trash-alt"></i> {% if ar %}حذف الكشف{% else %}Delete Payroll{% endif %}</button>
     <a class="pr-btn pr-btn-gray" style="text-decoration:none;" href="{{ url_for('payroll.payroll_reports') }}"><i class="fas fa-chart-bar"></i> {% if ar %}التقارير{% else %}Reports{% endif %}</a>
     <button class="pr-btn pr-btn-gray" id="btnExportPayroll" onclick="exportPayroll()" title="{% if ar %}تصدير الكشف المحدد أو كل الرواتب إن كان الحقل فارغًا{% else %}Export this Payroll ID, or all payroll if blank{% endif %}"><i class="fas fa-file-export"></i> {% if ar %}تصدير{% else %}Export{% endif %}</button>
     <button class="pr-btn pr-btn-gray" id="btnImportPayroll" onclick="document.getElementById('payrollImportFile').click()" title="{% if ar %}استيراد من ملف تم تصديره سابقًا{% else %}Import a previously-exported file{% endif %}"><i class="fas fa-file-import"></i> {% if ar %}استيراد{% else %}Import{% endif %}</button>
@@ -286,7 +287,8 @@ function cellEditable(field, row) {
   if (isRowLocked(row)) return false;
   if (field === 'payment_status') return true;
   if (isRowReadyOnly(row)) return false;
-  return field === 'sheet_no' || field === 'status' || EDITABLE_NUM_FIELDS.includes(field);
+  return field === 'sheet_no' || field === 'status' || field === 'emp_from_date'
+    || EDITABLE_NUM_FIELDS.includes(field);
 }
 const money = (v) => (v == null ? '' : Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 // Buyer column shows just the first word of the buyer's full name (e.g.
@@ -357,6 +359,11 @@ function renderHeaderForm() {
     fieldHtml('hMonthTo', AR ? 'إلى تاريخ' : 'Month To', 'date') +
     fieldHtml('hMonth', AR ? 'الشهر' : 'Month', 'text', null, 'pr-field-narrow') +
     fieldHtml('hSalaryCategory', AR ? 'فئة الراتب' : 'Salary Category', 'select', FILTER_OPTIONS.salary_category) +
+    // Fixed 2-value list, NOT sourced from FILTER_OPTIONS -- Salary Type is a
+    // closed enum (Per Month / Per Hour only), unlike the other dropdowns
+    // here which list whatever distinct values currently exist in the data.
+    fieldHtml('hSalaryType', AR ? 'نوع الراتب' : 'Salary Type', 'select',
+      [{ id: 'month', name: AR ? 'شهري' : 'Per Month' }, { id: 'hour', name: AR ? 'بالساعة' : 'Per Hour' }]) +
     fieldHtml('hKafeel', AR ? 'الكفيل' : 'Kafeel', 'select', FILTER_OPTIONS.kafeel) +
     fieldHtml('hBuyer', AR ? 'المشتري' : 'Buyer', 'select', FILTER_OPTIONS.buyers) +
     fieldHtml('hDept', AR ? 'القسم' : 'Department', 'select', FILTER_OPTIONS.buyer_department) +
@@ -369,7 +376,9 @@ function renderHeaderForm() {
 
   // Department and Location are independent dropdowns (sourced from
   // EmployeeWorkAllocation, like Kafeel used to be) and are also the actual
-  // matching criteria used server-side. Only Salary Order cascades from Buyer.
+  // matching criteria used server-side. Salary Order only cascades from
+  // Buyer for display/storage -- it is NOT part of the payroll-identity/
+  // duplicate-check criteria (see payroll_generate's comment).
   document.getElementById('hBuyer').addEventListener('change', loadBuyerContext);
 
   // Payroll Status: the "(any)" option fieldHtml() adds for every select
@@ -407,6 +416,7 @@ function headerFormData() {
   fd.set('buyer_department', document.getElementById('hDept').value);
   fd.set('location', document.getElementById('hLocation').value);
   fd.set('salary_category', document.getElementById('hSalaryCategory').value);
+  fd.set('salary_type', document.getElementById('hSalaryType').value);
   fd.set('salary_order', document.getElementById('hSalaryOrder').value);
   return fd;
 }
@@ -422,9 +432,10 @@ async function loadFilterOptions() {
 }
 
 async function loadBuyerContext() {
-  // Only Salary Order cascades from the selected Buyer now -- Department and
-  // Location are independent dropdowns (sourced from EmployeeWorkAllocation)
-  // and are the real matching criteria, unaffected by this.
+  // Salary Order cascades from the selected Buyer for display/storage only
+  // -- Department and Location are independent dropdowns (sourced from
+  // EmployeeWorkAllocation) and are the real matching criteria, unaffected
+  // by this.
   const buyerId = document.getElementById('hBuyer').value;
   const orderEl = document.getElementById('hSalaryOrder');
 
@@ -446,49 +457,66 @@ function openPayroll(payrollId) {
   load();
 }
 
+// Guards against a duplicate payroll being created by a double-click (or an
+// impatient re-click while the first request is still in flight): the
+// button is disabled and further clicks are ignored for the whole
+// request/response round-trip, re-enabled in the finally block below no
+// matter how the request ends. The server has its own lock-based guard for
+// the same race (see payroll_generate in payroll.py) -- this is the fast,
+// user-visible half of that same fix.
+let generatingPayroll = false;
 async function doGenerate() {
+  if (generatingPayroll) return;
+  generatingPayroll = true;
+  const btn = document.getElementById('btnGenerate');
+  if (btn) btn.disabled = true;
   const msgEl = document.getElementById('genMsg');
   msgEl.textContent = AR ? 'جارٍ الإنشاء...' : 'Generating...';
-  let r;
   try {
-    r = await fetch(GENERATE_URL, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN },
-      credentials: 'same-origin', body: headerFormData() });
-  } catch (e) {
-    // A *real* network failure: request never reached the server (offline, DNS, CORS, etc.)
-    msgEl.textContent = '';
-    flash((AR ? 'تعذّر الاتصال بالخادم: ' : 'Could not reach the server: ') + e.message, false);
-    console.error('Generate: network-level failure', e);
-    return;
-  }
+    let r;
+    try {
+      r = await fetch(GENERATE_URL, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN },
+        credentials: 'same-origin', body: headerFormData() });
+    } catch (e) {
+      // A *real* network failure: request never reached the server (offline, DNS, CORS, etc.)
+      msgEl.textContent = '';
+      flash((AR ? 'تعذّر الاتصال بالخادم: ' : 'Could not reach the server: ') + e.message, false);
+      console.error('Generate: network-level failure', e);
+      return;
+    }
 
-  let res;
-  try {
-    res = await r.json();
-  } catch (e) {
-    // The server responded, but not with JSON -- almost always a server error page
-    // (500/404/etc). Show the real HTTP status instead of a vague "network error".
-    const bodyText = await r.text().catch(() => '');
-    msgEl.textContent = '';
-    flash((AR ? 'خطأ من الخادم (' : 'Server error (') + r.status + '): ' +
-          (bodyText.slice(0, 200) || r.statusText), false);
-    console.error('Generate: server did not return JSON. Status:', r.status, 'Body:', bodyText);
-    return;
-  }
+    let res;
+    try {
+      res = await r.json();
+    } catch (e) {
+      // The server responded, but not with JSON -- almost always a server error page
+      // (500/404/etc). Show the real HTTP status instead of a vague "network error".
+      const bodyText = await r.text().catch(() => '');
+      msgEl.textContent = '';
+      flash((AR ? 'خطأ من الخادم (' : 'Server error (') + r.status + '): ' +
+            (bodyText.slice(0, 200) || r.statusText), false);
+      console.error('Generate: server did not return JSON. Status:', r.status, 'Body:', bodyText);
+      return;
+    }
 
-  if (res.duplicate) {
+    if (res.duplicate) {
+      msgEl.textContent = '';
+      const ok = confirm(res.error + '\n\n' + (AR ? 'فتح الكشف الحالي؟' : 'Open the existing payroll?'));
+      if (ok) openPayroll(res.payroll_id);
+      return;
+    }
+    if (!res.ok) {
+      msgEl.textContent = res.error || (AR ? 'فشل الإنشاء' : 'Generation failed');
+      flash(res.error || (AR ? 'فشل الإنشاء' : 'Generation failed'), false);
+      return;
+    }
     msgEl.textContent = '';
-    const ok = confirm(res.error + '\n\n' + (AR ? 'فتح الكشف الحالي؟' : 'Open the existing payroll?'));
-    if (ok) openPayroll(res.payroll_id);
-    return;
+    flash((AR ? 'تم إنشاء الكشف: ' : 'Payroll created: ') + res.payroll_id + ' (' + res.created + (AR ? ' موظف' : ' employees') + ')', true);
+    openPayroll(res.payroll_id);
+  } finally {
+    generatingPayroll = false;
+    if (btn) btn.disabled = false;
   }
-  if (!res.ok) {
-    msgEl.textContent = res.error || (AR ? 'فشل الإنشاء' : 'Generation failed');
-    flash(res.error || (AR ? 'فشل الإنشاء' : 'Generation failed'), false);
-    return;
-  }
-  msgEl.textContent = '';
-  flash((AR ? 'تم إنشاء الكشف: ' : 'Payroll created: ') + res.payroll_id + ' (' + res.created + (AR ? ' موظف' : ' employees') + ')', true);
-  openPayroll(res.payroll_id);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -624,13 +652,12 @@ const COLOR_PALETTE = [
   '#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47',
   '#DAE3F3', '#FCE4D6', '#EDEDED', '#FFF2CC', '#DDEBF7', '#E2EFDA',
 ];
-// Seeded once, on a browser that has never customized fill colors yet, so
-// the grid looks exactly as it always has until the user changes something.
-const DEFAULT_COLUMN_COLORS = {
-  fridays: '#ccffcc', holidays: '#d6f5d6', absent: '#c2fff0',
-  total_hours: '#d9ff99', ot_hour: '#d9ff99', bonus: '#b9f2ff',
-  deduction: '#ffc40c', advance: '#ffba00', credit: '#ffc0cb',
-};
+// No column carries a color by default -- every column starts plain/white
+// until the user explicitly picks one from a column heading's color swatch
+// (see PrHeader/openColorPicker below). Left as an object (rather than
+// removing the mechanism) so a future default palette can be seeded here
+// the same way, without touching loadColColors()/saveColColors() below.
+const DEFAULT_COLUMN_COLORS = {};
 function loadColColors() {
   try {
     const saved = JSON.parse(localStorage.getItem(COL_COLOR_KEY));
@@ -865,6 +892,24 @@ function buildColumnDefs() {
     col('salary_order', AR ? 'أمر الراتب' : 'Salary Order', 110),
     col('month_from', AR ? 'من تاريخ' : 'Month From', 105),
     col('month_to', AR ? 'إلى تاريخ' : 'Month To', 105),
+    {
+      field: 'emp_from_date', headerName: AR ? 'تاريخ بداية الموظف' : 'Employee From Date', width: 140,
+      editable: (p) => cellEditable('emp_from_date', p.data), cellClass: (p) => editableClass('emp_from_date', p.data),
+      cellEditor: 'agDateStringCellEditor',
+      cellEditorParams: (p) => ({ minValidYear: 2000, maxValidYear: 2100 }),
+      // Display-only reformat (01-Apr-26) -- the underlying value stays ISO
+      // (YYYY-MM-DD) since agDateStringCellEditor's date picker needs that
+      // exact format; valueFormatter never touches it, only what's shown.
+      valueFormatter: (p) => window.GridKit.fmtDate(p.value),
+      // Auto-set to MAX(payroll Month From, employee's latest joining date)
+      // at generation time -- editable only while the payroll is Initial,
+      // and must stay within [Month From, Month To] (enforced server-side).
+      headerTooltip: AR
+        ? 'يُحسب تلقائيًا من تاريخ التحاق الموظف، ويمكن تعديله ضمن فترة الكشف'
+        : 'Auto-set from the employee\'s joining date; editable within the payroll period',
+    },
+    col('emp_to_date', AR ? 'تاريخ نهاية الموظف' : 'Employee To Date', 130,
+      { valueFormatter: (p) => window.GridKit.fmtDate(p.value) }),
     col('month', AR ? 'الشهر' : 'Month', 100),
     col('kafeel', AR ? 'الكفيل' : 'Kafeel', 130),
     col('buyer_name', AR ? 'المشتري' : 'Buyer', 140, { valueFormatter: (p) => shortName(p.value) }),
@@ -1138,17 +1183,22 @@ function prLoadGrl(payrollId){
 function prUpdatePostBtnState(rows){
   const btn = document.getElementById('prGrlPostBtn');
   const hint = document.getElementById('prGrlPostHint');
-  if (!btn) return;
+  const delBtn = document.getElementById('btnDeletePayroll');
   const status = (rows && rows.length) ? rows[0].payroll_status : null;
-  if (status === 'Ready'){
-    btn.disabled = false;
-    hint.textContent = '';
-  } else {
-    btn.disabled = true;
-    hint.textContent = status === 'Post'
-      ? (AR ? 'تم الترحيل بالفعل' : 'Already posted')
-      : (AR ? 'يتطلب حالة "جاهز"' : 'Requires status Ready');
+  if (btn) {
+    if (status === 'Ready'){
+      btn.disabled = false;
+      hint.textContent = '';
+    } else {
+      btn.disabled = true;
+      hint.textContent = status === 'Post'
+        ? (AR ? 'تم الترحيل بالفعل' : 'Already posted')
+        : (AR ? 'يتطلب حالة "جاهز"' : 'Requires status Ready');
+    }
   }
+  // Delete Payroll: only a loaded, Initial-status batch may be deleted whole
+  // -- matches the backend's own restriction (payroll_delete_batch).
+  if (delBtn) delBtn.disabled = (status !== 'Initial');
 }
 
 function load() {
@@ -1200,6 +1250,20 @@ function deleteRow(id) {
       flash(AR ? 'تم الحذف' : 'Deleted', true);
       load();
     });
+}
+
+function deletePayroll(pid, reload) {
+  if (!pid) { flash(AR ? 'أدخل رقم الكشف أولاً' : 'Enter a Payroll ID first', false); return; }
+  if (!confirm((AR ? 'حذف كامل الكشف ' : 'Delete the ENTIRE payroll ') + pid +
+               (AR ? ' وكل صفوفه؟ لا يمكن التراجع عن هذا.' : ' and every row in it? This cannot be undone.'))) return;
+  fetch('/payroll/' + encodeURIComponent(pid) + '/delete-all', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin',
+  }).then(r => r.json()).then(res => {
+    if (!res.ok) { flash(res.error || (AR ? 'فشل الحذف' : 'Delete failed'), false); return; }
+    flash((AR ? 'تم حذف الكشف (' : 'Payroll deleted (') + res.deleted + (AR ? ' صف)' : ' rows)'), true);
+    document.getElementById('fltPayrollId').value = '';
+    reload();
+  });
 }
 
 function doRefreshAll(reload) {
@@ -1414,6 +1478,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnRefreshAll').addEventListener('click', () => doRefreshAll(load));
   document.getElementById('btnAddEmployee').addEventListener('click', () => openAddEmployeeModal(load));
   document.getElementById('prGrlPostBtn').addEventListener('click', () => doSetFlow('Post', load));
+  document.getElementById('btnDeletePayroll').addEventListener('click', () =>
+    deletePayroll(document.getElementById('fltPayrollId').value.trim(), load));
 });
 </script>
 {% endblock %}

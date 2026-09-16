@@ -378,15 +378,15 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="so_kind" class="f-inp">
+                  <select id="so_kind" class="f-inp" onchange="onSoKindChange()">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
                 </div>
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}رقم عرض السعر{% else %}Sales Quotation No{% endif %} <span class="f-req">*</span></div>
+                  <div class="f-lbl">{% if ar %}رقم عرض السعر{% else %}Sales Quotation No{% endif %}</div>
                   <select id="so_sq_id" class="f-inp" onchange="onSQChange()">
-                    <option value="">-- {% if ar %}اختر عرض سعر معتمد{% else %}Select an Approved SQ{% endif %} --</option>
+                    <option value="">-- {% if ar %}بدون عرض سعر (أمر بيع مستقل){% else %}No Sales Quotation (standalone order){% endif %} --</option>
                     {% for sq in sqs %}<option value="{{ sq.id }}">{{ sq.doc_no }}</option>{% endfor %}
                   </select>
                 </div>
@@ -411,10 +411,11 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               {# ── Row 2: Buyer info + Dates ── #}
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}</div>
-                  <input type="text" id="so_buyer_name" class="f-inp" readonly
-                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من عرض السعر{% else %}Derived from the Quotation{% endif %}">
-                  <input type="hidden" id="so_buyer">
+                  <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}<span class="f-req">*</span></div>
+                  <select id="so_buyer" class="f-inp" title="{% if ar %}المشتري{% else %}Buyer{% endif %}">
+                    <option value="">-- {% if ar %}اختر المشتري{% else %}Select Buyer{% endif %} --</option>
+                    {% for v in buyers %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
+                  </select>
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رقم مرجع المشتري{% else %}Buyer Ref No{% endif %}</div>
@@ -475,15 +476,24 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <i class="fas fa-chevron-up" style="color:#2563eb;font-size:11px;"></i>
             </button>
             <div class="pur-section-body open">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-size:11px;color:#6b7280;">
-                  <i class="fas fa-lock me-1"></i>
-                  {% if ar %}البنود موروثة من عرض السعر وغير قابلة للتعديل{% else %}Items are inherited from the Quotation and locked{% endif %}
-                </span>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                  <button type="button" onclick="addNewLiRow()"
+                          style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:#2563eb;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">
+                    <i class="fas fa-plus"></i>{% if ar %}إضافة صنف{% else %}Add Item{% endif %}
+                  </button>
+                  <span style="font-size:11px;color:#6b7280;">
+                    <i class="fas fa-lock me-1"></i>
+                    {% if ar %}بنود عرض السعر موروثة وغير قابلة للتعديل — يمكن إضافة بنود إضافية{% else %}Quotation items are inherited and locked — extra items can still be added{% endif %}
+                  </span>
+                </div>
                 <span style="font-size:11px;color:#6b7280;">
                   <i class="fas fa-info-circle me-1"></i>
                   {% if ar %}المبلغ الخاضع = الكمية × السعر — الخصم{% else %}Taxable = Qty × Rate − Discount{% endif %}
                 </span>
+              </div>
+              <div id="soShortageHint" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:7px;padding:8px 12px;font-size:12px;margin-bottom:10px;">
+                <i class="fas fa-triangle-exclamation me-1"></i><span id="soShortageHintText"></span>
               </div>
               <div class="li-wrap">
                 <table class="li-table">
@@ -501,6 +511,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                     <th style="width:80px;">{% if ar %}كود الضريبة{% else %}Tax Code{% endif %}</th>
                     <th style="width:65px;">{% if ar %}الضريبة{% else %}Tax Amt{% endif %}</th>
                     <th style="width:80px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+                    <th style="width:28px;"></th>
                   </tr></thead>
                   <tbody id="liBody"></tbody>
                   <tfoot>
@@ -670,13 +681,61 @@ function switchTab(tabId, btn) {
 /* ══ SQ selection → auto-fill buyer + dates + LOCKED line items ══ */
 let _sqPullInProgress = false;
 
+// Buyer is freely editable for a standalone order; once a Sales Quotation
+// is linked it's derived from that SQ and locked, matching Kind/Account
+// Code's own treatment on Sales Quotation itself.
+function _setSoBuyerLocked(locked) {
+  const el = document.getElementById('so_buyer');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f3f4f6' : '';
+  el.title = locked
+    ? (IS_AR ? 'يتم تحديده من عرض السعر' : 'Derived from the Quotation')
+    : (IS_AR ? 'المشتري' : 'Buyer');
+}
+
+// Kind, Account Code and Owner follow the same rule as Buyer -- freely
+// editable for a standalone order, derived and locked once a Sales
+// Quotation is linked.
+function _setSoKindLocked(locked) {
+  const el = document.getElementById('so_kind');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f3f4f6' : '';
+  el.title = locked
+    ? (IS_AR ? 'يتم تحديده من عرض السعر' : 'Derived from the Quotation')
+    : (IS_AR ? 'النوع' : 'Kind');
+}
+function _setSoAccountCodeLocked(locked) {
+  const el = document.getElementById('so_account_code');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f3f4f6' : '';
+  el.title = locked
+    ? (IS_AR ? 'يتم تحديده من عرض السعر' : 'Derived from the Quotation')
+    : (IS_AR ? 'رمز الحساب' : 'Account Code');
+}
+function _setSoOwnerLocked(locked) {
+  const el = document.getElementById('so_owner');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f3f4f6' : '';
+  el.title = locked
+    ? (IS_AR ? 'يتم تحديده من عرض السعر' : 'Derived from the Quotation')
+    : (IS_AR ? 'المالك' : 'Owner');
+}
+
 async function onSQChange() {
   const sqId = document.getElementById('so_sq_id').value;
   if (!sqId) {
     document.getElementById('so_buyer').value = '';
-    document.getElementById('so_buyer_name').value = '';
+    _setSoBuyerLocked(false);
+    _setSoKindLocked(false);
+    _setSoAccountCodeLocked(false);
+    _setSoOwnerLocked(false);
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0; recalcSummary(); updLiCount();
+    updateSoShortageHint();
     return;
   }
   _sqPullInProgress = true;
@@ -687,17 +746,24 @@ async function onSQChange() {
 
     // ⭐ Auto-fill buyer
     document.getElementById('so_buyer').value = sq.buyer_id || '';
-    document.getElementById('so_buyer_name').value = sq.buyer_name || '';
+    _setSoBuyerLocked(true);
     if (sq.buyer_ref_no) document.getElementById('so_buyer_ref').value = sq.buyer_ref_no;
 
     // ⭐ Kind comes from the selected Sales Quotation, not left at whatever
     // the form defaulted to.
     if (sq.kind) document.getElementById('so_kind').value = sq.kind;
+    _setSoKindLocked(true);
 
     // ⭐ Auto-fill account code from SQ
     if (sq.account_code) {
       document.getElementById('so_account_code').innerHTML = accountCodeOptionsHtml(sq.account_code);
     }
+    _setSoAccountCodeLocked(true);
+
+    // ⭐ Auto-fill owner from SQ
+    document.getElementById('so_owner').value = sq.owner_id || '';
+    _setSoOwnerLocked(true);
+    await loadOwnerWarehouses(document.getElementById('so_owner').value);
 
     // ⭐ Auto-fill line items from SQ
     document.getElementById('liBody').innerHTML = '';
@@ -708,6 +774,7 @@ async function onSQChange() {
       addLiRow();
     }
     recalcSummary(); updLiCount();
+    updateSoShortageHint();
   } catch (e) {
     console.error('Failed to load SQ:', e);
     alert(IS_AR ? 'فشل تحميل عرض السعر' : 'Failed to load Sales Quotation');
@@ -720,6 +787,7 @@ async function onSQChange() {
    Line items are locked/inherited from the source SQ, so there is no
    cascade into line items here, only the header dropdown. ══ */
 let TAX_CODES = [];
+const TAX_DEFAULT_CODE = 'S1';
 function taxCodeLabel(t) {
   return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
 }
@@ -747,7 +815,9 @@ function loadTaxCodes() {
 document.addEventListener('DOMContentLoaded', loadTaxCodes);
 
 /* ══ Owner / Account Code — header only; line items are locked/inherited from SQ ══ */
-function onSoOwnerChange() {}
+function onSoOwnerChange() {
+  loadOwnerWarehouses(document.getElementById('so_owner').value);
+}
 function onSoAccountCodeChange() {}
 
 /* ══ Posting Date: empty + disabled until status = Approved ══ */
@@ -783,10 +853,332 @@ function addLiRow(d) {
     <td><input type="text" class="li-inp" name="li_tax_code[]" id="pltc_${idx}" value="${d.tax_code||'VAT15'}" readonly style="width:78px;background:#f3f4f6;"></td>
     <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${d.tax_amount||0}" readonly style="width:62px;background:#f3f4f6;"></td>
     <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${d.total||0}" readonly style="width:76px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+    <td></td>
   </tr>`;
   document.getElementById('liBody').insertAdjacentHTML('beforeend', row);
   recalcLi(idx);
   updLiCount();
+}
+
+/* ══ "Add Item" — extra items beyond what the Quotation inherited, fully
+   editable, same item-picker mechanism as Sales Quotation. ══ */
+let _itemMaster = [];
+let _itemMasterLoaded = false;
+let _levelFive = [];
+let _levelFiveLoaded = false;
+
+async function loadItemMaster() {
+  try {
+    const res = await fetch('/items/data');
+    const all = await res.json();
+    _itemMaster = (all || []).filter(it => it.is_active === undefined || it.is_active);
+    _itemMasterLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Item Master:', e);
+    _itemMaster = [];
+  }
+}
+
+async function loadLevelFive() {
+  try {
+    const res = await fetch('/coa/level-five/data');
+    const all = await res.json();
+    _levelFive = (all || []).filter(a => (a.status || 'active') === 'active');
+    _levelFiveLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Level Five accounts:', e);
+    _levelFive = [];
+  }
+}
+
+function _isServicesKind() {
+  const el = document.getElementById('so_kind');
+  return !!el && el.value === 'Services';
+}
+
+function _itemCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    return `<option value="${it.item_code}"${sel}>${it.item_code}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _itemNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    const label = it.name_en + (it.name_ar ? ' / ' + it.name_ar : '');
+    return `<option value="${it.item_code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown item'})</option>`;
+  }
+  return html;
+}
+
+function _glCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    return `<option value="${a.code}"${sel}>${a.code}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _glNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    const label = a.drawers + (a.drawers_ar ? ' / ' + a.drawers_ar : '');
+    return `<option value="${a.code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown account'})</option>`;
+  }
+  return html;
+}
+
+function _defaultDescFor(code, servicesKind, item) {
+  if (servicesKind) {
+    const acc = _levelFive.find(a => a.code === code);
+    return acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+  }
+  return item ? (item.name_en + (item.name_ar ? ' / ' + item.name_ar : '')) : '';
+}
+
+function _uomOptionsHtml(item, selectedUom) {
+  const list = (item && item.uoms && item.uoms.length) ? item.uoms : null;
+  if (!list) {
+    const fallback = selectedUom || 'unit';
+    return `<option value="${fallback}" selected>${fallback}</option>`;
+  }
+  return list.map(u => {
+    const val = u.unit_name;
+    const sel = (selectedUom ? selectedUom === val : u.is_default) ? ' selected' : '';
+    return `<option value="${val}"${sel}>${val}</option>`;
+  }).join('');
+}
+
+/* ══ Owner → Warehouse cascade (only needed for manually-added rows) ══ */
+let _ownerWarehouses = [];
+function _warehouseOptionsHtml(selected) {
+  const sel = selected || (_ownerWarehouses.length ? _ownerWarehouses[0].warehouse_name : '');
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += _ownerWarehouses.map(w => {
+    const label = (IS_AR && w.warehouse_name_ar) ? w.warehouse_name_ar : w.warehouse_name;
+    const optSel = w.warehouse_name === sel ? ' selected' : '';
+    return `<option value="${w.warehouse_name}"${optSel}>${label}</option>`;
+  }).join('');
+  if (sel && !_ownerWarehouses.some(w => w.warehouse_name === sel)) {
+    html += `<option value="${sel}" selected>${sel}</option>`;
+  }
+  return html;
+}
+async function loadOwnerWarehouses(ownerId) {
+  if (!ownerId) {
+    _ownerWarehouses = [];
+  } else {
+    try {
+      const res = await fetch('/owners/' + ownerId + '/warehouses');
+      _ownerWarehouses = await res.json();
+    } catch (e) {
+      _ownerWarehouses = [];
+    }
+  }
+  document.querySelectorAll('select[name="li_warehouse[]"]').forEach(sel => {
+    sel.innerHTML = _warehouseOptionsHtml(sel.value);
+  });
+}
+
+function onLiItemChange(idx, source) {
+  const codeSel = document.getElementById('plic_' + idx);
+  const nameSel = document.getElementById('plname_' + idx);
+  const code = source === 'name' ? (nameSel ? nameSel.value : '') : (codeSel ? codeSel.value : '');
+
+  if (codeSel && codeSel.value !== code) codeSel.value = code;
+  if (nameSel && nameSel.value !== code) nameSel.value = code;
+
+  const descEl = document.getElementById('plid_' + idx);
+  const uomEl  = document.getElementById('pluom_' + idx);
+  const rateEl = document.getElementById('plrt_' + idx);
+  const qtyEl  = document.getElementById('plq_' + idx);
+
+  if (_isServicesKind()) {
+    const acc = _levelFive.find(a => a.code === code);
+    if (descEl) descEl.value = acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+    if (uomEl)  uomEl.innerHTML = _uomOptionsHtml(null, 'unit');
+    if (rateEl) rateEl.value = (0).toFixed(2);
+    // Services aren't physical stock -- no shortfall check applies.
+    if (qtyEl) { qtyEl.dataset.stockAvail = ''; qtyEl.setCustomValidity(''); }
+    updateSoShortageHint();
+    recalcLi(idx);
+    return;
+  }
+
+  const item = _itemMaster.find(it => it.item_code === code);
+  if (item) {
+    if (descEl) descEl.value = item.name_en + (item.name_ar ? ' / ' + item.name_ar : '');
+    if (uomEl)  uomEl.innerHTML = _uomOptionsHtml(item, null);
+    if (rateEl) rateEl.value = (item.main_rate || 0).toFixed(2);
+  } else {
+    if (descEl) descEl.value = '';
+    if (uomEl)  uomEl.innerHTML = _uomOptionsHtml(null, 'unit');
+  }
+
+  // ⭐ Look up current on-hand stock for this item so the Quantity field
+  // can warn (not block -- an order can outrun today's stock) how many
+  // units short it would be.
+  if (qtyEl) { qtyEl.dataset.stockAvail = ''; qtyEl.setCustomValidity(''); }
+  if (code) {
+    fetch('/items/' + encodeURIComponent(code) + '/stock')
+      .then(r => r.ok ? r.json() : null)
+      .then(s => {
+        if (!qtyEl || !s) return;
+        qtyEl.dataset.stockAvail = s.stock_available;
+        onSoQtyInput(idx);
+      })
+      .catch(() => {});
+  }
+  recalcLi(idx);
+}
+
+// Informational only -- an order is allowed to exceed today's stock (more
+// may arrive before delivery), so this warns with the shortfall via the
+// native validation bubble instead of capping/blocking the field.
+function onSoQtyInput(idx) {
+  const inp = document.getElementById('plq_' + idx);
+  if (!inp) { recalcLi(idx); return; }
+  const avail = inp.dataset.stockAvail;
+  if (avail !== '' && avail != null) {
+    const stockAvail = parseFloat(avail) || 0;
+    const val = parseFloat(inp.value || '0') || 0;
+    const short = val - stockAvail;
+    if (short > 0) {
+      inp.setCustomValidity(IS_AR
+        ? `الكمية تتجاوز المتوفر بالمخزون (${stockAvail}) بمقدار ${short}.`
+        : `Quantity exceeds available stock (${stockAvail}) by ${short}.`);
+      inp.reportValidity();
+    } else {
+      inp.setCustomValidity('');
+    }
+  }
+  updateSoShortageHint();
+  recalcLi(idx);
+}
+
+// Aggregates every manually-added row's stock shortfall into one hint banner
+// above the Line Items table -- only shown for a standalone order (no
+// Sales Quotation linked); SQ-linked orders derive their items from an
+// already-approved document, so this doesn't apply there.
+function updateSoShortageHint() {
+  const hint = document.getElementById('soShortageHint');
+  const hintText = document.getElementById('soShortageHintText');
+  if (!hint || !hintText) return;
+  if (document.getElementById('so_sq_id')?.value) { hint.style.display = 'none'; return; }
+  const shorts = [];
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const qtyEl = row.querySelector('input[name="li_qty[]"]');
+    if (!qtyEl || qtyEl.dataset.stockAvail === undefined || qtyEl.dataset.stockAvail === '') return;
+    const stockAvail = parseFloat(qtyEl.dataset.stockAvail) || 0;
+    const val = parseFloat(qtyEl.value || '0') || 0;
+    const short = val - stockAvail;
+    if (short > 0) {
+      const codeSel = row.querySelector('select[name="li_item_code[]"]');
+      const code = (codeSel ? codeSel.value : '') || (IS_AR ? 'صنف' : 'item');
+      shorts.push(IS_AR ? `${code} أقل بـ ${short}` : `${code} short by ${short}`);
+    }
+  });
+  if (shorts.length) {
+    hintText.textContent = (IS_AR ? 'نقص في المخزون: ' : 'Stock shortage: ') + shorts.join('  •  ');
+    hint.style.display = 'block';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+// Kind change re-renders only the manually-added (editable) rows' item
+// pickers -- Quotation-inherited rows are plain readonly text and unaffected.
+function onSoKindChange() {
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const m = (row.id || '').match(/^plr_(\d+)$/);
+    if (!m) return;
+    const idx = parseInt(m[1]);
+    const codeSel = document.getElementById('plic_' + idx);
+    const nameSel = document.getElementById('plname_' + idx);
+    if (!codeSel || !nameSel) return;
+    const servicesKind = _isServicesKind();
+    codeSel.innerHTML = servicesKind ? _glCodeOptionsHtml('') : _itemCodeOptionsHtml('');
+    nameSel.innerHTML = servicesKind ? _glNameOptionsHtml('') : _itemNameOptionsHtml('');
+    onLiItemChange(idx, 'code');
+  });
+}
+
+function addNewLiRow(d) {
+  const idx = _liIdx++;
+  d = d || {};
+  const servicesKind = _isServicesKind();
+  const item = (!servicesKind && d.item_code) ? _itemMaster.find(it => it.item_code === d.item_code) : null;
+  const codeOptsHtml = servicesKind ? _glCodeOptionsHtml(d.item_code||'') : _itemCodeOptionsHtml(d.item_code||'');
+  const nameOptsHtml = servicesKind ? _glNameOptionsHtml(d.item_code||'') : _itemNameOptionsHtml(d.item_code||'');
+  const row = `<tr id="plr_${idx}">
+    <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
+    <td><select class="li-inp" name="li_item_code[]" id="plic_${idx}" onchange="onLiItemChange(${idx},'code')" style="width:110px;">${codeOptsHtml}</select></td>
+    <td>
+      <select class="li-inp" id="plname_${idx}" onchange="onLiItemChange(${idx},'name')" style="min-width:160px;">${nameOptsHtml}</select>
+      <input type="hidden" name="li_item_desc[]" id="plid_${idx}" value="${d.item_desc||d.description||_defaultDescFor(d.item_code||'', servicesKind, item)}">
+    </td>
+    <td><select class="li-inp" name="li_warehouse[]" id="plwh_${idx}" style="min-width:100px;">${_warehouseOptionsHtml(d.warehouse||'')}</select></td>
+    <td><select class="li-inp" name="li_uom[]" id="pluom_${idx}" style="width:90px;">${_uomOptionsHtml(item, d.uom)}</select></td>
+    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  min="0" step="0.01" data-stock-avail="" oninput="onSoQtyInput(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||(item?item.main_rate:0)||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" id="plt_${idx}"  name="li_taxable_disp[]" value="${d.taxable||0}" readonly
+         style="width:76px;background:#fffbeb;color:#92400e;font-weight:600;" title="Qty × Rate − Discount"></td>
+    <td><select class="li-inp" name="li_tax_code[]" id="pltc_${idx}" onchange="recalcLi(${idx})" style="width:78px;">${taxOptionsHtml(d.tax_code)}</select></td>
+    <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${d.tax_amount||0}" readonly style="width:62px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${d.total||0}" readonly style="width:76px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+    <td><button type="button" onclick="removeLi(${idx})"
+                style="width:22px;height:22px;border-radius:5px;border:none;background:#fee2e2;color:#b91c1c;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">
+      <i class="fas fa-times" style="font-size:9px;"></i></button></td>
+  </tr>`;
+  document.getElementById('liBody').insertAdjacentHTML('beforeend', row);
+  recalcLi(idx);
+  updLiCount();
+}
+
+function removeLi(idx) {
+  const r = document.getElementById('plr_'+idx);
+  if (r) r.remove();
+  recalcSummary();
+  updLiCount();
+  updateSoShortageHint();
+}
+
+// Line-item Tax Code column: show only the rate/text ("15%", "Exempt", ...).
+function taxRateText(t) {
+  return t.tax_code || t.account_code;
+}
+function taxOptionsHtml(selected) {
+  const sel = selected || (document.getElementById('so_account_code')?.value) || TAX_DEFAULT_CODE;
+  if (!TAX_CODES.length) {
+    return `<option value="${sel}" selected>${sel}</option>`;
+  }
+  let html = TAX_CODES.map(t =>
+    `<option value="${t.account_code}"${t.account_code === sel ? ' selected' : ''}>${taxRateText(t)}</option>`
+  ).join('');
+  if (sel && !TAX_CODES.some(t => t.account_code === sel)) {
+    html = `<option value="${sel}" selected>${sel}</option>` + html;
+  }
+  return html;
 }
 
 function taxRateOf(code) {
@@ -879,7 +1271,9 @@ async function openAddSO() {
   document.getElementById('so_id').value = '';
   document.getElementById('soTitle').innerHTML =
     '<i class="fas fa-plus-circle me-2"></i>' + (IS_AR ? 'إضافة أمر بيع' : 'Add Sales Order');
-  ['so_buyer_ref','so_remarks','so_buyer_name'].forEach(id => {
+  const shortHint = document.getElementById('soShortageHint');
+  if (shortHint) shortHint.style.display = 'none';
+  ['so_buyer_ref','so_remarks'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = '';
   });
   const today = new Date().toISOString().split('T')[0];
@@ -889,19 +1283,26 @@ async function openAddSO() {
   document.getElementById('so_doc_date').value = today;
   document.getElementById('so_status').value = 'Open';
   document.getElementById('so_kind').value = 'Goods';
+  _setSoKindLocked(false);
   document.getElementById('so_buyer').value = '';
+  _setSoBuyerLocked(false);
   document.getElementById('so_sq_id').value = '';
   document.getElementById('so_doc_no').value = '';
   document.getElementById('soDocBadge').textContent = '...';
 
   const ownerSel = document.getElementById('so_owner');
   ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
+  _setSoOwnerLocked(false);
   const accSel = document.getElementById('so_account_code');
-  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+  _setSoAccountCodeLocked(false);
+  await loadItemMaster();
+  await loadLevelFive();
+  await loadOwnerWarehouses(ownerSel.value);
 
   // ⭐ Fetch fresh document number
   await fetchDocNo();
-  
+
   document.getElementById('liBody').innerHTML = '';
   document.getElementById('attList').innerHTML = '';
   document.getElementById('existAttList').innerHTML = '';
@@ -914,8 +1315,8 @@ async function openAddSO() {
     const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
     if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
   });
-  addLiRow();
-  
+  addNewLiRow();
+
   if (!_soModal) {
     const modalEl = document.getElementById('soModal');
     if (modalEl) {
@@ -934,7 +1335,7 @@ function openEditSO(id) {
       if (!r.ok) throw new Error('Network response was not ok');
       return r.json();
     })
-    .then(d => {
+    .then(async d => {
       _liIdx = 0; _attachments = [];
       document.getElementById('so_id').value = id;
       document.getElementById('soTitle').innerHTML =
@@ -943,11 +1344,11 @@ function openEditSO(id) {
       document.getElementById('soDocBadge').textContent = d.doc_no || '';
       document.getElementById('so_status').value = d.status || 'Open';
       document.getElementById('so_kind').value = d.kind || 'Goods';
+      _setSoKindLocked(!!d.sq_id);
       document.getElementById('so_sq_id').value = d.sq_id || '';
       document.getElementById('so_buyer').value = d.buyer_id || '';
+      _setSoBuyerLocked(!!d.sq_id);
       document.getElementById('so_buyer_ref').value = d.buyer_ref_no || '';
-      const vnEl = document.getElementById('so_buyer_name');
-      if (vnEl) vnEl.value = d.buyer_name || '';
       const rmEl = document.getElementById('so_remarks');
       if (rmEl) rmEl.value = d.remarks || '';
       document.getElementById('so_posting_date').disabled = (d.status === 'Open');
@@ -958,13 +1359,20 @@ function openEditSO(id) {
       const ownerSel = document.getElementById('so_owner');
       ownerSel.value = d.owner_id || '';
       if (!ownerSel.value && ownerSel.options.length > 1) ownerSel.selectedIndex = 1;
+      _setSoOwnerLocked(!!d.sq_id);
       const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
       document.getElementById('so_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+      _setSoAccountCodeLocked(!!d.sq_id);
+      await loadItemMaster();
+      await loadLevelFive();
+      await loadOwnerWarehouses(ownerSel.value);
 
       document.getElementById('liBody').innerHTML = '';
-      (d.items || []).forEach(li => addLiRow(li));
-      if (!d.items?.length) addLiRow();
-      
+      const renderLi = d.sq_id ? addLiRow : addNewLiRow;
+      (d.items || []).forEach(li => renderLi(li));
+      if (!d.items?.length) renderLi();
+      updateSoShortageHint();
+
       document.getElementById('attList').innerHTML = '';
       document.getElementById('existAttList').innerHTML = '';
       (d.attachments || []).forEach(a => {
@@ -998,6 +1406,32 @@ function openEditSO(id) {
 }
 
 /* ══ Save ══ */
+// Only relevant for a standalone order (no Sales Quotation linked) -- when
+// a Quotation IS linked, items are locked/inherited from it and already
+// trusted, so they're exempt from this check.
+function validateSoLineItems() {
+  if (document.getElementById('so_sq_id').value) return true;
+  const rows = document.querySelectorAll('#liBody tr');
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+    const n = i + 1;
+    if (!g('li_item_code').trim()) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب اختيار كود الصنف واسمه.' : ': Item Code and Item Name must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_qty')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال كمية أكبر من صفر.' : ': Quantity must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_rate')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال سعر أكبر من صفر.' : ': Rate must be selected.'));
+      return false;
+    }
+  }
+  return true;
+}
+
 async function saveSO() {
   // ⭐ Ensure we have a document number
   const docNo = document.getElementById('so_doc_no').value;
@@ -1011,10 +1445,11 @@ async function saveSO() {
     }
   }
   
-  if (!document.getElementById('so_sq_id').value) {
-    alert(IS_AR ? 'يجب اختيار عرض سعر معتمد' : 'An Approved Sales Quotation must be selected');
+  if (!document.getElementById('so_buyer').value) {
+    alert(IS_AR ? 'يجب اختيار المشتري' : 'Buyer must be selected');
     return;
   }
+  if (!validateSoLineItems()) { return; }
   if (_sqPullInProgress) {
     alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات عرض السعر' : 'Please wait — still loading data from the Sales Quotation');
     return;
@@ -1219,9 +1654,9 @@ const cols = [
   {headerName:IS_AR?'اسم المشتري':'Buyer Name',field:'buyer_name',minWidth:180,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'رقم مرجع المشتري':'Buyer Ref No',field:'buyer_ref_no',width:130,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:115,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:115,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},

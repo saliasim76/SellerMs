@@ -1623,9 +1623,14 @@ select.field-input {
             <i class="fas fa-info-circle me-1" style="color:#2563eb;"></i>
             {% if ar %}استخدم القالب الرسمي، ثم ارفع الملف هنا. الصفوف غير الصالحة سيتم تخطيها مع تقرير مفصل.{% else %}Use the official template, then upload it here. Invalid rows are skipped with a detailed report.{% endif %}
           </div>
-          <a href="/employees/import/template" class="btn btn-sm btn-outline-primary" style="border-radius:8px;font-weight:600;">
-            <i class="fas fa-file-download me-1"></i>{% if ar %}تحميل القالب{% else %}Download Sample Template{% endif %}
-          </a>
+          <div style="display:flex;gap:8px;">
+            <a href="/employees/import/template" class="btn btn-sm btn-outline-primary" style="border-radius:8px;font-weight:600;">
+              <i class="fas fa-file-excel me-1"></i>{% if ar %}قالب إكسل{% else %}Excel Template{% endif %}
+            </a>
+            <a href="/employees/import/template?fmt=csv" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-weight:600;">
+              <i class="fas fa-file-csv me-1"></i>{% if ar %}قالب CSV{% else %}CSV Template{% endif %}
+            </a>
+          </div>
         </div>
         <div id="impDrop"
              style="border:2px dashed #cbd5e1;border-radius:12px;background:#fff;padding:34px 20px;text-align:center;cursor:pointer;transition:border-color .15s, background .15s;"
@@ -1644,7 +1649,7 @@ select.field-input {
           <div id="impFileName" style="margin-top:12px;font-size:12.5px;color:#16a34a;font-weight:600;display:none;">
             <i class="fas fa-file-excel me-1"></i><span></span>
           </div>
-          <input type="file" id="impFile" accept=".xlsx,.xls" style="display:none;" onchange="impFilePicked(this)">
+          <input type="file" id="impFile" accept=".xlsx,.xls,.csv" style="display:none;" onchange="impFilePicked(this)">
         </div>
         <div id="impProgress" style="display:none;margin-top:16px;">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
@@ -2502,7 +2507,7 @@ function viewDateFmt(dateStr) {
     const hijri = gregToHijri(dateStr);
     return hijri ? hijri + ' هـ' : dateStr;
   }
-  return dateStr;
+  return fmtDateDisplay(dateStr);
 }
 function calcAgeStr(birthDate) {
   if (!birthDate) return IS_AR ? 'غير محدد' : 'N/A';
@@ -3106,13 +3111,22 @@ const EMP_COLS = [
   { f: 'updated_at', h: 'Updated At', hAr: 'تاريخ التحديث', w: 150, type: 'date' },
 ];
 
+// Display-only reformat (ISO -> 01-Apr-26 style). Never touches the
+// underlying ISO value stored on the row -- that's still what feeds the
+// edit modal's native <input type="date"> fields, which require ISO.
+function fmtDateDisplay(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  if (!m) return v || '';
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${m[3]}-${months[parseInt(m[2], 10) - 1]}-${m[1].slice(-2)}`;
+}
 function fmtDateVal(v) {
   if (!v) return '';
   if (IS_AR && typeof gregToHijri === 'function') {
     const hijri = gregToHijri(v);
     return hijri || v;
   }
-  return v;
+  return fmtDateDisplay(v);
 }
 const money = (v) => (v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString());
 
@@ -3395,7 +3409,7 @@ function impSetBtn(enabled) {
 function impValidFile(f) {
   if (!f) return false;
   var n = f.name.toLowerCase();
-  return n.endsWith('.xlsx') || n.endsWith('.xls');
+  return n.endsWith('.xlsx') || n.endsWith('.xls') || n.endsWith('.csv');
 }
 
 function impShowFile(f) {
@@ -3406,7 +3420,7 @@ function impShowFile(f) {
 function impFilePicked(inp) {
   var f = inp.files && inp.files[0];
   if (!impValidFile(f)) {
-    impErr(IS_AR ? 'يسمح فقط بملفات .xlsx / .xls' : 'Only .xlsx / .xls files are allowed.');
+    impErr(IS_AR ? 'يسمح فقط بملفات .xlsx / .xls / .csv' : 'Only .xlsx / .xls / .csv files are allowed.');
     return;
   }
   var er = document.getElementById('impError');
@@ -3420,7 +3434,7 @@ function impOnDrop(ev) {
   if (dz) { dz.style.borderColor = '#cbd5e1'; dz.style.background = '#fff'; }
   var f = ev.dataTransfer.files && ev.dataTransfer.files[0];
   if (!impValidFile(f)) {
-    impErr(IS_AR ? 'يسمح فقط بملفات .xlsx / .xls' : 'Only .xlsx / .xls files are allowed.');
+    impErr(IS_AR ? 'يسمح فقط بملفات .xlsx / .xls / .csv' : 'Only .xlsx / .xls / .csv files are allowed.');
     return;
   }
   var er = document.getElementById('impError');

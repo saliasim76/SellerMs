@@ -92,7 +92,7 @@ body {
     <div style="text-align:right;">
       <div style="background:#0f2642;color:white;padding:.3rem 1.2rem;border-radius:30px;font-weight:700;font-size:1.1rem;display:inline-block;">PURCHASE INVOICE</div>
       <div style="font-weight:500;margin-top:.2rem;font-size:.9rem;">فاتورة شراء</div>
-      <div style="margin-top:.4rem;font-size:.85rem;"><span style="font-weight:600;">Invoice Date:</span> {{ doc.document_date.strftime('%d-%b-%Y') if doc.document_date else '—' }}</div>
+      <div style="margin-top:.4rem;font-size:.85rem;"><span style="font-weight:600;">Invoice Date:</span> {{ doc.document_date.strftime('%d-%b-%y') if doc.document_date else '—' }}</div>
     </div>
   </div>
 
@@ -105,9 +105,9 @@ body {
   {# Invoice meta grid -- only fields we actually track are filled; the rest render as — #}
   <div class="invoice-grid">
     <div class="field-group"><span class="label">Payment Method</span><span class="value">{{ doc.payment_method or '—' }}</span></div>
-    <div class="field-group"><span class="label">Invoice Period</span><span class="value">{% if doc.from_date and doc.to_date %}{{ doc.from_date.strftime('%d-%b-%Y') }} to {{ doc.to_date.strftime('%d-%b-%Y') }}{% else %}—{% endif %}</span></div>
+    <div class="field-group"><span class="label">Invoice Period</span><span class="value">{% if doc.from_date and doc.to_date %}{{ doc.from_date.strftime('%d-%b-%y') }} to {{ doc.to_date.strftime('%d-%b-%y') }}{% else %}—{% endif %}</span></div>
     <div class="field-group"><span class="label">Department / Branch</span><span class="value">—</span></div>
-    <div class="field-group"><span class="label">Due Date</span><span class="value">{{ doc.delivery_date.strftime('%d-%b-%Y') if doc.delivery_date else '—' }}</span></div>
+    <div class="field-group"><span class="label">Due Date</span><span class="value">{{ doc.delivery_date.strftime('%d-%b-%y') if doc.delivery_date else '—' }}</span></div>
     <div class="field-group"><span class="label">Bank</span><span class="value">{{ bank.bank_name_en if bank else '—' }}</span></div>
     <div class="field-group"><span class="label">Project / Ref No.</span><span class="value">{{ doc.supplier_ref_no or '—' }}</span></div>
     <div class="field-group"><span class="label">IBAN</span><span class="value">{{ bank.iban if bank else '—' }}</span></div>
@@ -199,7 +199,7 @@ body {
   <div class="footer-note">
     <span>Invoice No: {{ doc.doc_no }} · VAT: {{ doc.supplier.vat_number if doc.supplier and doc.supplier.vat_number else '—' }}</span>
     <span>CR: {{ doc.supplier.crn if doc.supplier and doc.supplier.crn else '—' }} · IBAN: {{ bank.iban if bank else '—' }}</span>
-    <span><i class="far fa-calendar-alt"></i> {{ doc.document_date.strftime('%d-%b-%Y') if doc.document_date else '—' }}</span>
+    <span><i class="far fa-calendar-alt"></i> {{ doc.document_date.strftime('%d-%b-%y') if doc.document_date else '—' }}</span>
   </div>
 
 </div>

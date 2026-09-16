@@ -1250,8 +1250,8 @@ function openViewWA(id) {
       <div class="vw-sec"><i class="fas fa-tasks me-1"></i>${IS_AR?'تفاصيل التوزيع':'Allocation Details'}</div>
       <div class="vw-grid">
         <div class="vw-item"><div class="vw-label">${IS_AR?'الحالة':'Status'}</div><div class="vw-value">${statLabel}</div></div>
-        <div class="vw-item"><div class="vw-label">${IS_AR?'تاريخ الانضمام':'Joining Date'}</div><div class="vw-value">${v(d.joining_date)}</div></div>
-        <div class="vw-item"><div class="vw-label">${IS_AR?'تاريخ الانتهاء':'End Date'}</div><div class="vw-value">${v(d.end_date)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'تاريخ الانضمام':'Joining Date'}</div><div class="vw-value">${v(window.GridKit.fmtDate(d.joining_date))}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'تاريخ الانتهاء':'End Date'}</div><div class="vw-value">${v(window.GridKit.fmtDate(d.end_date))}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'المشتري':'Buyer/HR'}</div><div class="vw-value">${v(d.buyer_name)}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'الشركة':'Company'}</div><div class="vw-value">${vr(d.company,d.company_ar)}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'القسم':'Department'}</div><div class="vw-value">${vr(d.department,d.department_ar)}</div></div>
@@ -1321,8 +1321,8 @@ const mainCols=[
   {headerName:IS_AR?'جواز السفر':'Passport',field:'passport_number',width:130,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإقامة':'Iqama',field:'iqama_number',width:130,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'المهنة':'Profession',field:'profession',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ الانضمام':'Joining Date',field:'joining_date',width:130,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ الانتهاء':'End Date',field:'end_date',width:120,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الانضمام':'Joining Date',field:'joining_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ الانتهاء':'End Date',field:'end_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'الشركة':'Company',field:'company',width:140,valueGetter:p=>IS_AR&&p.data.company_ar?p.data.company_ar:p.data.company,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'القسم':'Department',field:'department',width:120,valueGetter:p=>IS_AR&&p.data.department_ar?p.data.department_ar:p.data.department,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'القطاع':'Section',field:'section',width:120,valueGetter:p=>IS_AR&&p.data.section_ar?p.data.section_ar:p.data.section,filter:'agTextColumnFilter'},

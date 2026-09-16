@@ -385,7 +385,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="dn_kind" class="f-inp">
+                  <select id="dn_kind" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من أمر البيع{% else %}Derived from the Sales Order{% endif %}">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
@@ -437,7 +437,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}المالك{% else %}Owner{% endif %}</div>
-                  <select id="dn_owner" class="f-inp" title="{% if ar %}المالك{% else %}Owner{% endif %}">
+                  <select id="dn_owner" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من أمر البيع{% else %}Derived from the Sales Order{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                     {% for s in owners %}
                     <option value="{{ s.id }}">{{ s.name }}</option>
@@ -446,7 +446,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
-                  <select id="dn_account_code" class="f-inp" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                  <select id="dn_account_code" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من أمر البيع{% else %}Derived from the Sales Order{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                   </select>
                 </div>
@@ -500,6 +500,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                     <th style="width:60px;">{% if ar %}كمية أمر البيع{% else %}SO Qty{% endif %}</th>
                     <th style="width:60px;">{% if ar %}تم تسليمه سابقاً{% else %}Prev. Delivered{% endif %}</th>
                     <th style="width:60px;">{% if ar %}المتبقي{% else %}Remaining{% endif %}</th>
+                    <th style="width:70px;">{% if ar %}المتوفر بالمخزون{% else %}In Stock{% endif %}</th>
                     <th style="width:65px;">{% if ar %}السعر{% else %}Rate{% endif %}</th>
                     <th style="width:60px;">{% if ar %}الخصم{% else %}Disc.{% endif %}</th>
                     <th style="width:60px;">{% if ar %}الشحن{% else %}Freight{% endif %}</th>
@@ -511,7 +512,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                   <tbody id="liBody"></tbody>
                   <tfoot>
                     <tr style="background:#f1f5f9;">
-                      <td colspan="15" style="text-align:right;padding:7px 10px;font-weight:600;font-size:12px;color:#374151;">
+                      <td colspan="16" style="text-align:right;padding:7px 10px;font-weight:600;font-size:12px;color:#374151;">
                         {% if ar %}المجموع الإجمالي{% else %}Grand Total{% endif %}
                       </td>
                       <td style="padding:7px 8px;font-weight:700;color:#1e3a5f;font-size:13px;" id="li_grand_total">SAR 0.00</td>
@@ -730,14 +731,21 @@ function grlCollapseSec(){
 }
 
 /* Reflects _dnPosted on the Post & Save button -- disabled + relabeled
-   once this DN has already been posted (duplicate-posting prevention). */
+   once this DN has already been posted (duplicate-posting prevention), and
+   also disabled until the document's Status is Approved. */
 function grlUpdatePostBtnState(){
   const btn = document.getElementById('grlPostBtn');
   if(!btn) return;
-  btn.disabled = _dnPosted;
-  btn.style.opacity = _dnPosted ? '0.55' : '1';
-  btn.style.cursor = _dnPosted ? 'not-allowed' : 'pointer';
-  btn.title = _dnPosted ? (IS_AR?'تم ترحيل إذن التسليم هذا مسبقاً.':'This Delivery Note has already been posted.') : '';
+  const statusEl = document.getElementById('dn_status');
+  const notApproved = !_dnPosted && statusEl && statusEl.value !== 'Approved';
+  btn.disabled = _dnPosted || notApproved;
+  btn.style.opacity = (_dnPosted || notApproved) ? '0.55' : '1';
+  btn.style.cursor = (_dnPosted || notApproved) ? 'not-allowed' : 'pointer';
+  btn.title = _dnPosted
+    ? (IS_AR?'تم ترحيل إذن التسليم هذا مسبقاً.':'This Delivery Note has already been posted.')
+    : notApproved
+      ? (IS_AR?'يجب أن تكون الحالة "معتمد" قبل الترحيل.':'Status must be Approved before posting.')
+      : '';
 }
 
 /* ══ Document Number Fetch - FIXED: Ensures proper increment ══ */
@@ -806,6 +814,15 @@ async function onSOChange() {
     // the form defaulted to.
     if (so.kind) document.getElementById('dn_kind').value = so.kind;
 
+    // ⭐ Account Code comes from the selected Sales Order, falling back to
+    // the S1 default only if the SO itself has none set.
+    const soAccVal = so.account_code || (TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+    document.getElementById('dn_account_code').innerHTML = accountCodeOptionsHtml(soAccVal);
+
+    // ⭐ Owner defaults to the one on the selected Sales Order (still
+    // user-editable -- it's a starting value, not locked).
+    if (so.owner_id) document.getElementById('dn_owner').value = so.owner_id;
+
     // ⭐ Auto-fill line items from SO -- only lines that still have
     // remaining (undelivered) quantity; fully-delivered SO lines are
     // skipped. Defaults the Delivery Qty to the remaining (undelivered)
@@ -841,12 +858,14 @@ function onDnStatusChange() {
     postEl.disabled = true;
     postEl.value = '';
   }
+  grlUpdatePostBtnState();
 }
 
 /* ══ Account Code (header) — populated from the sales tax code master.
    Line items are locked/inherited from the source SO, so there is no
    cascade into line items here, only the header dropdown. ══ */
 let TAX_CODES = [];
+const TAX_DEFAULT_CODE = 'S1';
 function taxCodeLabel(t) {
   return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
 }
@@ -880,7 +899,9 @@ function addLiRow(d) {
   const soQty      = parseFloat(d.so_quantity ?? d.quantity ?? 0) || 0;
   const deliveredQty = parseFloat(d.delivered_quantity ?? 0) || 0;
   const remainingQty = d.remaining_quantity != null ? (parseFloat(d.remaining_quantity) || 0) : soQty;
-  const defaultQty = d.quantity != null ? parseFloat(d.quantity) : remainingQty;
+  const stockAvail = parseFloat(d.stock_available ?? 0) || 0;
+  const effectiveCap = Math.max(0, Math.min(remainingQty, stockAvail));
+  const defaultQty = d.quantity != null ? Math.min(parseFloat(d.quantity), effectiveCap) : effectiveCap;
   const row = `<tr id="plr_${idx}">
     <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
     <td><input type="text"   class="li-inp" name="li_item_code[]" value="${d.item_code||''}" readonly style="width:80px;background:#f3f4f6;"></td>
@@ -888,12 +909,13 @@ function addLiRow(d) {
     <td><input type="text"   class="li-inp" name="li_warehouse[]" value="${d.warehouse||''}" readonly style="min-width:90px;background:#f3f4f6;"></td>
     <td><input type="text"   class="li-inp" name="li_uom[]" value="${d.uom||'unit'}" readonly style="width:90px;background:#f3f4f6;"></td>
     <td><input type="hidden" name="li_source_line_id[]" value="${d.sales_order_line_item_id||''}">
-        <input type="number" class="li-inp" name="li_qty[]" id="plq_${idx}" data-remaining="${remainingQty}"
-               value="${defaultQty}" min="0" max="${remainingQty}" step="any"
+        <input type="number" class="li-inp" name="li_qty[]" id="plq_${idx}" data-remaining="${remainingQty}" data-stock-avail="${stockAvail}"
+               value="${defaultQty}" min="0" max="${effectiveCap}" step="any"
                oninput="onDnQtyInput(${idx})" style="width:62px;"></td>
     <td><input type="text" class="li-inp" value="${soQty}" readonly style="width:58px;background:#f3f4f6;color:#6b7280;" title="${IS_AR?'كمية أمر البيع':'Original SO Quantity'}"></td>
     <td><input type="text" class="li-inp" value="${deliveredQty}" readonly style="width:58px;background:#f3f4f6;color:#6b7280;" title="${IS_AR?'تم تسليمه سابقاً (مرحّل)':'Previously Delivered (Posted)'}"></td>
     <td><input type="text" class="li-inp" id="plrem_${idx}" value="${remainingQty}" readonly style="width:58px;background:#f3f4f6;color:#166534;font-weight:600;"></td>
+    <td><input type="text" class="li-inp" id="plstk_${idx}" value="${stockAvail}" readonly style="width:64px;background:#f3f4f6;color:${stockAvail < remainingQty ? '#b91c1c' : '#166534'};font-weight:600;" title="${IS_AR?'الكمية المتوفرة حالياً بالمخزون':'Current on-hand stock balance'}"></td>
     <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||0}"      readonly style="width:62px;background:#f3f4f6;"></td>
     <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  readonly style="width:58px;background:#f3f4f6;"></td>
     <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   readonly style="width:58px;background:#f3f4f6;"></td>
@@ -909,15 +931,22 @@ function addLiRow(d) {
 }
 
 /* Live cap + validation on Delivery Qty: never let the user type more than
-   the remaining SO quantity (mirrors the backend's exact rejection in
-   _validate_dn_delivery_quantities(), so a user never discovers the cap
-   only at Save time). Mirrors onGrnQtyInput() in grn_list.html. */
+   the remaining SO quantity OR the item's current on-hand stock balance
+   (mirrors the backend's exact rejections in _validate_dn_delivery_quantities()
+   and _check_dn_stock_availability(), so a user never discovers either cap
+   only at Save/Post time). Mirrors onGrnQtyInput() in grn_list.html. */
 function onDnQtyInput(idx) {
   const inp = document.getElementById('plq_'+idx);
   if (!inp) return;
   const remaining = parseFloat(inp.dataset.remaining || '0') || 0;
+  const stockAvail = parseFloat(inp.dataset.stockAvail || '0') || 0;
   const val = parseFloat(inp.value || '0') || 0;
-  if (val > remaining) {
+  if (val > stockAvail) {
+    inp.setCustomValidity(IS_AR
+      ? `كمية التسليم لا يمكن أن تتجاوز الكمية المتوفرة بالمخزون وهي ${stockAvail}.`
+      : `Delivery quantity cannot exceed the available stock of ${stockAvail}.`);
+    inp.reportValidity();
+  } else if (val > remaining) {
     inp.setCustomValidity(IS_AR
       ? `كمية التسليم لا يمكن أن تتجاوز الكمية المتبقية من أمر البيع وهي ${remaining}.`
       : `Delivery quantity cannot exceed the remaining SO quantity of ${remaining}.`);
@@ -1044,7 +1073,7 @@ async function openAddDN() {
   const ownerSel = document.getElementById('dn_owner');
   ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
   const accSel = document.getElementById('dn_account_code');
-  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
 
   // ⭐ Fetch fresh document number
   await fetchDocNo();
@@ -1108,8 +1137,16 @@ function openEditDN(id) {
         li.so_quantity = src.quantity;
         li.delivered_quantity = src.delivered_quantity;
         let remaining = parseFloat(src.remaining_quantity) || 0;
-        if (d.posting_status === 'Posted') remaining += parseFloat(li.quantity) || 0;
+        let stockAvail = parseFloat(src.stock_available) || 0;
+        if (d.posting_status === 'Posted') {
+          // This DN's own posted delivery already decremented stock -- add
+          // its quantity back so the shown balance reflects what's really
+          // available to re-allocate while editing it.
+          remaining += parseFloat(li.quantity) || 0;
+          stockAvail += parseFloat(li.quantity) || 0;
+        }
         li.remaining_quantity = remaining;
+        li.stock_available = stockAvail;
       });
       _liIdx = 0; _attachments = [];
       document.getElementById('dn_id').value = id;
@@ -1121,6 +1158,7 @@ function openEditDN(id) {
       document.getElementById('dn_doc_no').value = d.doc_no || '';
       document.getElementById('dnDocBadge').textContent = d.doc_no || '';
       document.getElementById('dn_status').value = d.status || 'Open';
+      grlUpdatePostBtnState();
       document.getElementById('dn_kind').value = d.kind || 'Goods';
       document.getElementById('dn_buyer').value = d.buyer_id || '';
       document.getElementById('dn_buyer_name').value = d.buyer_name || '';
@@ -1177,6 +1215,36 @@ function openEditDN(id) {
 }
 
 /* ══ Save ══ */
+function validateDnLineItems() {
+  const rows = document.querySelectorAll('#liBody tr');
+  if (!rows.length) {
+    alert(IS_AR ? 'أضف صنفاً واحداً على الأقل.' : 'Add at least one line item.');
+    return false;
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+    const n = i + 1;
+    if (!g('li_item_code').trim()) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': كود الصنف مفقود.' : ': Item Code is missing.'));
+      return false;
+    }
+    if (!g('li_item_desc').trim()) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': اسم الصنف مفقود.' : ': Item Name is missing.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_qty')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال كمية أكبر من صفر.' : ': Quantity must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_rate')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': السعر لا يمكن أن يكون صفراً.' : ': Rate cannot be zero.'));
+      return false;
+    }
+  }
+  return true;
+}
+
 async function saveDN() {
   // ⭐ Ensure we have a document number
   const docNo = document.getElementById('dn_doc_no').value;
@@ -1198,7 +1266,8 @@ async function saveDN() {
     alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات أمر البيع' : 'Please wait — still loading data from the Sales Order');
     return;
   }
-  
+  if (!validateDnLineItems()) { return; }
+
   const id = document.getElementById('dn_id').value;
   const url = id ? `/sales/delivery/${id}/edit` : '/sales/delivery/add';
   const fd = new FormData();
@@ -1403,9 +1472,9 @@ const cols = [
   { headerName: IS_AR ? 'شخص الاتصال' : 'Contact Person', field: 'contact_person', width: 140, filter: 'agTextColumnFilter' },
   { headerName: IS_AR ? 'الحالة' : 'Status', field: 'status', width: 100, cellRenderer: rStatus, floatingFilter: false, filter: 'agSetColumnFilter', filterParams: { values: ['Open','Pending','Approved','Closed','Cancelled'], buttons: ['apply','reset','clear'] } },
   { headerName: IS_AR ? 'حالة الترحيل' : 'Posting Status', field: 'posting_status', width: 120, cellRenderer: rPostingStatus, floatingFilter: false, filter: 'agSetColumnFilter', filterParams: { values: ['Saved','Posted'], buttons: ['apply','reset','clear'] } },
-  { headerName: IS_AR ? 'تاريخ الترحيل' : 'Posting Date', field: 'posting_date', width: 125, filter: 'agTextColumnFilter' },
-  { headerName: IS_AR ? 'تاريخ التسليم' : 'Delivery Date', field: 'delivery_date', width: 120, filter: 'agTextColumnFilter' },
-  { headerName: IS_AR ? 'تاريخ المستند' : 'Document Date', field: 'document_date', width: 130, filter: 'agTextColumnFilter' },
+  { headerName: IS_AR ? 'تاريخ الترحيل' : 'Posting Date', field: 'posting_date', width: 125, filter: 'agTextColumnFilter' ,valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  { headerName: IS_AR ? 'تاريخ التسليم' : 'Delivery Date', field: 'delivery_date', width: 120, filter: 'agTextColumnFilter' ,valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  { headerName: IS_AR ? 'تاريخ المستند' : 'Document Date', field: 'document_date', width: 130, filter: 'agTextColumnFilter' ,valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   { headerName: IS_AR ? 'كود الضريبة' : 'Tax Code', field: 'tax_code', width: 110, filter: 'agTextColumnFilter' },
   { headerName: IS_AR ? 'الإجمالي قبل الخصم' : 'Total', field: 'total_before_discount', width: 130, cellRenderer: rSAR, floatingFilter: false },
   { headerName: IS_AR ? 'الخصم' : 'Discount', field: 'total_discount', width: 120, cellRenderer: rSAR, floatingFilter: false },
@@ -1782,6 +1851,7 @@ async function _buildDNFormData() {
     alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات أمر البيع' : 'Please wait — still loading data from the Sales Order');
     return null;
   }
+  if (!validateDnLineItems()) { return null; }
 
   const fd = new FormData();
   fd.set('csrf_token', CSRF);

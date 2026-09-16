@@ -34,6 +34,16 @@ DB_NAME     = os.environ.get('DB_NAME', 'sellerms').strip()
 DB_USER     = os.environ.get('DB_USER', 'set-DB_USER-in-.env').strip()
 DB_PASSWORD = os.environ.get('DB_PASSWORD', 'set-DB_PASSWORD-in-.env').strip()
 
+# cPanel-style shared hosting auto-prefixes every MySQL database (and user)
+# with the cPanel account name, e.g. a "Noman" database really ends up
+# created as "proledg_Noman" -- the DB_USER itself is scoped by that same
+# host to only databases matching its own prefix. Set this (e.g.
+# "proledg_") on such a host so every SaaS tenant database
+# tenant_provisioning.py creates is automatically named within what the
+# host actually allows; leave blank for local dev / hosts with no such
+# restriction, where a tenant database is just named exactly as typed.
+TENANT_DB_PREFIX = os.environ.get('TENANT_DB_PREFIX', '').strip()
+
 MYSQL_URI = (
     f"mysql+pymysql://{urllib.parse.quote_plus(DB_USER)}:{urllib.parse.quote_plus(DB_PASSWORD)}"
     f"@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
@@ -59,16 +69,32 @@ OLD_SAAS_MASTER_DB_NAME = os.environ.get('OLD_SAAS_MASTER_DB_NAME', 'saas_master
 
 class Config:
     SECRET_KEY = (os.environ.get('SECRET_KEY') or 'seller-ms-secret-key-2024-change-in-production').strip()
+    # ZATCA Phase 2: gates the actual outbound HTTP calls to ZATCA's
+    # Compliance-Check/Production-CSID/Clearance/Reporting endpoints. Off by
+    # default -- invoices are still built, hashed, and signed locally
+    # (needed for the QR/XML/chain-state to work at all) even while this is
+    # off; only the live network round-trip is held back until real
+    # sandbox/production credentials have been verified.
+    ZATCA_LIVE_CALLS_ENABLED = os.environ.get('ZATCA_LIVE_CALLS_ENABLED', 'false').strip().lower() == 'true'
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', MYSQL_URI).strip()
-    SQLALCHEMY_BINDS = {
-        'saas': os.environ.get('DATABASE_URL', MYSQL_URI).strip(),
-    }
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
     # pool_pre_ping: test each pooled connection with a cheap query before
     # handing it to a request, transparently reconnecting if it's dead (e.g.
     # killed server-side, or dropped after MySQL's wait_timeout). Without
     # this, the first request after any such disconnect fails outright.
     SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True, 'pool_recycle': 280}
+    # Flask-SQLAlchemy builds each bind's engine from ITS OWN dict here --
+    # it does NOT inherit SQLALCHEMY_ENGINE_OPTIONS above (that only applies
+    # to the default, un-bound engine). A bind given as a bare URL string
+    # therefore gets NO pool_pre_ping/pool_recycle at all, so its connections
+    # silently go stale after MySQL's wait_timeout with nothing to catch it.
+    # Repeat the same options explicitly for every bind to avoid that.
+    SQLALCHEMY_BINDS = {
+        'saas': {
+            'url': os.environ.get('DATABASE_URL', MYSQL_URI).strip(),
+            'pool_pre_ping': True,
+            'pool_recycle': 280,
+        },
+    }
     WTF_CSRF_ENABLED = True
     # Total request size cap (form + line items + ALL attachments in one POST).
     # Must be comfortably larger than the per-file limit (16MB in the upload

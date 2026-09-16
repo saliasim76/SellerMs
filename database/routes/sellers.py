@@ -32,10 +32,30 @@ def _resolve_second_language(current_value=None):
     the acting user is a Super Admin, and only for a value from the app's
     configured language list (English excluded)."""
     allowed = current_app.config.get('SECOND_LANGUAGES', {'Arabic': 'ar'})
-    if not getattr(current_user, 'is_super_admin', False):
+    if not getattr(current_user, 'effectively_super_admin', False):
         return current_value or 'Arabic'
     submitted = (request.form.get('second_language') or '').strip()
     return submitted if submitted in allowed else (current_value or 'Arabic')
+
+
+_SINV_PRINT_TEMPLATES = ('classic', 'letterhead', 'formal', 'default1')
+
+
+def _resolve_sinv_print_template(current_value=None):
+    """Sales Invoice print/PDF template choice -- one of the 4 templates
+    Owner Settings offers: 'formal' ("By Default", the default: detailed
+    bilingual tables, Owner logo/watermark/color, neutral grey Seller/Buyer
+    headers), 'default1' ("Default Template" -- same layout as 'formal',
+    but every header on the page, including Seller Details and Buyer
+    Detail, uses the owner's report colour), 'classic' (original
+    bilingual-card design), or 'letterhead' (Owner's uploaded header/footer
+    images). Falls back to the current value (or 'formal') for anything
+    not in the known set, matching _resolve_second_language()'s own
+    defensive-default pattern -- this is also what makes existing owners
+    who still have the retired 'compact' template saved degrade
+    gracefully to 'formal' rather than erroring."""
+    submitted = (request.form.get('sinv_print_template') or '').strip()
+    return submitted if submitted in _SINV_PRINT_TEMPLATES else (current_value or 'formal')
 
 
 def generate_owner_code():
@@ -397,6 +417,7 @@ def add_owner():
         country              = request.form.get('country', 'Saudi Arabia').strip(),
         country_ar           = request.form.get('country_ar',       '').strip(),
         second_language      = _resolve_second_language(),
+        sinv_print_template  = _resolve_sinv_print_template(),
     )
 
     errors = []
@@ -497,6 +518,7 @@ def owner_json(id):
         'country_ar':           g('country_ar'),
         'status':                g('status'),
         'second_language':       g('second_language') or 'Arabic',
+        'sinv_print_template':   g('sinv_print_template') or 'formal',
         'banks':                 banks_data,
         # Direct bank fields for the form
         'bank_name':             getattr(primary_bank, 'bank_name', '') if primary_bank else '',
@@ -543,6 +565,7 @@ def edit_owner(id):
     owner.country              = request.form.get('country',          '').strip()
     owner.country_ar           = request.form.get('country_ar',       '').strip()
     owner.second_language      = _resolve_second_language(owner.second_language)
+    owner.sinv_print_template  = _resolve_sinv_print_template(owner.sinv_print_template)
     owner.updated_at           = datetime.utcnow()
 
     logo    = request.files.get('logo')

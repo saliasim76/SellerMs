@@ -389,7 +389,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}نوع الشراء{% else %}Purchase Type{% endif %}</div>
-                  <select id="pdm_ptype" class="f-inp">
+                  <select id="pdm_ptype" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من إشعار إرجاع الشراء{% else %}Derived from the Purchase Return Note{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                     <option value="Assets">{% if ar %}أصول{% else %}Assets{% endif %}</option>
                     <option value="Expense">{% if ar %}مصروف{% else %}Expense{% endif %}</option>
@@ -397,7 +397,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="pdm_kind" class="f-inp" onchange="onPdmKindChange()">
+                  <select id="pdm_kind" class="f-inp" onchange="onPdmKindChange()" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من إشعار إرجاع الشراء{% else %}Derived from the Purchase Return Note{% endif %}">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
@@ -482,7 +482,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
-                  <select id="pdm_account_code" class="f-inp" onchange="onPdmAccountCodeChange()" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                  <select id="pdm_account_code" class="f-inp" onchange="onPdmAccountCodeChange()" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من إشعار إرجاع الشراء{% else %}Derived from the Purchase Return Note{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                   </select>
                 </div>
@@ -708,7 +708,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 {% if is_basic_mode %}disabled title="{% if ar %}الترحيل مقفل في الخطة الأساسية{% else %}Posting is locked on the Basic plan{% endif %}"{% endif %}>
           <i class="fas fa-check me-1"></i>{% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}
         </button>
-        <button class="btn-f btn-save" onclick="savePDM()">
+        <button class="btn-f btn-save" id="pdmSaveBtn" onclick="savePDM()">
           <i class="fas fa-save me-1"></i>{% if ar %}حفظ مذكرة الخصم{% else %}Save Purchase Debit Memo{% endif %}
         </button>
       </div>
@@ -772,11 +772,25 @@ function grlCollapseSec(){
    once this Purchase Debit Memo has already been posted (duplicate-posting prevention). */
 function grlUpdatePostBtnState(){
   const btn = document.getElementById('grlPostBtn');
-  if(!btn) return;
-  btn.disabled = _pdmPosted;
-  btn.style.opacity = _pdmPosted ? '0.55' : '1';
-  btn.style.cursor = _pdmPosted ? 'not-allowed' : 'pointer';
-  btn.title = _pdmPosted ? (IS_AR?'تم ترحيل إشعار مدين الشراء هذا مسبقاً.':'This Purchase Debit Memo has already been posted.') : '';
+  const saveBtn = document.getElementById('pdmSaveBtn');
+  const statusEl = document.getElementById('pdm_status');
+  const notApproved = !_pdmPosted && statusEl && statusEl.value !== 'Approved';
+  if(btn){
+    btn.disabled = _pdmPosted || notApproved;
+    btn.style.opacity = (_pdmPosted || notApproved) ? '0.55' : '1';
+    btn.style.cursor = (_pdmPosted || notApproved) ? 'not-allowed' : 'pointer';
+    btn.title = _pdmPosted
+      ? (IS_AR?'تم ترحيل إشعار مدين الشراء هذا مسبقاً.':'This Purchase Debit Memo has already been posted.')
+      : notApproved
+        ? (IS_AR?'يجب أن تكون الحالة "معتمد" قبل الترحيل.':'Status must be Approved before posting.')
+        : '';
+  }
+  if(saveBtn){
+    saveBtn.disabled = _pdmPosted;
+    saveBtn.style.opacity = _pdmPosted ? '0.55' : '1';
+    saveBtn.style.cursor = _pdmPosted ? 'not-allowed' : 'pointer';
+    saveBtn.title = _pdmPosted ? (IS_AR?'تم ترحيل إشعار مدين الشراء هذا مسبقاً.':'This Purchase Debit Memo has already been posted.') : '';
+  }
 }
 
 /* ══ Document Number Fetch - FIXED: Ensures proper increment ══ */
@@ -869,6 +883,13 @@ async function onPrnChange() {
     const prnAccVal = prn.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : TAX_DEFAULT_CODE);
     document.getElementById('pdm_account_code').innerHTML = accountCodeOptionsHtml(prnAccVal);
 
+    // ⭐ Owner defaults to the one on the selected Purchase Return Note
+    // (still user-editable -- it's a starting value, not locked).
+    if (prn.owner_id) {
+      document.getElementById('pdm_owner').value = prn.owner_id;
+      await loadOwnerWarehouses(prn.owner_id);
+    }
+
     // ⭐ Auto-fill line items from the Purchase Return Note
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0;
@@ -929,6 +950,7 @@ function onPdmStatusChange() {
     postEl.disabled = true;
     postEl.value = '';
   }
+  grlUpdatePostBtnState();
 }
 
 /* ══ Section toggle ══ */
@@ -1336,6 +1358,7 @@ function openEditPDM(id) {
     document.getElementById('pdm_doc_no').value = d.doc_no || '';
     document.getElementById('pdmDocBadge').textContent = d.doc_no || '';
     document.getElementById('pdm_status').value = d.status || 'Open';
+    grlUpdatePostBtnState();
     document.getElementById('pdm_kind').value = d.kind || 'Goods';
       document.getElementById('pdm_ptype').value = d.purchase_type || '';
     document.getElementById('pdm_payment').value = d.payment_method || 'Credit';
@@ -1619,9 +1642,9 @@ const cols = [
   {headerName:IS_AR?'شخص الاتصال':'Contact Person',field:'contact_person',width:130,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'المالك':'Owner',field:'owner_name',minWidth:150,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},

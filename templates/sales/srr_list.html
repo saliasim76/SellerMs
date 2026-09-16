@@ -731,6 +731,7 @@ function onSrrStatusChange() {
    Line items are locked/inherited from the source invoice, so there is no
    cascade into line items here, only the header dropdown. ══ */
 let TAX_CODES = [];
+const TAX_DEFAULT_CODE = 'S1';
 function taxCodeLabel(t) {
   return t.tax_code ? `${t.account_code} — ${t.tax_code}` : t.account_code;
 }
@@ -901,7 +902,7 @@ async function openAddSRR() {
   const ownerSel = document.getElementById('srr_owner');
   ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
   const accSel = document.getElementById('srr_account_code');
-  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
 
   await fetchDocNo();
   
@@ -1227,9 +1228,9 @@ const cols = [
   {headerName:IS_AR?'رقم مرجع المشتري':'Buyer Ref No',field:'buyer_ref_no',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'شخص الاتصال':'Contact Person',field:'contact_person',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},

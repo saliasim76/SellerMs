@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, current_app
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, current_app, abort
 from flask_login import login_required, current_user
 from decimal import Decimal
 from datetime import datetime, date
@@ -24,6 +24,7 @@ from models import (
     PurchaseTaxCode, SalesTaxCode,
     GRL, GRLDetail,
     ItemMaster, StoreTransaction, LevelFive,
+    ZatcaSettings,
 )
 from database.routes.shared import _next_grl_no, _grl_num, _grl_lines_from, block_in_basic_mode_json
 
@@ -71,6 +72,36 @@ def owner_banks(owner_id):
     """Active bank accounts for a owner, for the invoice/credit-memo bank dropdown."""
     banks = OwnerBank.query.filter_by(owner_id=owner_id).order_by(OwnerBank.is_primary.desc()).all()
     return jsonify([b.to_dict() for b in banks])
+
+
+@sale_bp.route('/sales/owners/<int:owner_id>/details')
+@login_required
+def sinv_owner_details(owner_id):
+    """Read-only Name/Street/City/VAT/CRN (English + Arabic) for the Sales
+    Invoice Seller section's "Selected Seller Details" card -- never
+    re-typed, always derived live from Owner."""
+    o = Owner.query.get_or_404(owner_id)
+    return jsonify({
+        'name': o.name or '', 'name_ar': o.name_ar or '',
+        'street': o.street_name or '', 'street_ar': o.street_name_ar or '',
+        'city': o.city or '', 'city_ar': o.city_ar or '',
+        'vat_number': o.vat_number or '', 'crn': o.crn or '',
+    })
+
+
+@sale_bp.route('/sales/buyers/<int:buyer_id>/details')
+@login_required
+def sinv_buyer_details(buyer_id):
+    """Read-only Name/Street/City/VAT/CRN (English + Arabic) for the Sales
+    Invoice Buyer section's "Selected Buyer Details" card -- never
+    re-typed, always derived live from BuyerMaster."""
+    b = BuyerMaster.query.get_or_404(buyer_id)
+    return jsonify({
+        'name': b.buyer_name_en or '', 'name_ar': b.buyer_name_ar or '',
+        'street': b.street_name or '', 'street_ar': b.street_name_ar or '',
+        'city': b.city or '', 'city_ar': b.city_ar or '',
+        'vat_number': b.vat_number or '', 'crn': b.crn or '',
+    })
 
 
 def _validate_sr_sq_dates(valid_until, required_date):
@@ -176,6 +207,63 @@ def _next_doc_no(doc_type, model):
     return doc_no
 
 
+def _next_sinv_doc_no(transaction_type):
+    """Sales Invoice document numbering, one independent sequence per
+    Transaction Type: <transaction_type>-<FY year>-<n>, e.g. STD-INV-2026-1.
+    Each of the 6 dropdown values (STD-INV, STD-DR, STD-CR, SIM-INV,
+    SIM-DR, SIM-CR -- see database/zatca/engine.py's SINV_TRANSACTION_TYPES)
+    uses itself as the prefix and keeps its own count, so e.g. the first
+    Standard Debit Note is always STD-DR-<year>-1 no matter how many
+    Standard Invoices already exist for that year. This replaces the
+    single shared SLI-<year>-<n> counter _next_doc_no('SINV', ...) used to
+    assign every Sales Invoice regardless of type -- existing SLI-prefixed
+    invoices are untouched and keep their historical numbers; only NEW
+    invoices use this. Raises NoActiveFinancialYear if no financial year
+    is open, exactly like _next_doc_no."""
+    from models import active_fy_year
+    year = active_fy_year()
+    if not year:
+        raise NoActiveFinancialYear()
+
+    like = f'{transaction_type}-{year}-%'
+    max_num = 0
+    for doc in db.session.query(SalesInvoice).filter(SalesInvoice.doc_no.like(like)).all():
+        if doc.doc_no:
+            try:
+                num = int(doc.doc_no.rsplit('-', 1)[1])
+                if num > max_num:
+                    max_num = num
+            except (ValueError, IndexError):
+                continue
+
+    n = max_num + 1
+    doc_no = f'{transaction_type}-{year}-{n}'
+
+    retries = 0
+    while SalesInvoice.query.filter_by(doc_no=doc_no).first() and retries < 100:
+        n += 1
+        doc_no = f'{transaction_type}-{year}-{n}'
+        retries += 1
+    if retries >= 100:
+        doc_no = f'{transaction_type}-{year}-{datetime.now().strftime("%Y%m%d%H%M%S")}'
+    return doc_no
+
+
+def _sinv_txn_category(transaction_type):
+    """Standard/Simplified, derived from a transaction_type value's prefix
+    -- covers both the current STD-/SIM- dropdown values and the legacy
+    STD_/SMP_ values already stored on invoices created before the
+    dropdown was consolidated to a single field. The route layer always
+    derives invoice_category this way rather than trusting a separately
+    posted form value, so the two fields can never desync."""
+    t = (transaction_type or '').upper()
+    if t.startswith('STD'):
+        return 'standard'
+    if t.startswith('SIM') or t.startswith('SMP'):
+        return 'simplified'
+    return None
+
+
 
 
 def _save_attachments(doc_type, doc_id, files):
@@ -195,6 +283,110 @@ def _save_attachments(doc_type, doc_id, files):
             uploaded_by=current_user.id,
         )
         db.session.add(att)
+
+
+# ─────────────────────────────────────────────────────────────
+# SALES ATTACHMENTS — view / download / delete
+# Mirrors purchase.py's _attachment_dir_and_name()/purchase_attachment_*
+# routes exactly, but resolves the RBAC permission dynamically from the
+# attachment's own doc_type rather than hardcoding one -- Purchase's
+# routes hardcode ('purchase','supplier',...) regardless of which document
+# type the attachment actually belongs to, a pre-existing inconsistency
+# not worth carrying over here.
+# ─────────────────────────────────────────────────────────────
+_SALES_ATTACHMENT_PERMISSION_MAP = {
+    'SR': ('sale', 'sales_request'), 'SQ': ('sale', 'sales_quotation'),
+    'SO': ('sale', 'sales_order'), 'DN': ('sale', 'delivery_note'),
+    'SINV': ('sale', 'sales_invoice'), 'SINVZ': ('sale', 'sales_invoice'),
+    'SRR': ('sale', 'sales_return_request'), 'SRN': ('sale', 'sales_return_note'),
+    'SCM': ('sale', 'sales_credit_memo'),
+}
+
+
+def _sales_attachment_dir_and_name(att):
+    rel = (att.filepath or '').replace('\\', '/')
+    directory = os.path.abspath(os.path.dirname(rel))
+    fname = os.path.basename(rel)
+    return directory, fname
+
+
+def _check_sales_attachment_permission(att, action):
+    from database.routes.rbac import can
+    module, form = _SALES_ATTACHMENT_PERMISSION_MAP.get(att.doc_type, ('sale', 'sales_invoice'))
+    if not can(module, form, action):
+        abort(403)
+
+
+@sale_bp.route('/sales/attachments/<int:att_id>/view')
+@login_required
+def sales_attachment_view(att_id):
+    """Open the attachment inline when the browser can show it."""
+    from flask import send_from_directory
+    att = SalesAttachment.query.get_or_404(att_id)
+    _check_sales_attachment_permission(att, 'view')
+    directory, fname = _sales_attachment_dir_and_name(att)
+    full = os.path.join(directory, fname)
+    if not os.path.exists(full):
+        abort(404)
+    mime = mimetypes.guess_type(fname)[0] or 'application/octet-stream'
+    inline_ok = mime in ('application/pdf', 'text/plain', 'text/csv', 'text/xml', 'application/xml') or mime.startswith('image/')
+    return send_from_directory(directory, fname, as_attachment=not inline_ok,
+                               download_name=att.filename or fname, mimetype=mime)
+
+
+@sale_bp.route('/sales/attachments/<int:att_id>/download')
+@login_required
+def sales_attachment_download(att_id):
+    """Always download the attachment."""
+    from flask import send_from_directory
+    att = SalesAttachment.query.get_or_404(att_id)
+    _check_sales_attachment_permission(att, 'view')
+    directory, fname = _sales_attachment_dir_and_name(att)
+    full = os.path.join(directory, fname)
+    if not os.path.exists(full):
+        abort(404)
+    mime = mimetypes.guess_type(fname)[0] or 'application/octet-stream'
+    return send_from_directory(directory, fname, as_attachment=True,
+                               download_name=att.filename or fname, mimetype=mime)
+
+
+@sale_bp.route('/sales/attachments/<int:att_id>/delete', methods=['POST'])
+@login_required
+def sales_attachment_delete(att_id):
+    """Delete a single attachment: remove the file from disk, then the row."""
+    att = SalesAttachment.query.get_or_404(att_id)
+    _check_sales_attachment_permission(att, 'delete')
+    try:
+        directory, fname = _sales_attachment_dir_and_name(att)
+        full = os.path.join(directory, fname)
+        if os.path.exists(full):
+            os.remove(full)
+        db.session.delete(att)
+        db.session.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _save_generated_attachment(doc_type, doc_id, filename, content_bytes):
+    """Same on-disk convention as _save_attachments(), for server-generated
+    content (e.g. a ZATCA XML) rather than an uploaded FileStorage."""
+    upload_dir = os.path.join('static', 'uploads', 'sales', doc_type, str(doc_id))
+    os.makedirs(upload_dir, exist_ok=True)
+    fname = secure_filename(filename)
+    fpath = os.path.join(upload_dir, fname)
+    with open(fpath, 'wb') as fh:
+        fh.write(content_bytes)
+    att = SalesAttachment(
+        doc_type=doc_type, doc_id=doc_id,
+        filename=fname, filepath=fpath,
+        file_size=os.path.getsize(fpath),
+        uploaded_by=current_user.id,
+    )
+    db.session.add(att)
+    db.session.flush()
+    return att
 
 
 def _resolve_tax_code(account_code, doc_type='purchase'):
@@ -263,10 +455,11 @@ def _save_doc_line_items(LIModel, fk_field, fk_value, f, doc_type='purchase', so
     tcodes   = f.getlist('li_tax_code[]')
     src_ids  = f.getlist('li_source_line_id[]') if source_link_field else []
 
-    total_bd = Decimal(0)
-    total_disc = Decimal(0)
-    total_fr = Decimal(0)
-    total_vat = Decimal(0)
+    total_bd = Decimal('0.00')
+    total_disc = Decimal('0.00')
+    total_fr = Decimal('0.00')
+    total_vat = Decimal('0.00')
+    total_taxable = Decimal('0.00')
 
     for i in range(len(qtys)):
         try:
@@ -275,29 +468,39 @@ def _save_doc_line_items(LIModel, fk_field, fk_value, f, doc_type='purchase', so
             rate_str = rates[i] if i < len(rates) and rates[i] else '0'
             disc_str = discs[i] if i < len(discs) and discs[i] else '0'
             fr_str = freights[i] if i < len(freights) and freights[i] else '0'
-            
+
             # Remove commas and clean
             qty_str = qty_str.replace(',', '').strip()
             rate_str = rate_str.replace(',', '').strip()
             disc_str = disc_str.replace(',', '').strip()
             fr_str = fr_str.replace(',', '').strip()
-            
+
             # Parse with 4 decimal precision
             qty = Decimal(qty_str or '0').quantize(Decimal('0.0001'))
             rate = Decimal(rate_str or '0').quantize(Decimal('0.0001'))
             disc = Decimal(disc_str or '0').quantize(Decimal('0.0001'))
             fr = Decimal(fr_str or '0').quantize(Decimal('0.0001'))
-            
+
             # Resolve tax code -> (numeric rate, display text like "15%")
             tax_code = tcodes[i] if i < len(tcodes) and tcodes[i] else '0'
             tax_code = tax_code.strip()
             tax_rate, tax_code_text = _resolve_tax_code(tax_code, doc_type)
 
-            # Calculate with proper precision
-            taxable = max(Decimal('0'), (qty * rate - disc) + fr)
-            tax_amt = (taxable * tax_rate / 100).quantize(Decimal('0.01'))  # 2 decimals
-            total = (taxable + tax_amt).quantize(Decimal('0.01'))  # 2 decimals
-            taxable_rounded = taxable.quantize(Decimal('0.01'))  # 2 decimals
+            # Round the taxable base to 2dp FIRST, then derive VAT and the
+            # line total from THAT rounded figure -- not the raw 4-decimal
+            # intermediate. The header totals below are built by summing
+            # these exact same already-rounded per-line values, so they
+            # can never drift by a cent from what each line displays --
+            # summing unrounded amounts and rounding only the header total
+            # once at the end (the previous approach) is exactly the kind
+            # of thing that makes line items not add up to the printed/
+            # ZATCA-submitted summary total.
+            taxable_rounded = max(Decimal('0.00'), ((qty * rate - disc) + fr).quantize(Decimal('0.01')))
+            tax_amt = (taxable_rounded * tax_rate / 100).quantize(Decimal('0.01'))
+            total = (taxable_rounded + tax_amt).quantize(Decimal('0.01'))
+            bd_rounded = (qty * rate).quantize(Decimal('0.01'))
+            disc_rounded = disc.quantize(Decimal('0.01'))
+            fr_rounded = fr.quantize(Decimal('0.01'))
 
             li = LIModel(**{
                 fk_field:        fk_value,
@@ -319,23 +522,23 @@ def _save_doc_line_items(LIModel, fk_field, fk_value, f, doc_type='purchase', so
                 src_id = src_ids[i] if i < len(src_ids) and src_ids[i] else None
                 setattr(li, source_link_field, int(src_id) if src_id else None)
             db.session.add(li)
-            total_bd   += qty * rate
-            total_disc += disc
-            total_fr   += fr
-            total_vat  += tax_amt
+            total_bd      += bd_rounded
+            total_disc    += disc_rounded
+            total_fr      += fr_rounded
+            total_taxable += taxable_rounded
+            total_vat     += tax_amt
         except Exception as e:
             print(f"Error processing line item {i}: {str(e)}")
             import traceback
             traceback.print_exc()
 
-    excl = (total_bd - total_disc) + total_fr
     return {
-        'total_before_discount': total_bd.quantize(Decimal('0.01')),
-        'total_discount':        total_disc.quantize(Decimal('0.01')),
-        'total_freight':         total_fr.quantize(Decimal('0.01')),
-        'total_excl_vat':        excl.quantize(Decimal('0.01')),
-        'vat_amount':            total_vat.quantize(Decimal('0.01')),
-        'total_incl_vat':        (excl + total_vat).quantize(Decimal('0.01')),
+        'total_before_discount': total_bd,
+        'total_discount':        total_disc,
+        'total_freight':         total_fr,
+        'total_excl_vat':        total_taxable,
+        'vat_amount':            total_vat,
+        'total_incl_vat':        (total_taxable + total_vat),
     }
 
 
@@ -345,7 +548,23 @@ def next_doc_no():
     """Preview the next document number for a given sales doc type."""
     t = (request.args.get('type') or 'SR').upper()
     force_new = request.args.get('force_new', 'false').lower() == 'true'
-    
+
+    if t == 'SINV':
+        # Sales Invoice numbering is keyed by Transaction Type, not a
+        # single shared SINV counter -- see _next_sinv_doc_no(). Until a
+        # (valid) transaction type is chosen there's nothing to preview.
+        from database.zatca import engine as zengine
+        txn_type = (request.args.get('transaction_type') or '').strip().upper()
+        if txn_type not in zengine.SINV_TRANSACTION_TYPES:
+            return jsonify({'doc_no': '', 'force_new': force_new})
+        try:
+            doc_no = _next_sinv_doc_no(txn_type)
+            return jsonify({'doc_no': doc_no, 'force_new': force_new})
+        except Exception as e:
+            print(f"Error generating doc number: {e}")
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            return jsonify({'doc_no': f'{txn_type}-{timestamp}', 'force_new': force_new})
+
     model_map = {
         'SR': SalesRequest, 'SQ': SalesQuotation, 'SO': SalesOrder,
         'DN': DeliveryNote, 'SINV': SalesInvoice,
@@ -598,6 +817,10 @@ def sq_add():
     if sr_id and (not sr or sr.status != 'Approved'):
         return jsonify({'ok': False, 'error': 'Selected Sales Request is not Approved'}), 400
 
+    buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else None
+    if not buyer_id:
+        return jsonify({'ok': False, 'error': 'Buyer must be selected'}), 400
+
     subject = f.get('subject','').strip()
 
     valid_until   = pd(f.get('valid_until'))
@@ -614,11 +837,11 @@ def sq_add():
         sales_request_id=sr_id,
         requester=current_user.username,
         requester_name=current_user.username,
-        buyer_id=int(f.get('buyer_id')) if f.get('buyer_id') else None,
+        buyer_id=buyer_id,
         buyer_ref_no=f.get('buyer_ref_no','').strip(),
         owner_id=int(f.get('owner_id')) if f.get('owner_id') else None,
         status=f.get('status','Open'),
-        kind=f.get('kind','Goods'),
+        kind=sr.kind if sr else f.get('kind','Goods'),
         posting_date=pd(f.get('posting_date')) or date.today(),
         valid_until=valid_until,
         document_date=date.today(),
@@ -626,7 +849,7 @@ def sq_add():
         subject=subject,
         remarks=f.get('remarks','').strip(),
         body=f.get('body','').strip() or None,
-        account_code=f.get('account_code','').strip() or None,
+        account_code=(sr.account_code if sr else None) or f.get('account_code','').strip() or None,
         report_style=f.get('report_style','header_footer') if f.get('report_style') in ('header_footer','default') else 'header_footer',
         item_summary_display=f.get('item_summary_display','on') if f.get('item_summary_display') in ('on','off') else 'on',
         terms_conditions=f.get('terms_conditions','').strip() or None,
@@ -664,19 +887,26 @@ def sq_edit(id):
     if err:
         return jsonify({'ok': False, 'error': err}), 400
 
+    sr_id = int(f.get('sr_id')) if f.get('sr_id') else None
+    sr = SalesRequest.query.get(sr_id) if sr_id else None
+
+    buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else None
+    if not buyer_id:
+        return jsonify({'ok': False, 'error': 'Buyer must be selected'}), 400
+
     for fld in ['status','remarks','approved_by']:
         setattr(sq, fld, f.get(fld,'').strip())
-    sq.kind = f.get('kind','Goods')
+    sq.kind = sr.kind if sr else f.get('kind','Goods')
     if not sq.requester:
         sq.requester = current_user.username
     if not sq.requester_name:
         sq.requester_name = current_user.username
 
-    sq.sales_request_id = int(f.get('sr_id')) if f.get('sr_id') else None
-    sq.buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else None
+    sq.sales_request_id = sr_id
+    sq.buyer_id = buyer_id
     sq.buyer_ref_no = f.get('buyer_ref_no','').strip()
     sq.owner_id = int(f.get('owner_id')) if f.get('owner_id') else None
-    sq.account_code = f.get('account_code','').strip() or None
+    sq.account_code = (sr.account_code if sr else None) or f.get('account_code','').strip() or None
     sq.subject = subject
     sq.body = f.get('body','').strip() or None
     sq.report_style = f.get('report_style','header_footer') if f.get('report_style') in ('header_footer','default') else 'header_footer'
@@ -1001,6 +1231,8 @@ def so_add():
             return jsonify({'ok': False, 'error': 'Selected Sales Quotation is not Approved'}), 400
 
         buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else (sq.buyer_id if sq else None)
+        if not buyer_id:
+            return jsonify({'ok': False, 'error': 'Buyer must be selected'}), 400
 
         doc_no = _next_doc_no('SO', SalesOrder)
         print(f"Generated doc_no: {doc_no}")
@@ -1070,8 +1302,12 @@ def so_edit(id):
         sq_id = int(f.get('sq_id')) if f.get('sq_id') else None
         sq = SalesQuotation.query.get(sq_id) if sq_id else None
 
+        buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else (sq.buyer_id if sq else None)
+        if not buyer_id:
+            return jsonify({'ok': False, 'error': 'Buyer must be selected'}), 400
+
         so.sales_quotation_id = sq_id
-        so.buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else (sq.buyer_id if sq else None)
+        so.buyer_id = buyer_id
         so.buyer_ref_no = f.get('buyer_ref_no', '').strip()
         so.owner_id = int(f.get('owner_id')) if f.get('owner_id') else None
         so.remarks = f.get('remarks', '').strip()
@@ -1289,18 +1525,20 @@ def _apply_dn_fields(doc, f, is_new):
     dn_post_and_save(). Does NOT touch GRL/Journal Entry or stock --
     posting is a separate, explicit step. Mirrors _apply_grn_fields()."""
     so_id = int(f.get('so_id')) if f.get('so_id') else None
+    so = SalesOrder.query.get(so_id) if so_id else None
     if is_new:
-        so = SalesOrder.query.get(so_id) if so_id else None
-        if so_id and (not so or so.status != 'Approved'):
+        if not so_id:
+            raise ValueError('An Approved Sales Order must be selected')
+        if not so or so.status != 'Approved':
             raise ValueError('Selected Sales Order is not Approved')
     doc.sales_order_id  = so_id
     doc.buyer_id         = int(f.get('buyer_id')) if f.get('buyer_id') else None
     doc.contact_person   = f.get('contact_person', '').strip()
     doc.buyer_ref_no     = f.get('buyer_ref_no', '').strip()
-    doc.owner_id         = int(f.get('owner_id')) if f.get('owner_id') else None
-    doc.account_code     = f.get('account_code', '').strip() or None
+    doc.owner_id         = so.owner_id if so else (int(f.get('owner_id')) if f.get('owner_id') else None)
+    doc.account_code     = so.account_code if so else (f.get('account_code', '').strip() or None)
     doc.status           = f.get('status', 'Open')
-    doc.kind             = f.get('kind', 'Goods')
+    doc.kind             = so.kind if so else f.get('kind', 'Goods')
     doc.posting_date     = pd(f.get('posting_date')) or date.today()
     doc.delivery_date    = pd(f.get('delivery_date'))
     doc.document_date    = date.today()
@@ -1711,14 +1949,21 @@ def sinv_json(id):
 @permission_required('sale', 'sales_invoice', 'view')
 def sinv_view(id):
     doc = SalesInvoice.query.get_or_404(id)
+    zatca_attachment = None
+    if doc.zatca_attachment_id:
+        zatca_attachment = SalesAttachment.query.get(doc.zatca_attachment_id)
     return render_template('sales/sinv_view.html', doc=doc,
         items=SalesInvoiceLineItem.query.filter_by(sales_invoice_id=id).order_by(SalesInvoiceLineItem.line_number).all(),
-        attachments=SalesAttachment.query.filter_by(doc_type='SINV', doc_id=id).all())
+        attachments=SalesAttachment.query.filter_by(doc_type='SINV', doc_id=id).all(),
+        zatca_attachment=zatca_attachment,
+        qr_b64=_sinv_qr_for(doc) if doc.zatca_invoice_hash else None)
 
 
 def _sinv_qr_b64(doc):
-    """ZATCA-compliant QR for a Sales Invoice -- here WE are the seller, so
-    it's built from the Owner (our company), not the Buyer."""
+    """ZATCA Phase-1 QR for a Sales Invoice -- here WE are the seller, so
+    it's built from the Owner (our company), not the Buyer. Kept unchanged
+    as the fallback for any invoice that hasn't gone through "Create ZATCA
+    Invoice" yet -- see _sinv_zatca_qr_b64() for the Phase-2 (9-tag) QR."""
     from database.routes.purchase import _zatca_qr_payload, _qr_image_b64
     ts_date = doc.document_date or doc.posting_date or date.today()
     timestamp_iso = datetime.combine(ts_date, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -1732,6 +1977,190 @@ def _sinv_qr_b64(doc):
     return _qr_image_b64(qr_payload)
 
 
+def _sinv_zatca_qr_b64(doc):
+    """ZATCA Phase-2 QR (9 tags) for a Sales Invoice that has already been
+    through "Create ZATCA Invoice" -- extends the Phase-1 payload with the
+    invoice hash/signature/public key/certificate-authority signature. Only
+    call this once doc.zatca_status != 'not_generated'; callers should fall
+    back to _sinv_qr_b64() otherwise."""
+    from database.routes.purchase import _zatca_qr_payload, _qr_image_b64
+    from database.zatca import engine as zengine
+    settings = ZatcaSettings.query.first()
+    ts_date = doc.document_date or doc.posting_date or date.today()
+    timestamp_iso = datetime.combine(ts_date, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%SZ')
+    extra_tags = zengine.phase2_qr_extra_tags(
+        invoice_hash_b64=doc.zatca_invoice_hash or '',
+        signature_b64=doc.zatca_xml_signature or '',
+        public_key_b64=(settings.cert_public_key_b64 if settings else '') or '',
+        cert_ca_signature_b64=(settings.cert_ca_signature_b64 if settings else '') or '',
+    )
+    qr_payload = _zatca_qr_payload(
+        seller_name=doc.owner.name if doc.owner else '',
+        vat_number=(doc.owner.vat_number if doc.owner else '') or '',
+        timestamp_iso=timestamp_iso,
+        total=float(doc.total_incl_vat or 0),
+        vat_amount=float(doc.vat_amount or 0),
+        extra_tags=extra_tags,
+    )
+    return _qr_image_b64(qr_payload)
+
+
+def _sinv_qr_for(doc):
+    """Picks the right QR for wherever a Sales Invoice's QR is displayed --
+    Phase 2 once generated and accepted (or awaiting live submission),
+    Phase 1 otherwise: old/never-submitted invoices keep printing exactly
+    as they always have, and an invoice ZATCA explicitly rejected
+    (zatca_status == 'failed') falls back to the plain Phase-1 QR rather
+    than displaying signature/hash tags implying a clearance that never
+    happened -- the signed XML stays attached regardless, as the record of
+    what was attempted."""
+    status = doc.zatca_status or 'not_generated'
+    if status not in ('not_generated', 'failed') and doc.zatca_invoice_hash:
+        try:
+            return _sinv_zatca_qr_b64(doc)
+        except Exception:
+            pass
+    return _sinv_qr_b64(doc)
+
+
+_SINV_PRINT_TEMPLATE_FILES = {
+    'classic':    'sales/sales_invoice_print.html',
+    'letterhead': 'sales/sales_invoice_print_letterhead.html',
+    'formal':     'sales/sales_invoice_print_formal.html',
+    'default1':   'sales/sales_invoice_print_default1.html',
+}
+
+
+def _amount_in_words(amount):
+    """English + Arabic "amount in words" for the formal template's
+    legally-conventional SAR amount-in-words line, e.g. 92552.00 ->
+    ('Ninety two thousand, five hundred and fifty two Saudi Riyals only.',
+     'اثنان و تسعون ألفاً و خمسمائة و اثنان و خمسون ريال سعودي فقط لا غير.')
+    Uses num2words for the actual digit-to-word conversion in both
+    languages -- a well-established library, not a hand-rolled one, since
+    correct Arabic number grammar (gender agreement, dual forms) is
+    genuinely intricate; its Arabic output is a standard, widely-used
+    approximation, not independently verified against a native speaker
+    for every possible amount."""
+    from num2words import num2words
+    amount = Decimal(str(amount or 0))
+    riyals = int(amount)
+    halalas = int((amount - riyals) * 100)
+
+    en = num2words(riyals, lang='en').replace('-', ' ').capitalize()
+    en += ' Saudi Riyal' + ('s' if riyals != 1 else '')
+    if halalas:
+        en += ' and ' + num2words(halalas, lang='en').replace('-', ' ') + ' Halala' + ('s' if halalas != 1 else '')
+    en += ' only.'
+
+    ar = num2words(riyals, lang='ar') + ' ريال سعودي'
+    if halalas:
+        ar += ' و' + num2words(halalas, lang='ar') + ' هللة'
+    ar += ' فقط لا غير.'
+
+    return en, ar
+
+
+def _sinv_print_html(doc, template_override=None, is_preview=False):
+    """Renders the Tax Invoice print layout to an HTML string -- shared by
+    sinv_print() (served directly for on-screen/browser-print use) and
+    sinv_pdf() (fed to a headless browser to produce a real downloadable
+    PDF, identically rendered). Which of the 4 templates is used is picked
+    from Owner.sinv_print_template (set in Owner Settings) -- reading it
+    here, in the one function both routes call, is what guarantees Print
+    and the PDF download can never show a different template from each
+    other. `template_override`, when given, is used instead of the saved
+    Owner setting -- sinv_preview_template() uses this so Owner Settings'
+    "Preview" button can show any of the 4 templates against a real
+    invoice without first saving the dropdown's choice. `is_preview`
+    suppresses the templates' on-load auto-print() -- sinv_preview_template()
+    sets it so comparing templates from Owner Settings never pops the
+    browser's native print dialog, which (on Windows Chrome at least) is
+    process-modal and blocks input to every other tab/window, including
+    the Owner form the Preview button was opened from, until dismissed."""
+    owner = doc.owner or Owner.query.first()
+    items = SalesInvoiceLineItem.query.filter_by(sales_invoice_id=doc.sales_invoice_id).order_by(SalesInvoiceLineItem.line_number).all()
+
+    bank = OwnerBank.query.get(doc.bank_account_id) if doc.bank_account_id else None
+
+    # The Description column shows the Item Master's own name for the line's
+    # item_code (the name an item is actually catalogued under) rather than
+    # whatever free-text note was typed into the line at entry time -- falls
+    # back to that free text only for lines with no item_code / no matching
+    # Item Master row (e.g. ad-hoc service lines).
+    item_codes = {li.item_code for li in items if li.item_code}
+    item_master_by_code = {}
+    if item_codes:
+        for im in ItemMaster.query.filter(ItemMaster.item_code.in_(item_codes)).all():
+            item_master_by_code[im.item_code] = im
+
+    item_rows = []
+    for li in items:
+        m = re.search(r'(\d+(?:\.\d+)?)\s*%', li.tax_code or '')
+        tax_pct = f'{m.group(1)}%' if m else (li.tax_code or '—')
+        item_master = item_master_by_code.get(li.item_code) if li.item_code else None
+        item_name = item_master.name_en if item_master and item_master.name_en else None
+        item_rows.append({
+            'item_code': li.item_code or '', 'description': item_name or li.description or '', 'uom': li.uom or '',
+            'quantity': float(li.quantity or 0), 'rate': float(li.rate or 0),
+            'discount': float(li.discount or 0), 'taxable': float(li.taxable or 0),
+            'tax_pct': tax_pct, 'tax_amount': float(li.tax_amount or 0), 'total': float(li.total or 0),
+        })
+
+    if template_override in _SINV_PRINT_TEMPLATE_FILES:
+        template_key = template_override
+    else:
+        template_key = (getattr(owner, 'sinv_print_template', None) or 'formal') if owner else 'formal'
+    template_name = _SINV_PRINT_TEMPLATE_FILES.get(template_key, _SINV_PRINT_TEMPLATE_FILES['formal'])
+
+    header_data_uri = _uploaded_file_data_uri(owner, 'header_path')
+    footer_data_uri = _uploaded_file_data_uri(owner, 'footer_path')
+    # The letterhead template falls back to the classic built-in header
+    # rather than printing a blank strip if the Owner picked "letterhead"
+    # but hasn't actually uploaded both images yet.
+    use_owner_hf = template_key == 'letterhead' and header_data_uri and footer_data_uri
+
+    amount_in_words_en, amount_in_words_ar = _amount_in_words(doc.total_incl_vat)
+
+    # The formal template's Bank Details row deliberately shows the
+    # Owner's own active bank account, not doc.bank_account_id -- an
+    # invoice may not have a specific bank chosen at all, and this row is
+    # meant to tell the buyer where to pay the Owner, which doesn't
+    # depend on which bank (if any) the invoice itself references.
+    owner_active_bank = None
+    if owner:
+        owner_active_bank = (OwnerBank.query.filter_by(owner_id=owner.id, is_primary=True).first()
+                              or OwnerBank.query.filter_by(owner_id=owner.id).first())
+
+    return render_template(template_name, doc=doc, owner=owner, item_rows=item_rows,
+        bank=bank, owner_active_bank=owner_active_bank, qr_b64=_sinv_qr_for(doc),
+        logo_data_uri=_owner_logo_data_uri(owner),
+        bg_logo_data_uri=_uploaded_file_data_uri(owner, 'bg_logo_path'),
+        header_data_uri=header_data_uri, footer_data_uri=footer_data_uri, use_owner_hf=use_owner_hf,
+        amount_in_words_en=amount_in_words_en, amount_in_words_ar=amount_in_words_ar,
+        is_preview=is_preview)
+
+
+@sale_bp.route('/sales/invoices/preview-template')
+@login_required
+@permission_required('sale', 'sales_invoice', 'print')
+def sinv_preview_template():
+    """Owner Settings' "Preview" button: renders the most recent Sales
+    Invoice using whichever template is passed in ?template=, regardless
+    of what's actually saved on Owner -- lets someone compare all 3
+    templates against a real invoice before committing to a choice by
+    saving the form."""
+    template_key = (request.args.get('template') or '').strip()
+    doc = SalesInvoice.query.order_by(SalesInvoice.sales_invoice_id.desc()).first()
+    if not doc:
+        return _t(
+            '<div style="font-family:sans-serif;padding:60px 20px;text-align:center;color:#6b7280;">'
+            'No Sales Invoice exists yet to preview a template against.<br>Create one first.</div>',
+            '<div dir="rtl" style="font-family:sans-serif;padding:60px 20px;text-align:center;color:#6b7280;">'
+            'لا توجد فاتورة مبيعات بعد لمعاينة القالب عليها.<br>يرجى إنشاء واحدة أولاً.</div>')
+    return _sinv_print_html(doc, template_override=template_key, is_preview=True)
+
+
 @sale_bp.route('/sales/invoices/<int:id>/print')
 @login_required
 @permission_required('sale', 'sales_invoice', 'print')
@@ -1740,24 +2169,49 @@ def sinv_print(id):
     purchase.pinv_print, with Seller/Buyer swapped: Seller is our own Owner
     (we're the one selling), Buyer is the invoice's own BuyerMaster."""
     doc = SalesInvoice.query.get_or_404(id)
-    owner = doc.owner or Owner.query.first()
-    items = SalesInvoiceLineItem.query.filter_by(sales_invoice_id=id).order_by(SalesInvoiceLineItem.line_number).all()
+    return _sinv_print_html(doc)
 
-    bank = OwnerBank.query.get(doc.bank_account_id) if doc.bank_account_id else None
 
-    item_rows = []
-    for li in items:
-        m = re.search(r'(\d+(?:\.\d+)?)\s*%', li.tax_code or '')
-        tax_pct = f'{m.group(1)}%' if m else (li.tax_code or '—')
-        item_rows.append({
-            'item_code': li.item_code or '', 'description': li.description or '', 'uom': li.uom or '',
-            'quantity': float(li.quantity or 0), 'rate': float(li.rate or 0),
-            'discount': float(li.discount or 0), 'taxable': float(li.taxable or 0),
-            'tax_pct': tax_pct, 'tax_amount': float(li.tax_amount or 0), 'total': float(li.total or 0),
-        })
+@sale_bp.route('/sales/invoices/<int:id>/pdf')
+@login_required
+@permission_required('sale', 'sales_invoice', 'print')
+def sinv_pdf(id):
+    """Download a real PDF file of the Tax Invoice -- same template, same
+    headless-Chromium-rendered visual output as /print, but as an actual
+    file rather than a browser print dialog (which JS can't hook into to
+    attach anything). If this invoice has already been through ZATCA, its
+    signed XML is embedded inside the PDF as a genuine file attachment (a
+    Factur-X/ZUGFeRD-style hybrid document), so the one downloaded file
+    carries both the human-readable invoice and its machine-readable XML;
+    otherwise a plain PDF is returned."""
+    from flask import Response
+    from database import pdf_engine
 
-    return render_template('sales/sales_invoice_print.html', doc=doc, owner=owner, item_rows=item_rows,
-        bank=bank, qr_b64=_sinv_qr_b64(doc))
+    doc = SalesInvoice.query.get_or_404(id)
+    html = _sinv_print_html(doc)
+    try:
+        pdf_bytes = pdf_engine.html_to_pdf(html)
+    except Exception as e:
+        current_app.logger.exception('PDF rendering failed for SalesInvoice %s', id)
+        return jsonify({'ok': False, 'error': _t(
+            f'Failed to render PDF: {e}', f'فشل إنشاء ملف PDF: {e}')}), 500
+
+    if doc.zatca_attachment_id:
+        xml_att = SalesAttachment.query.get(doc.zatca_attachment_id)
+        if xml_att:
+            try:
+                directory, fname = _sales_attachment_dir_and_name(xml_att)
+                with open(os.path.join(directory, fname), 'rb') as f:
+                    xml_bytes = f.read()
+                pdf_bytes = pdf_engine.embed_file_in_pdf(pdf_bytes, xml_att.filename, xml_bytes)
+            except Exception:
+                current_app.logger.exception(
+                    'Failed to embed ZATCA XML into PDF for SalesInvoice %s -- serving the plain PDF instead', id)
+
+    filename = f'{doc.doc_no or ("SINV-" + str(id))}.pdf'
+    return Response(pdf_bytes, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="{filename}"',
+    })
 
 
 @sale_bp.route('/sales/invoices/<int:id>/summary')
@@ -1775,26 +2229,38 @@ def sinv_summary(id):
 @permission_required_json('sale', 'sales_invoice', 'add')
 def sinv_add():
     try:
+        from database.zatca import engine as zengine
         f = request.form
         so_id = int(f.get('so_id')) if f.get('so_id') else None
         so = SalesOrder.query.get(so_id) if so_id else None
         if so_id and (not so or so.status != 'Approved'):
             return jsonify({'ok': False, 'error': 'Selected Sales Order is not Approved'}), 400
 
+        txn_type = (f.get('transaction_type') or '').strip().upper()
+        if txn_type not in zengine.SINV_TRANSACTION_TYPES:
+            return jsonify({'ok': False, 'error': _t(
+                'Select a valid Transaction Type.', 'يرجى اختيار نوع معاملة صالح.')}), 400
+
         status = f.get('status','Open')
         posting_date = pd(f.get('posting_date')) or date.today()
         if status != 'Open' and not posting_date:
             posting_date = date.today()
 
+        from_date = pd(f.get('from_date'))
+        to_date = pd(f.get('to_date'))
+        if from_date and to_date and from_date > to_date:
+            return jsonify({'ok': False, 'error': 'From Date must be on or before To Date'}), 400
+
         doc = SalesInvoice(
-            doc_no=_next_doc_no('SINV', SalesInvoice),
+            doc_no=_next_sinv_doc_no(txn_type),
             sales_order_id=so_id,
             delivery_note_id=int(f.get('dn_id')) if f.get('dn_id') else None,
             buyer_id=int(f.get('buyer_id')) if f.get('buyer_id') else (so.buyer_id if so else None),
             buyer_ref_no=f.get('buyer_ref_no','').strip(),
-            transaction_type=f.get('transaction_type','').strip() or None,
-            invoice_category=f.get('invoice_category','').strip() or None,
+            transaction_type=txn_type,
+            invoice_category=_sinv_txn_category(txn_type),
             reference_invoices=f.get('reference_invoices','').strip() or None,
+            project_ref=f.get('project_ref','').strip() or None,
             status=status,
             kind=f.get('kind','Goods'),
             payment_method=f.get('payment_method','Credit'),
@@ -1804,6 +2270,8 @@ def sinv_add():
             posting_date=posting_date,
             delivery_date=pd(f.get('delivery_date')),
             document_date=date.today(),
+            from_date=from_date,
+            to_date=to_date,
             created_by=current_user.id,
         )
         db.session.add(doc)
@@ -1830,21 +2298,40 @@ def sinv_add():
 @permission_required_json('sale', 'sales_invoice', 'edit')
 def sinv_edit(id):
     try:
+        from database.zatca import engine as zengine
         doc = SalesInvoice.query.get_or_404(id)
         f = request.form
-        
+
+        # Edit accepts the current 6 dropdown values AND the legacy
+        # underscore-separated ones (STD_INV, SMP_CR, ...) still on file
+        # for invoices created before the dropdown was consolidated --
+        # unlike sinv_add(), which only accepts the current 6, since an
+        # old invoice being edited for an unrelated field must not be
+        # forced into re-classification just because its dropdown option
+        # was renamed.
+        txn_type = (f.get('transaction_type') or '').strip().upper()
+        if txn_type not in zengine.TXN_TYPE_MAP:
+            return jsonify({'ok': False, 'error': _t(
+                'Select a valid Transaction Type.', 'يرجى اختيار نوع معاملة صالح.')}), 400
+
         status = f.get('status','Open')
         posting_date = pd(f.get('posting_date')) or date.today()
         if status != 'Open' and not posting_date:
             posting_date = date.today()
 
+        from_date = pd(f.get('from_date'))
+        to_date = pd(f.get('to_date'))
+        if from_date and to_date and from_date > to_date:
+            return jsonify({'ok': False, 'error': 'From Date must be on or before To Date'}), 400
+
         doc.sales_order_id = int(f.get('so_id')) if f.get('so_id') else None
         doc.delivery_note_id = int(f.get('dn_id')) if f.get('dn_id') else None
         doc.buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else None
         doc.buyer_ref_no = f.get('buyer_ref_no','').strip()
-        doc.transaction_type = f.get('transaction_type','').strip() or None
-        doc.invoice_category = f.get('invoice_category','').strip() or None
+        doc.transaction_type = txn_type
+        doc.invoice_category = _sinv_txn_category(txn_type)
         doc.reference_invoices = f.get('reference_invoices','').strip() or None
+        doc.project_ref = f.get('project_ref','').strip() or None
         doc.status = status
         doc.kind = f.get('kind','Goods')
         doc.payment_method = f.get('payment_method','Credit')
@@ -1854,6 +2341,8 @@ def sinv_edit(id):
         doc.posting_date  = posting_date
         doc.delivery_date = pd(f.get('delivery_date'))
         doc.document_date = date.today()
+        doc.from_date = from_date
+        doc.to_date = to_date
 
         tots = _save_doc_line_items(SalesInvoiceLineItem, 'sales_invoice_id', id, f, 'sales')
         for k,v in tots.items(): 
@@ -1895,21 +2384,38 @@ def _apply_sinv_fields(doc, f, is_new):
     sinv_edit() keep their own separate inline logic unchanged (matching
     this codebase's existing SINV convention); this exists only so Post &
     Save doesn't duplicate that same logic a third time."""
+    from database.zatca import engine as zengine
     so_id = int(f.get('so_id')) if f.get('so_id') else None
     so = SalesOrder.query.get(so_id) if so_id else None
     if is_new and so_id and (not so or so.status != 'Approved'):
         raise ValueError('Selected Sales Order is not Approved')
 
+    # New documents must use one of the current 6 dropdown values (also
+    # the numbering prefix -- see _next_sinv_doc_no()); editing an existing
+    # one also accepts a legacy underscore-separated value already on file,
+    # so an old invoice isn't forced into re-classification by an edit to
+    # some unrelated field. Mirrors sinv_add()/sinv_edit()'s own checks.
+    txn_type = (f.get('transaction_type') or '').strip().upper()
+    valid_types = zengine.SINV_TRANSACTION_TYPES if is_new else zengine.TXN_TYPE_MAP
+    if txn_type not in valid_types:
+        raise ValueError('Select a valid Transaction Type.')
+
     status = f.get('status', 'Open')
     posting_date = pd(f.get('posting_date')) or date.today()
+
+    from_date = pd(f.get('from_date'))
+    to_date = pd(f.get('to_date'))
+    if from_date and to_date and from_date > to_date:
+        raise ValueError('From Date must be on or before To Date')
 
     doc.sales_order_id = so_id
     doc.delivery_note_id = int(f.get('dn_id')) if f.get('dn_id') else None
     doc.buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else (so.buyer_id if so else None)
     doc.buyer_ref_no = f.get('buyer_ref_no', '').strip()
-    doc.transaction_type = f.get('transaction_type', '').strip() or None
-    doc.invoice_category = f.get('invoice_category', '').strip() or None
+    doc.transaction_type = txn_type
+    doc.invoice_category = _sinv_txn_category(txn_type)
     doc.reference_invoices = f.get('reference_invoices', '').strip() or None
+    doc.project_ref = f.get('project_ref', '').strip() or None
     doc.status = status
     doc.kind = f.get('kind', 'Goods')
     doc.payment_method = f.get('payment_method', 'Credit')
@@ -1919,6 +2425,8 @@ def _apply_sinv_fields(doc, f, is_new):
     doc.posting_date = posting_date
     doc.delivery_date = pd(f.get('delivery_date'))
     doc.document_date = date.today()
+    doc.from_date = from_date
+    doc.to_date = to_date
     db.session.flush()  # ensure doc.sales_invoice_id exists
     tots = _save_doc_line_items(SalesInvoiceLineItem, 'sales_invoice_id', doc.sales_invoice_id, f, 'sales')
     for k, v in tots.items(): setattr(doc, k, float(v) if isinstance(v, Decimal) else v)
@@ -2007,7 +2515,12 @@ def sinv_post_and_save():
                     'تم ترحيل فاتورة البيع هذه مسبقاً.')}), 400
             _apply_sinv_fields(doc, f, is_new=False)
         else:
-            doc = SalesInvoice(doc_no=_next_doc_no('SINV', SalesInvoice), created_by=current_user.id)
+            from database.zatca import engine as zengine
+            txn_type = (f.get('transaction_type') or '').strip().upper()
+            if txn_type not in zengine.SINV_TRANSACTION_TYPES:
+                return jsonify({'ok': False, 'error': _t(
+                    'Select a valid Transaction Type.', 'يرجى اختيار نوع معاملة صالح.')}), 400
+            doc = SalesInvoice(doc_no=_next_sinv_doc_no(txn_type), created_by=current_user.id)
             db.session.add(doc)
             _apply_sinv_fields(doc, f, is_new=True)
 
@@ -2108,15 +2621,178 @@ def sinv_post_and_save():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@sale_bp.route('/sales/invoices/<int:id>/zatca/generate', methods=['POST'])
+@login_required
+@permission_required_json('sale', 'sales_invoice', 'approve')
+def sinv_zatca_generate(id):
+    """"Create ZATCA Invoice": builds, hashes, signs, QR-encodes, and
+    attaches the UBL XML for a Posted Sales Invoice -- only ever available
+    once, since re-issuing would burn a new ICV for an already-issued
+    document (which ZATCA forbids). Live submission to ZATCA's Clearance/
+    Reporting endpoints only happens when ZATCA_LIVE_CALLS_ENABLED is set;
+    otherwise the invoice is generated and signed locally only, clearly
+    flagged as such in the response."""
+    from database.zatca import engine as zengine
+    doc = SalesInvoice.query.get_or_404(id)
+
+    if doc.posting_status != 'Posted':
+        return jsonify({'ok': False, 'error': _t(
+            'The invoice must be Posted before it can be submitted to ZATCA.',
+            'يجب ترحيل الفاتورة أولاً قبل إرسالها إلى زاتكا.')}), 400
+    if (doc.zatca_status or 'not_generated') not in ('not_generated', 'failed'):
+        return jsonify({'ok': False, 'error': _t(
+            'This invoice has already been submitted to ZATCA.',
+            'تم إرسال هذه الفاتورة إلى زاتكا مسبقاً.')}), 400
+
+    settings = ZatcaSettings.query.with_for_update().first()
+    # active_csid() prefers a Production CSID over a Compliance one -- must
+    # be used here rather than checking compliance_csid_binary directly, or
+    # an account that has moved on to a real Production certificate (with
+    # nothing left in the compliance_* slots) would be wrongly told to
+    # complete onboarding despite already being fully onboarded.
+    active_cert_type, active_binary_token, active_secret_enc = settings.active_csid() if settings else (None, None, None)
+    if not active_binary_token:
+        return jsonify({'ok': False, 'onboarding_required': True, 'error': _t(
+            'Complete ZATCA onboarding (Compliance or Production CSID) before creating ZATCA invoices.',
+            'أكمل عملية التسجيل في زاتكا (شهادة الامتثال أو الإنتاج) قبل إنشاء فواتير زاتكا.')}), 400
+
+    referenced_uuid = None
+    if doc.reference_invoices:
+        ref_ids = [int(x) for x in doc.reference_invoices.split(',') if x.strip().isdigit()]
+        for ref_id in ref_ids:
+            ref_doc = SalesInvoice.query.get(ref_id)
+            if not ref_doc or not ref_doc.zatca_uuid:
+                return jsonify({'ok': False, 'error': _t(
+                    'Every referenced invoice must already have its own ZATCA UUID before this Credit/Debit Note can be generated.',
+                    'يجب أن تحتوي كل فاتورة مرجعية على معرف زاتكا الخاص بها قبل إنشاء إشعار الدائن/المدين هذا.')}), 400
+            referenced_uuid = ref_doc.zatca_uuid
+
+    items = SalesInvoiceLineItem.query.filter_by(sales_invoice_id=id).order_by(SalesInvoiceLineItem.line_number).all()
+    if not items:
+        return jsonify({'ok': False, 'error': _t('This invoice has no line items.', 'لا تحتوي هذه الفاتورة على بنود.')}), 400
+
+    owner = doc.owner or Owner.query.first()
+    buyer = doc.buyer
+
+    icv = int(settings.last_icv or 0) + 1
+    pih = settings.last_invoice_hash or zengine.genesis_hash()
+    uuid_str = zengine.new_uuid()
+
+    try:
+        private_key_pem = zengine.decrypt_secret(settings.private_key_pem_enc, current_app.config['SECRET_KEY'])
+        if not private_key_pem:
+            raise ValueError('No signing key on file -- generate a keypair/CSR in ZATCA Settings first')
+        private_key = zengine.load_private_key_from_pem(private_key_pem)
+        root, submission_type = zengine.build_invoice_xml(doc, items, owner, buyer, settings, uuid_str, icv, pih,
+                                                            referenced_uuid=referenced_uuid)
+        finalized, invoice_hash, signature_b64 = zengine.sign_and_finalize(root, private_key, active_binary_token)
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('ZATCA XML build/sign failed for SalesInvoice %s', id)
+        return jsonify({'ok': False, 'error': f'Failed to build/sign the ZATCA invoice: {e}'}), 500
+
+    try:
+        from database.routes.purchase import _zatca_qr_payload, _qr_image_b64
+        qr_extra = zengine.phase2_qr_extra_tags(
+            invoice_hash, signature_b64,
+            settings.cert_public_key_b64 or '', settings.cert_ca_signature_b64 or '')
+        ts_date = doc.document_date or doc.posting_date or date.today()
+        timestamp_iso = datetime.combine(ts_date, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%SZ')
+        seller_name = owner.name if owner else ''
+        seller_vat = (owner.vat_number if owner else '') or ''
+        total = float(doc.total_incl_vat or 0)
+        vat_amount = float(doc.vat_amount or 0)
+        phase2_qr_payload = _zatca_qr_payload(
+            seller_name=seller_name, vat_number=seller_vat,
+            timestamp_iso=timestamp_iso, total=total,
+            vat_amount=vat_amount, extra_tags=qr_extra)
+        # Embedded in the XML itself (not just rendered for print) --
+        # must happen before serialize(), and uses this exact same
+        # base64 payload so the embedded and printed QR always match.
+        zengine.set_qr_reference(finalized, phase2_qr_payload)
+        xml_bytes = zengine.serialize(finalized)
+
+        attachment = _save_generated_attachment('SINVZ', doc.sales_invoice_id,
+                                                 f'{doc.doc_no or ("SINV-" + str(id))}.xml', xml_bytes)
+
+        doc.zatca_uuid = uuid_str
+        doc.zatca_icv = icv
+        doc.zatca_pih = pih
+        doc.zatca_invoice_hash = invoice_hash
+        doc.zatca_xml_signature = signature_b64
+        doc.zatca_submission_type = submission_type
+        doc.zatca_attachment_id = attachment.id
+        doc.zatca_generated_at = datetime.utcnow()
+
+        if current_app.config.get('ZATCA_LIVE_CALLS_ENABLED'):
+            secret = zengine.decrypt_secret(active_secret_enc, current_app.config['SECRET_KEY'])
+            try:
+                if doc.zatca_submission_type == 'clearance':
+                    status_code, resp_json = zengine.submit_clearance(settings.environment, xml_bytes, uuid_str, active_binary_token, secret)
+                else:
+                    status_code, resp_json = zengine.submit_reporting(settings.environment, xml_bytes, uuid_str, active_binary_token, secret)
+                doc.zatca_status = 'cleared' if status_code < 300 else 'failed'
+                doc.zatca_response_message = str(resp_json)[:4000]
+                doc.zatca_submitted_at = datetime.utcnow()
+            except Exception as e:
+                doc.zatca_status = 'failed'
+                doc.zatca_response_message = f'Live submission error: {e}'
+        else:
+            doc.zatca_status = 'generated'
+            doc.zatca_response_message = _t(
+                'Generated and signed locally only; live submission to ZATCA is disabled (Phase 2).',
+                'تم الإنشاء والتوقيع محلياً فقط؛ الإرسال المباشر إلى زاتكا معطل (المرحلة الثانية).')
+
+        if doc.zatca_status == 'failed':
+            # ZATCA did not approve this invoice -- the QR must not display
+            # signature/hash tags implying a clearance that never happened.
+            # Fall back to the plain Phase-1 QR; the signed XML stays
+            # attached either way as the record of what was attempted.
+            qr_payload = _zatca_qr_payload(
+                seller_name=seller_name, vat_number=seller_vat,
+                timestamp_iso=timestamp_iso, total=total, vat_amount=vat_amount)
+        else:
+            qr_payload = phase2_qr_payload
+        doc.zatca_qr_code = qr_payload
+        qr_b64 = _qr_image_b64(qr_payload)
+
+        settings.last_icv = icv
+        settings.last_invoice_hash = invoice_hash
+        settings.updated_at = datetime.utcnow()
+        settings.updated_by = current_user.id
+
+        db.session.commit()
+        return jsonify({
+            'ok': True, 'uuid': uuid_str, 'icv': icv, 'status': doc.zatca_status,
+            'attachment_id': attachment.id, 'qr_b64': qr_b64, 'message': doc.zatca_response_message,
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('ZATCA submission failed for SalesInvoice %s', id)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ══════════════════════════════════════════════════════════════════
 # SALES RETURN REQUESTS (SRR)
 # ══════════════════════════════════════════════════════════════════
+
+# A return request only makes sense against the original invoiced goods --
+# Debit/Credit Note invoices (STD-DR/STD-CR/SIM-DR/SIM-CR, plus their legacy
+# underscore-separated aliases, never migrated) are themselves adjustments
+# and must never be selectable as the source of an SRR.
+SRR_INVOICE_ONLY_TYPES = ('STD-INV', 'SIM-INV', 'STD_INV', 'SMP_INV')
 
 @sale_bp.route('/sales/returns')
 @login_required
 @permission_required('sale', 'sales_return_request', 'view')
 def srr_list():
-    sins = [{'id':p.sales_invoice_id,'doc_no':p.doc_no} for p in SalesInvoice.query.filter_by(status='Approved').order_by(SalesInvoice.sales_invoice_id.desc()).all()]
+    sins = [{'id':p.sales_invoice_id,'doc_no':p.doc_no} for p in SalesInvoice.query
+            .filter_by(status='Approved')
+            .filter(SalesInvoice.transaction_type.in_(SRR_INVOICE_ONLY_TYPES))
+            .order_by(SalesInvoice.sales_invoice_id.desc()).all()]
     return render_template('sales/srr_list.html', buyers=_buyer_list(), sinvs=sins, owners=Owner.query.order_by(Owner.name).all())
 
 
@@ -2195,6 +2871,8 @@ def srr_add():
         sinv = SalesInvoice.query.get(si_id) if si_id else None
         if si_id and (not sinv or sinv.status != 'Approved'):
             return jsonify({'ok': False, 'error': 'Selected Sales Invoice is not Approved'}), 400
+        if sinv and sinv.transaction_type not in SRR_INVOICE_ONLY_TYPES:
+            return jsonify({'ok': False, 'error': 'A Return Request cannot be filed against a Debit/Credit Note invoice'}), 400
 
         err = _validate_srr_qty(f, si_id)
         if err:
@@ -2243,6 +2921,9 @@ def srr_edit(id):
         doc = SalesReturnRequest.query.get_or_404(id)
         f = request.form
         si_id = int(f.get('si_id')) if f.get('si_id') else None
+        sinv = SalesInvoice.query.get(si_id) if si_id else None
+        if sinv and sinv.transaction_type not in SRR_INVOICE_ONLY_TYPES:
+            return jsonify({'ok': False, 'error': 'A Return Request cannot be filed against a Debit/Credit Note invoice'}), 400
 
         err = _validate_srr_qty(f, si_id)
         if err:
@@ -2349,9 +3030,9 @@ def _apply_srn_fields(doc, f, is_new):
     doc.contact_person    = f.get('contact_person', '').strip()
     doc.buyer_ref         = f.get('buyer_ref', '').strip()
     doc.owner_id          = int(f.get('owner_id')) if f.get('owner_id') else None
-    doc.account_code      = f.get('account_code', '').strip() or None
+    doc.account_code      = srr.account_code if srr else (f.get('account_code', '').strip() or None)
     doc.status            = f.get('status', 'Open')
-    doc.kind              = f.get('kind', 'Goods')
+    doc.kind              = srr.kind if srr else f.get('kind', 'Goods')
     doc.posting_date      = pd(f.get('posting_date')) or date.today()
     doc.delivery_date     = pd(f.get('delivery_date'))
     doc.document_date     = date.today()
@@ -2484,6 +3165,24 @@ def grl_preview_from_srr(srr_id):
     # (opposite side) either way -- see _apply_buyer_control_account()'s
     # docstring.
     _apply_buyer_control_account(grl_lines, buyer, side='credit', kind=srr.kind or 'Goods')
+    return jsonify({'ok': True, 'lines': grl_lines})
+
+
+@sale_bp.route('/sales/return-notes/<int:srn_id>/grl-preview')
+@login_required
+@permission_required_json('sale', 'sales_credit_memo', 'view')
+def grl_preview_from_srn(srn_id):
+    """Preview the GRL records for a not-yet-saved Sales Credit Memo, shown
+    in Add mode as soon as its source Sales Return Note is selected --
+    mirrors grl_preview_from_prn() in purchase.py."""
+    srn = SalesReturnNote.query.get_or_404(srn_id)
+    form_code = request.args.get('form', 'sales_credit_memo')
+    lines = (SalesReturnNoteLineItem.query
+             .filter_by(sales_return_note_id=srn_id)
+             .order_by(SalesReturnNoteLineItem.line_number).all())
+    grl_lines = _grl_lines_from(lines, form_code=form_code, module_code='sale', kind=srn.kind or 'Goods')
+    buyer = BuyerMaster.query.get(srn.buyer_id) if getattr(srn, 'buyer_id', None) else None
+    _apply_buyer_control_account(grl_lines, buyer, side='credit', kind=srn.kind or 'Goods')
     return jsonify({'ok': True, 'lines': grl_lines})
 
 
@@ -2620,10 +3319,9 @@ def srn_post_and_save():
 @login_required
 @permission_required('sale', 'sales_credit_memo', 'view')
 def scm_list():
-    srrs = [{'id':p.sales_return_request_id,'doc_no':p.doc_no} for p in SalesReturnRequest.query.filter_by(status='Approved').order_by(SalesReturnRequest.sales_return_request_id.desc()).all()]
     srns = [{'id':p.sales_return_note_id,'doc_no':p.doc_no,'sales_return_request_id':p.sales_return_request_id}
             for p in SalesReturnNote.query.filter_by(status='Approved').order_by(SalesReturnNote.sales_return_note_id.desc()).all()]
-    return render_template('sales/scm_list.html', buyers=_buyer_list(), srrs=srrs, srns=srns, owners=Owner.query.order_by(Owner.name).all())
+    return render_template('sales/scm_list.html', buyers=_buyer_list(), srns=srns, owners=Owner.query.order_by(Owner.name).all())
 
 
 @sale_bp.route('/sales/credit-memos/data')
@@ -2660,16 +3358,17 @@ def scm_view(id):
 def scm_add():
     try:
         f = request.form
-        srr_id = int(f.get('srr_id')) if f.get('srr_id') else None
-        srr = SalesReturnRequest.query.get(srr_id) if srr_id else None
-        if srr_id and (not srr or srr.status != 'Approved'):
-            return jsonify({'ok': False, 'error': 'Selected Sales Return Request is not Approved'}), 400
+        srn_id = int(f.get('srn_id')) if f.get('srn_id') else None
+        srn = SalesReturnNote.query.get(srn_id) if srn_id else None
+        if srn_id and (not srn or srn.status != 'Approved'):
+            return jsonify({'ok': False, 'error': 'Selected Sales Return Note is not Approved'}), 400
 
         doc = SalesCreditMemo(
             doc_no=_next_doc_no('SCM', SalesCreditMemo),
-            sales_return_request_id=srr_id,
-            sales_return_note_id=(int(f.get('srn_id')) if f.get('srn_id') else None),
-            sales_invoice_id=(srr.sales_invoice_id if srr else None),
+            sales_return_note_id=srn_id,
+            sales_return_request_id=(srn.sales_return_request_id if srn else None),
+            sales_invoice_id=(srn.sales_return_request.sales_invoice_id
+                               if srn and srn.sales_return_request else None),
             buyer_id=int(f.get('buyer_id')) if f.get('buyer_id') else None,
             contact_person=f.get('contact_person','').strip(),
             buyer_ref_no=f.get('buyer_ref_no','').strip(),
@@ -2707,12 +3406,13 @@ def scm_edit(id):
     try:
         doc = SalesCreditMemo.query.get_or_404(id)
         f = request.form
-        srr_id = int(f.get('srr_id')) if f.get('srr_id') else None
-        srr = SalesReturnRequest.query.get(srr_id) if srr_id else None
+        srn_id = int(f.get('srn_id')) if f.get('srn_id') else None
+        srn = SalesReturnNote.query.get(srn_id) if srn_id else None
 
-        doc.sales_return_request_id = srr_id
-        doc.sales_return_note_id = (int(f.get('srn_id')) if f.get('srn_id') else None)
-        doc.sales_invoice_id = (srr.sales_invoice_id if srr else None)
+        doc.sales_return_note_id = srn_id
+        doc.sales_return_request_id = (srn.sales_return_request_id if srn else None)
+        doc.sales_invoice_id = (srn.sales_return_request.sales_invoice_id
+                                 if srn and srn.sales_return_request else None)
         doc.buyer_id=int(f.get('buyer_id')) if f.get('buyer_id') else None
         doc.contact_person=f.get('contact_person','').strip()
         doc.buyer_ref_no=f.get('buyer_ref_no','').strip()
@@ -2757,13 +3457,13 @@ def _apply_scm_fields(doc, f, is_new):
     the existing SCM convention; this exists only so Post & Save doesn't
     duplicate that logic a third time. Mirrors _apply_pdm_fields() in
     purchase.py."""
-    srr_id = int(f.get('srr_id')) if f.get('srr_id') else None
-    srr = SalesReturnRequest.query.get(srr_id) if srr_id else None
     srn_id = int(f.get('srn_id')) if f.get('srn_id') else None
+    srn = SalesReturnNote.query.get(srn_id) if srn_id else None
 
-    doc.sales_return_request_id = srr_id
     doc.sales_return_note_id = srn_id
-    doc.sales_invoice_id = (srr.sales_invoice_id if srr else None)
+    doc.sales_return_request_id = (srn.sales_return_request_id if srn else None)
+    doc.sales_invoice_id = (srn.sales_return_request.sales_invoice_id
+                             if srn and srn.sales_return_request else None)
     doc.buyer_id = int(f.get('buyer_id')) if f.get('buyer_id') else None
     doc.contact_person = f.get('contact_person', '').strip()
     doc.buyer_ref_no = f.get('buyer_ref_no', '').strip()

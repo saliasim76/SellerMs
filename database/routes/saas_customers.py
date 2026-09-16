@@ -19,7 +19,8 @@ from sqlalchemy.exc import IntegrityError
 from config import DB_NAME
 from models import db, Customer, Subscription, SubscriptionModule, SaasModule, SaasUserDirectory, User
 from database.routes.shared import super_admin_required, _t
-from database.tenant_provisioning import provision_tenant, sync_tenant_schema, reset_tenant_password
+from database.routes.rbac import DEFAULT_ADMIN_USERNAME
+from database.tenant_provisioning import provision_tenant, sync_tenant_schema, reset_tenant_password, validate_custom_db_name
 from database.routes.saas_internal import provision_trial_user_direct
 
 saas_customers_bp = Blueprint('saas_customers', __name__)
@@ -89,11 +90,19 @@ def add_saas_customer():
     billing_cycle = 'trial' if is_trial else (f.get('billing_cycle') or 'monthly')
     end_date = (datetime.utcnow() + timedelta(days=14)) if is_trial else _parse_date(f.get('end_date'))
     access_mode = f.get('access_mode') if f.get('access_mode') in ('basic', 'expert') else 'expert'
+    custom_db_name = (f.get('database_name') or '').strip()
 
     if not company_name or not customer_name or not email:
         flash(_t('Company name, contact name and email are required.',
                   'اسم الشركة واسم جهة الاتصال والبريد الإلكتروني مطلوبة.'), 'danger')
         return redirect(url_for('saas_customers.list_saas_customers'))
+
+    if not is_trial and custom_db_name:
+        try:
+            custom_db_name = validate_custom_db_name(custom_db_name)
+        except ValueError as exc:
+            flash(_t(f'Invalid database name: {exc}.', f'اسم قاعدة بيانات غير صالح: {exc}.'), 'danger')
+            return redirect(url_for('saas_customers.list_saas_customers'))
 
     if Customer.query.filter_by(email=email).first():
         flash(_t(f'A customer with email "{email}" already exists.',
@@ -164,7 +173,7 @@ def add_saas_customer():
         return redirect(url_for('saas_customers.list_saas_customers'))
 
     try:
-        result = provision_tenant(customer, customer_name, email, mobile)
+        result = provision_tenant(customer, customer_name, email, mobile, db_name=custom_db_name or None)
     except Exception as exc:
         db.session.delete(customer)  # cascades to subscription + modules
         db.session.commit()
@@ -176,12 +185,10 @@ def add_saas_customer():
     db.session.commit()
 
     flash(_t(
-        f'Customer "{company_name}" provisioned. Database: {result["database_name"]} | '
-        f'Username: {result["username"]} | Temporary password: {result["password"]} '
-        f'(shown once -- copy it now).',
-        f'تم إنشاء العميل "{company_name}". قاعدة البيانات: {result["database_name"]} | '
-        f'اسم المستخدم: {result["username"]} | كلمة المرور المؤقتة: {result["password"]} '
-        f'(تظهر مرة واحدة فقط -- انسخها الآن).',
+        f'Customer "{company_name}" provisioned. Organization (enter this at login): {result["database_name"]} | '
+        f'Username: {result["username"]} | Password: {result["password"]}.',
+        f'تم إنشاء العميل "{company_name}". المؤسسة (تُستخدم عند تسجيل الدخول): {result["database_name"]} | '
+        f'اسم المستخدم: {result["username"]} | كلمة المرور: {result["password"]}.',
     ), 'success')
     return redirect(url_for('saas_customers.list_saas_customers'))
 
@@ -309,11 +316,12 @@ def reset_saas_customer_password(id):
 
     if customer.database_name:
         target_db = customer.database_name
+        # Legacy tenants (provisioned before the Organization-based login
+        # flow) had their Admin account renamed to a unique username
+        # recorded here; new tenants keep the literal "Admin" username
+        # instead, so nothing is recorded in the directory for them.
         entry = SaasUserDirectory.query.filter_by(database_name=target_db).first()
-        if not entry:
-            flash(_t('No login is recorded for this customer.', 'لا يوجد تسجيل دخول مسجل لهذا العميل.'), 'danger')
-            return redirect(url_for('saas_customers.list_saas_customers'))
-        username = entry.username
+        username = entry.username if entry else DEFAULT_ADMIN_USERNAME
     else:
         target_db = DB_NAME  # trial customer -- shares SellerMs's own database
         user = User.query.filter_by(email=customer.email).first()

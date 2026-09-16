@@ -3,7 +3,7 @@ from datetime import datetime
 import pyotp
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
-from models import db, User, SaasUserDirectory
+from models import db, User, SaasUserDirectory, Customer
 from forms import LoginForm, TwoFactorForm
 from database.routes.audit import log_login_success, log_login_failed, log_logout
 
@@ -29,16 +29,30 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         username = form.username.data
-        user = User.query.filter_by(username=username).first()
-        if not user:
-            # Not in the shared database -- check whether this username
-            # belongs to a Phase-3-provisioned tenant with its own
-            # dedicated database. The login form itself never changes;
-            # this only affects which database gets queried.
-            entry = SaasUserDirectory.query.filter_by(username=username).first()
-            if entry:
-                session['tenant_db'] = entry.database_name
+        organization = (form.organization.data or '').strip()
+        user = None
+
+        if organization:
+            # Explicit tenant routing: every tenant's standard accounts
+            # (SuperAdmin/Admin/User) share the same three literal
+            # usernames, so a username alone can no longer say which
+            # tenant a login belongs to -- the Organization field (this
+            # tenant's database_name, shown to the customer at
+            # provisioning time) picks the database directly instead.
+            customer = Customer.query.filter_by(database_name=organization).first()
+            if customer:
+                session['tenant_db'] = customer.database_name
                 user = User.query.filter_by(username=username).first()
+        else:
+            user = User.query.filter_by(username=username).first()
+            if not user:
+                # Legacy fallback: a tenant admin provisioned before the
+                # Organization field existed, with a globally-unique
+                # username recorded in the directory.
+                entry = SaasUserDirectory.query.filter_by(username=username).first()
+                if entry:
+                    session['tenant_db'] = entry.database_name
+                    user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(form.password.data) and user.is_active:
             if user.totp_enabled:

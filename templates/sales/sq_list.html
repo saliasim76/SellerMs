@@ -389,15 +389,15 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="sq_kind" class="f-inp" onchange="onSqKindChange()">
+                  <select id="sq_kind" class="f-inp" onchange="onSqKindChange()" title="{% if ar %}النوع{% else %}Kind{% endif %}">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
                 </div>
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}رقم طلب البيع{% else %}Sales Request No{% endif %} <span class="f-req">*</span></div>
+                  <div class="f-lbl">{% if ar %}رقم طلب البيع{% else %}Sales Request No{% endif %}</div>
                   <select id="sq_sr_id" class="f-inp" onchange="onSRChange()">
-                    <option value="">-- {% if ar %}اختر طلب بيع معتمد{% else %}Select an Approved SR{% endif %} --</option>
+                    <option value="">-- {% if ar %}بدون طلب بيع (عرض سعر مستقل){% else %}No Sales Request (standalone quotation){% endif %} --</option>
                     {% for sr in srs %}<option value="{{ sr.id }}">{{ sr.doc_no }}</option>{% endfor %}
                   </select>
                 </div>
@@ -420,7 +420,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               </div>
               <div class="f-grid4">
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer Name{% endif %}</div>
+                  <div class="f-lbl">{% if ar %}المشتري{% else %}Buyer Name{% endif %}<span class="f-req">*</span></div>
                   <select id="sq_buyer" class="f-inp">
                     <option value="">-- {% if ar %}اختر المشتري{% else %}Select Buyer{% endif %} --</option>
                     {% for v in buyers %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
@@ -974,12 +974,39 @@ function updateSqRemarksFromSubject() {
 /* ══ Pull header + line items from the selected Approved SR ══ */
 let _srPullInProgress = false;
 
+// Kind is freely editable until a Sales Request is linked -- once one is
+// selected it's derived from that SR and locked; clearing the SR unlocks
+// it again.
+function _setSqKindLocked(locked) {
+  const el = document.getElementById('sq_kind');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f3f4f6' : '';
+  el.title = locked
+    ? (IS_AR ? 'يتم تحديده من طلب البيع' : 'Derived from the Sales Request')
+    : (IS_AR ? 'النوع' : 'Kind');
+}
+
+// Account Code follows the same rule as Kind -- editable while there's no
+// linked Sales Request, derived and locked once one is selected.
+function _setSqAccountCodeLocked(locked) {
+  const el = document.getElementById('sq_account_code');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f3f4f6' : '';
+  el.title = locked
+    ? (IS_AR ? 'يتم تحديده من طلب البيع' : 'Derived from the Sales Request')
+    : (IS_AR ? 'رمز الحساب' : 'Account Code');
+}
+
 async function onSRChange() {
   const srId = document.getElementById('sq_sr_id').value;
   if (!srId) {
     document.getElementById('sq_buyer').value = '';
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0; recalcSummary(); updLiCount();
+    _setSqKindLocked(false);
+    _setSqAccountCodeLocked(false);
     return;
   }
   _srPullInProgress = true;
@@ -990,6 +1017,16 @@ async function onSRChange() {
 
     if (sr.valid_until)   document.getElementById('sq_valid_until').value = sr.valid_until;
     if (sr.required_date) document.getElementById('sq_req_date').value   = sr.required_date;
+
+    // ⭐ Kind and Account Code come from the selected Sales Request, not left
+    // at whatever the form defaulted to -- Kind must happen before the line
+    // items below are added, so their Item Code/Name dropdowns render for
+    // the right Kind (Item Master vs. Level Five) from the start.
+    if (sr.kind) document.getElementById('sq_kind').value = sr.kind;
+    _setSqKindLocked(true);
+    const srAccVal = sr.account_code || (TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+    document.getElementById('sq_account_code').innerHTML = accountCodeOptionsHtml(srAccVal);
+    _setSqAccountCodeLocked(true);
 
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0;
@@ -1359,6 +1396,7 @@ async function openAddSQ() {
   document.getElementById('sqDateErr').style.display = 'none';
   document.getElementById('sq_status').value = 'Open';
   document.getElementById('sq_kind').value = 'Goods';
+  _setSqKindLocked(false);
   document.getElementById('sq_buyer').value = '';
   document.getElementById('sq_sr_id').value = '';
   document.getElementById('sq_doc_no').value = '';
@@ -1370,7 +1408,8 @@ async function openAddSQ() {
   ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
   await applySqReportDefaultsForOwner(ownerSel.value);
   const accSel = document.getElementById('sq_account_code');
-  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+  _setSqAccountCodeLocked(false);
   await loadOwnerWarehouses(ownerSel.value);
 
   // ⭐ Fetch fresh document number
@@ -1423,6 +1462,7 @@ function openEditSQ(id) {
       document.getElementById('sqDocBadge').textContent = d.doc_no || '';
       document.getElementById('sq_status').value = d.status || 'Open';
       document.getElementById('sq_kind').value = d.kind || 'Goods';
+      _setSqKindLocked(!!d.sales_request_id);
       document.getElementById('sq_buyer').value = d.buyer_id || '';
       document.getElementById('sq_sr_id').value = d.sales_request_id || '';
       document.getElementById('sq_requester').value = d.requester || CURRENT_USERNAME;
@@ -1454,6 +1494,7 @@ function openEditSQ(id) {
       if (!ownerSel.value && ownerSel.options.length > 1) ownerSel.selectedIndex = 1;
       const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
       document.getElementById('sq_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+      _setSqAccountCodeLocked(!!d.sales_request_id);
       await loadOwnerWarehouses(ownerSel.value);
 
       await loadItemMaster();
@@ -1496,6 +1537,28 @@ function openEditSQ(id) {
     });
 }
 
+function validateSqLineItems() {
+  const rows = document.querySelectorAll('#liBody tr');
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+    const n = i + 1;
+    if (!g('li_item_code').trim()) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب اختيار كود الصنف واسمه.' : ': Item Code and Item Name must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_qty')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال كمية أكبر من صفر.' : ': Quantity must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_rate')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال سعر أكبر من صفر.' : ': Rate must be selected.'));
+      return false;
+    }
+  }
+  return true;
+}
+
 /* ══ Save ══ */
 async function saveSQ() {
   // ⭐ Ensure we have a document number
@@ -1510,8 +1573,8 @@ async function saveSQ() {
     }
   }
   
-  if (!document.getElementById('sq_sr_id').value) {
-    alert(IS_AR ? 'يجب اختيار طلب بيع معتمد' : 'An Approved Sales Request must be selected');
+  if (!document.getElementById('sq_buyer').value) {
+    alert(IS_AR ? 'يجب اختيار المشتري' : 'Buyer must be selected');
     return;
   }
   if (_srPullInProgress) {
@@ -1519,6 +1582,7 @@ async function saveSQ() {
     return;
   }
   if (!validateSqDates()) { return; }
+  if (!validateSqLineItems()) { return; }
 
   try {
     const id  = document.getElementById('sq_id').value;
@@ -1735,10 +1799,10 @@ const cols = [
   {headerName:IS_AR?'المشتري':'Buyer',field:'buyer_name',minWidth:180,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'رقم مرجع المشتري':'Buyer Ref No',field:'buyer_ref_no',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'صالح حتى':'Valid Until',field:'valid_until',width:115,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},

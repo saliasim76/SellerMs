@@ -256,14 +256,56 @@ step, Passenger is its own application server and process manager.
    `.env.example`) next to `passenger_wsgi.py` — `config.py` loads either
    automatically. **`SECRET_KEY` and `DB_PASSWORD` are required**; there is
    no real-credential fallback baked into the code.
-4. **Install dependencies** into the app's virtualenv (cPanel provides a
-   pip command per app, e.g. `pip install -r requirements.txt`).
-5. **Restart the app** from cPanel once configured — `passenger_wsgi.py`
+4. **`DB_USER` needs `CREATE DATABASE` privilege, not just access to one
+   database.** This app manages more than one MySQL database:
+   - `DB_NAME` (e.g. `sellerms`) holds both the ERP schema and the SaaS
+     control tables (customers/subscriptions/module catalog) — these were
+     merged into one physical database, kept apart only by a separate
+     Flask-SQLAlchemy bind key (`'saas'`) in `config.py`, so no second
+     connection string is needed for this part.
+   - Every time a Super Admin provisions a **paid SaaS customer** (SaaS
+     Admin → Customers → Add), the app issues `CREATE DATABASE` on the
+     same MySQL server to give that customer their own dedicated database
+     (`database/tenant_provisioning.py`), reusing the same `DB_USER` /
+     `DB_PASSWORD` — no separate credentials or host needed per tenant.
+
+   A cPanel MySQL user created through cPanel's own "MySQL Databases" tool
+   is commonly scoped to specific, individually pre-created databases and
+   may **not** have a database-server-wide `CREATE DATABASE` grant by
+   default. Confirmed in practice: cPanel also auto-prefixes every
+   database *and* MySQL user with your cPanel account name (e.g. a tenant
+   meant to be named `Noman` actually gets created as `proledg_Noman`,
+   and a `proledg_ali` DB_USER is itself only ever granted access to
+   databases matching that same `proledg_` prefix) — a raw, unprefixed
+   `CREATE DATABASE` from the app fails there with "Access denied for
+   user ... to database ..." (MySQL error 1044), not "unknown database".
+   Set **`TENANT_DB_PREFIX`** (e.g. `proledg_`, see `.env.example`) to
+   your cPanel account's own prefix so every tenant database this app
+   creates is automatically named within what the host actually allows —
+   otherwise provisioning fails with a permissions error at the exact
+   moment a paying customer is created (trial customers are unaffected:
+   they share `DB_NAME` and never trigger `CREATE DATABASE`).
+5. **PDF generation requires Chromium + its system libraries.**
+   `database/pdf_engine.py` renders invoices/documents to PDF via
+   Playwright's headless Chromium (`playwright install chromium`), which
+   needs several OS-level shared libraries (libnss3, libatk, etc.) beyond
+   what `pip install` provides. Standard shared cPanel hosting has no
+   root/sudo access to install those, so this can fail there even though
+   `pip install -r requirements.txt` itself succeeds. Verify with your
+   host that Playwright/Chromium is actually usable in your specific
+   environment before going live — if not, printing/PDF export routes
+   that depend on `pdf_engine.py` will error at request time even though
+   the rest of the app works.
+6. **Install dependencies** into the app's virtualenv (cPanel provides a
+   pip command per app, e.g. `pip install -r requirements.txt`), then
+   `playwright install chromium` for the PDF engine above (see its own
+   system-dependency caveat).
+7. **Restart the app** from cPanel once configured — `passenger_wsgi.py`
    calls `init_db()` on startup, which creates any missing tables, seeds
    the Chart of Accounts/RBAC catalog/default users, and backfills the RBAC
    `role_id` on any pre-existing user (all idempotent, safe on every
    restart).
-6. **Change the default admin password immediately** (`admin` / `Admin@123`,
+8. **Change the default admin password immediately** (`admin` / `Admin@123`,
    auto-created only if no `admin` user exists yet) before exposing the
    site publicly -- see [Security Features](#security-features).
 

@@ -397,7 +397,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="po_kind" class="f-inp">
+                  <select id="po_kind" class="f-inp" onchange="onPoKindChange()">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
@@ -423,17 +423,18 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               {# ── Row: PQ reference + Supplier info ── #}
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}رقم عرض السعر{% else %}Purchase Quotation No{% endif %} <span class="f-req">*</span></div>
+                  <div class="f-lbl">{% if ar %}رقم عرض السعر{% else %}Purchase Quotation No{% endif %}</div>
                   <select id="po_pq_id" class="f-inp" onchange="onPQChange()">
-                    <option value="">-- {% if ar %}اختر عرض سعر معتمد{% else %}Select an Approved PQ{% endif %} --</option>
+                    <option value="">-- {% if ar %}بدون عرض سعر (أمر شراء مستقل){% else %}No PQ (standalone order){% endif %} --</option>
                     {% for pq in pqs %}<option value="{{ pq.id }}">{{ pq.doc_no }}</option>{% endfor %}
                   </select>
                 </div>
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}المورد{% else %}Supplier{% endif %}</div>
-                  <input type="text" id="po_supplier_name" class="f-inp" readonly
-                         style="background:#f8fafc;" placeholder="{% if ar %}يتم تحديده من عرض السعر{% else %}Derived from the Quotation{% endif %}">
-                  <input type="hidden" id="po_supplier">
+                  <div class="f-lbl">{% if ar %}المورد{% else %}Supplier{% endif %} <span class="f-req">*</span></div>
+                  <select id="po_supplier" class="f-inp">
+                    <option value="">-- {% if ar %}اختر المورد{% else %}Select Supplier{% endif %} --</option>
+                    {% for v in suppliers %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
+                  </select>
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رقم مرجع المورد{% else %}Supplier Ref No{% endif %}</div>
@@ -469,7 +470,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4" style="margin-top:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
-                  <select id="po_account_code" class="f-inp" disabled style="background:#f8fafc;" title="{% if ar %}يتم تحديده من عرض السعر{% else %}Derived from the Quotation{% endif %}">
+                  <select id="po_account_code" class="f-inp" onchange="onPoAccountCodeChange()" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                   </select>
                 </div>
@@ -492,10 +493,10 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
             </button>
             <div class="pur-section-body open">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-size:11px;color:#6b7280;">
-                  <i class="fas fa-lock me-1"></i>
-                  {% if ar %}البنود موروثة من عرض السعر وغير قابلة للتعديل{% else %}Items are inherited from the Quotation and locked{% endif %}
-                </span>
+                <button type="button" onclick="addLiRow()"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:#2563eb;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">
+                  <i class="fas fa-plus"></i>{% if ar %}إضافة صنف{% else %}Add Item{% endif %}
+                </button>
                 <span style="font-size:11px;color:#6b7280;">
                   <i class="fas fa-info-circle me-1"></i>
                   {% if ar %}المبلغ الخاضع = الكمية × السعر — الخصم{% else %}Taxable = Qty × Rate − Discount{% endif %}
@@ -517,6 +518,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                     <th style="width:80px;">{% if ar %}كود الضريبة{% else %}Tax Code{% endif %}</th>
                     <th style="width:65px;">{% if ar %}الضريبة{% else %}Tax Amt{% endif %}</th>
                     <th style="width:80px;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
+                    <th style="width:28px;"></th>
                   </tr></thead>
                   <tbody id="liBody"></tbody>
                   <tfoot>
@@ -716,6 +718,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
 <script>
 const IS_AR = {{ 'true' if ar else 'false' }};
 const CSRF  = '{{ csrf_token() }}';
+const OWNER_WAREHOUSES = {{ owner_warehouses | tojson }};
 const DEFAULT_TERMS = IS_AR
   ? '<div>الشروط والأحكام</div><div>يجب تسليم البضائع في أو قبل تاريخ التسليم المحدد.</div><div>جميع الأصناف تخضع للفحص عند الاستلام.</div><div>سيتم الدفع وفقاً لشروط الدفع المتفق عليها.</div><div>يجب الإبلاغ عن أي تباين خلال 7 أيام من التسليم.</div><div><br></div><div>معتمد من:</div>'
   : '<div>Terms and Conditions</div><div>Goods must be delivered on or before the specified delivery date.</div><div>All items are subject to inspection upon receipt.</div><div>Payment will be made according to the agreed payment terms.</div><div>Any discrepancies must be reported within 7 days of delivery.</div><div><br></div><div>Authorized By:</div>';
@@ -856,27 +859,39 @@ function switchTab(tabId, btn) {
 /* ══ PQ selection → auto-fill supplier + dates + LOCKED line items ══ */
 let _pqPullInProgress = false;
 
+// Account Code is inherited from the linked PQ and locked while that link
+// is active -- it only becomes freely editable again for a standalone
+// order (no PQ selected). Mirrors _setPqAccountCodeLocked() in the
+// Purchase Quotation form (locked when it has a linked Purchase Request).
+function _setPoAccountCodeLocked(locked) {
+  const el = document.getElementById('po_account_code');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f8fafc' : '';
+  el.title = locked
+    ? (IS_AR ? 'يُحدَّد تلقائيًا من عرض السعر المرتبط' : 'Derived from the linked Purchase Quotation')
+    : (IS_AR ? 'رمز الحساب' : 'Account Code');
+}
+
 async function onPQChange() {
   const pqId = document.getElementById('po_pq_id').value;
-  if (!pqId) {
-    document.getElementById('po_supplier').value = '';
-    document.getElementById('po_supplier_name').value = '';
-    document.getElementById('po_account_code').innerHTML = accountCodeOptionsHtml('');
-    return;
-  }
+  // No PQ (standalone order): leave whatever the user already entered
+  // manually (Supplier included) untouched -- matches onPrChange()'s same
+  // non-destructive behavior in the Purchase Quotation form.
+  if (!pqId) { _setPoAccountCodeLocked(false); return; }
   _pqPullInProgress = true;
   try {
     const res = await fetch('/purchase/quotations/' + pqId + '/summary');
     if (!res.ok) throw new Error('Failed to fetch PQ');
     const pq = await res.json();
 
-    document.getElementById('po_supplier').value = pq.supplier_id || '';
-    document.getElementById('po_supplier_name').value = pq.supplier_name || '';
+    if (pq.supplier_id) document.getElementById('po_supplier').value = pq.supplier_id;
     if (pq.supplier_ref_no) document.getElementById('po_supplier_ref').value = pq.supplier_ref_no;
     if (pq.purchase_type) document.getElementById('po_ptype').value = pq.purchase_type;
     if (pq.kind)           document.getElementById('po_kind').value  = pq.kind;
 
     document.getElementById('po_account_code').innerHTML = accountCodeOptionsHtml(pq.account_code || '');
+    _setPoAccountCodeLocked(true);
 
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0;
@@ -937,42 +952,278 @@ function loadTaxCodes() {
     .catch(() => { TAX_CODES = []; });
 }
 document.addEventListener('DOMContentLoaded', loadTaxCodes);
+document.addEventListener('DOMContentLoaded', loadItemMaster);
+document.addEventListener('DOMContentLoaded', loadLevelFive);
 
-/* ══ Line Items — locked/inherited from PQ, read-only ══ */
+function onPoAccountCodeChange() {
+  const val = document.getElementById('po_account_code').value;
+  if (!val) return;
+  document.querySelectorAll('select[name="li_tax_code[]"]').forEach(sel => { sel.value = val; });
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const m = (row.id || '').match(/plr_(\d+)/);
+    if (m) recalcLi(parseInt(m[1]));
+  });
+}
+
+/* ══ Line Items — same mechanism as Purchase Quotation: a real item
+   picker (Item Master for Goods, Chart of Accounts for Services), editable
+   qty/rate/discount/freight, and a tax-master-driven tax code dropdown.
+   Pulling from an Approved PQ (onPQChange above) still pre-fills these rows
+   from the PQ's own items, but every field stays editable afterward --
+   nothing is locked/readonly, matching a standalone order's manual entry
+   the same way Purchase Quotation's own PR-pull works. ══ */
+let _itemMaster = [];
+let _itemMasterLoaded = false;
+let _levelFive = [];
+let _levelFiveLoaded = false;
+
+async function loadItemMaster() {
+  try {
+    const res = await fetch('/items/data');
+    const all = await res.json();
+    _itemMaster = (all || []).filter(it => it.is_active === undefined || it.is_active);
+    _itemMasterLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Item Master:', e);
+    _itemMaster = [];
+  }
+}
+
+async function loadLevelFive() {
+  try {
+    const res = await fetch('/coa/level-five/data');
+    const all = await res.json();
+    _levelFive = (all || []).filter(a => (a.status || 'active') === 'active');
+    _levelFiveLoaded = true;
+  } catch (e) {
+    console.error('Failed to load Level Five accounts:', e);
+    _levelFive = [];
+  }
+}
+
+function _isServicesKind() {
+  const el = document.getElementById('po_kind');
+  return !!el && el.value === 'Services';
+}
+
+function _itemCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    return `<option value="${it.item_code}"${sel}>${it.item_code}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _itemNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _itemMaster.map(it => {
+    const sel = it.item_code === selectedCode ? ' selected' : '';
+    const label = it.name_en + (it.name_ar ? ' / ' + it.name_ar : '');
+    return `<option value="${it.item_code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_itemMaster.some(it => it.item_code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown item'})</option>`;
+  }
+  return html;
+}
+
+/* Services-kind counterparts, sourced from Level Five (Chart of Accounts)
+   instead of Item Master -- same shape as the Item Master pair above. */
+function _glCodeOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الكود --' : '-- Code --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    return `<option value="${a.code}"${sel}>${a.code}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>${selectedCode}</option>`;
+  }
+  return html;
+}
+
+function _glNameOptionsHtml(selectedCode) {
+  let html = '<option value="">' + (IS_AR ? '-- الاسم --' : '-- Name --') + '</option>';
+  html += _levelFive.map(a => {
+    const sel = a.code === selectedCode ? ' selected' : '';
+    const label = a.drawers + (a.drawers_ar ? ' / ' + a.drawers_ar : '');
+    return `<option value="${a.code}"${sel}>${label}</option>`;
+  }).join('');
+  if (selectedCode && !_levelFive.some(a => a.code === selectedCode)) {
+    html += `<option value="${selectedCode}" selected>(${IS_AR ? 'غير معروف' : 'unknown account'})</option>`;
+  }
+  return html;
+}
+
+function _defaultDescFor(code, servicesKind, item) {
+  if (servicesKind) {
+    const acc = _levelFive.find(a => a.code === code);
+    return acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+  }
+  return item ? (item.name_en + (item.name_ar ? ' / ' + item.name_ar : '')) : '';
+}
+
+function _uomOptionsHtml(item, selectedUom) {
+  const list = (item && item.uoms && item.uoms.length) ? item.uoms : null;
+  if (!list) {
+    const fallback = selectedUom || (item && item.uom) || 'unit';
+    return `<option value="${fallback}" selected>${fallback}</option>`;
+  }
+  return list.map(u => {
+    const val = u.unit_name;
+    const sel = (selectedUom ? selectedUom === val : u.is_default) ? ' selected' : '';
+    return `<option value="${val}"${sel}>${val}</option>`;
+  }).join('');
+}
+function _defaultUomOf(item) {
+  const list = (item && item.uoms && item.uoms.length) ? item.uoms : null;
+  if (!list) return (item && item.uom) || 'unit';
+  return (list.find(u => u.is_default) || list[0]).unit_name;
+}
+
+/* ══ Warehouse options (sourced from the Owner's warehouses; first = default) ══ */
+function _warehouseOptionsHtml(selected) {
+  const sel = selected || (OWNER_WAREHOUSES.length ? OWNER_WAREHOUSES[0].warehouse_name : '');
+  let html = '<option value="">' + (IS_AR ? '-- اختر --' : '-- Select --') + '</option>';
+  html += OWNER_WAREHOUSES.map(w => {
+    const label = (IS_AR && w.warehouse_name_ar) ? w.warehouse_name_ar : w.warehouse_name;
+    const optSel = w.warehouse_name === sel ? ' selected' : '';
+    return `<option value="${w.warehouse_name}"${optSel}>${label}</option>`;
+  }).join('');
+  if (sel && !OWNER_WAREHOUSES.some(w => w.warehouse_name === sel)) {
+    html += `<option value="${sel}" selected>${sel}</option>`;
+  }
+  return html;
+}
+
+const TAX_DEFAULT_CODE = 'P1';
+function taxRateText(t) {
+  return t.tax_code || t.account_code;
+}
+function liTaxOptionsHtml(selected) {
+  const sel = selected || (document.getElementById('po_account_code')?.value) || TAX_DEFAULT_CODE;
+  if (!TAX_CODES.length) {
+    return `<option value="${sel}" selected>${sel}</option>`;
+  }
+  let html = TAX_CODES.map(t =>
+    `<option value="${t.account_code}"${t.account_code === sel ? ' selected' : ''}>${taxRateText(t)}</option>`
+  ).join('');
+  // Keep a legacy/unknown saved code selectable so editing an old document
+  // never silently changes its tax code.
+  if (sel && !TAX_CODES.some(t => t.account_code === sel)) {
+    html = `<option value="${sel}" selected>${sel}</option>` + html;
+  }
+  return html;
+}
+
+function onLiItemChange(idx, source) {
+  const codeSel = document.getElementById('plic_' + idx);
+  const nameSel = document.getElementById('plname_' + idx);
+  const code = source === 'name' ? (nameSel ? nameSel.value : '') : (codeSel ? codeSel.value : '');
+
+  if (codeSel && codeSel.value !== code) codeSel.value = code;
+  if (nameSel && nameSel.value !== code) nameSel.value = code;
+
+  const descEl = document.getElementById('plid_' + idx);
+  const uomEl  = document.getElementById('pluom_' + idx);
+  const rateEl = document.getElementById('plrt_' + idx);
+
+  if (_isServicesKind()) {
+    const acc = _levelFive.find(a => a.code === code);
+    if (descEl) descEl.value = acc ? (acc.drawers + (acc.drawers_ar ? ' / ' + acc.drawers_ar : '')) : '';
+    if (uomEl)  { uomEl.innerHTML = _uomOptionsHtml(null, 'unit'); uomEl.value = 'unit'; }
+    if (rateEl) rateEl.value = (0).toFixed(2);
+    recalcLi(idx);
+    return;
+  }
+
+  const item = _itemMaster.find(it => it.item_code === code);
+  if (item) {
+    if (descEl) descEl.value = item.name_en + (item.name_ar ? ' / ' + item.name_ar : '');
+    if (uomEl)  { uomEl.innerHTML = _uomOptionsHtml(item, null); uomEl.value = _defaultUomOf(item); }
+    if (rateEl) rateEl.value = (item.main_rate || 0).toFixed(2);
+  } else {
+    if (descEl) descEl.value = '';
+    if (uomEl)  { uomEl.innerHTML = _uomOptionsHtml(null, 'unit'); uomEl.value = 'unit'; }
+    if (rateEl) rateEl.value = (0).toFixed(2);
+  }
+  recalcLi(idx);
+}
+
+function onPoKindChange() {
+  document.querySelectorAll('#liBody tr').forEach(row => {
+    const m = (row.id || '').match(/^plr_(\d+)$/);
+    if (!m) return;
+    const idx = parseInt(m[1]);
+    const codeSel = document.getElementById('plic_' + idx);
+    const nameSel = document.getElementById('plname_' + idx);
+    if (!codeSel || !nameSel) return;
+    const servicesKind = _isServicesKind();
+    codeSel.innerHTML = servicesKind ? _glCodeOptionsHtml('') : _itemCodeOptionsHtml('');
+    nameSel.innerHTML = servicesKind ? _glNameOptionsHtml('') : _itemNameOptionsHtml('');
+    onLiItemChange(idx, 'code');
+  });
+}
+
 function addLiRow(d) {
   const idx = _liIdx++;
   d = d || {};
+  const servicesKind = _isServicesKind();
+  const item = (!servicesKind && d.item_code) ? _itemMaster.find(it => it.item_code === d.item_code) : null;
+  const codeOptsHtml = servicesKind ? _glCodeOptionsHtml(d.item_code||'') : _itemCodeOptionsHtml(d.item_code||'');
+  const nameOptsHtml = servicesKind ? _glNameOptionsHtml(d.item_code||'') : _itemNameOptionsHtml(d.item_code||'');
   const row = `<tr id="plr_${idx}">
     <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
-    <td><input type="text"   class="li-inp" name="li_item_code[]" value="${d.item_code||''}" readonly style="width:80px;background:#f3f4f6;"></td>
-    <td><input type="text"   class="li-inp" name="li_item_desc[]" value="${d.item_desc||''}" readonly style="min-width:130px;background:#f3f4f6;"></td>
-    <td><input type="text"   class="li-inp" name="li_warehouse[]" value="${d.warehouse||''}" readonly style="min-width:90px;background:#f3f4f6;"></td>
-    <td><input type="text"   class="li-inp" name="li_uom[]" value="${d.uom||'unit'}" readonly style="width:90px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  readonly style="width:62px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||0}"      readonly style="width:62px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  readonly style="width:58px;background:#f3f4f6;"></td>
-    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   readonly style="width:58px;background:#f3f4f6;"></td>
+    <td><select class="li-inp" name="li_item_code[]" id="plic_${idx}" onchange="onLiItemChange(${idx},'code')" style="width:110px;">${codeOptsHtml}</select></td>
+    <td>
+      <select class="li-inp" id="plname_${idx}" onchange="onLiItemChange(${idx},'name')" style="min-width:160px;">${nameOptsHtml}</select>
+      <input type="hidden" name="li_item_desc[]" id="plid_${idx}" value="${d.item_desc||d.description||_defaultDescFor(d.item_code||'', servicesKind, item)}">
+    </td>
+    <td><select class="li-inp" name="li_warehouse[]" id="plwh_${idx}" style="min-width:100px;">${_warehouseOptionsHtml(d.warehouse||'')}</select></td>
+    <td><select class="li-inp" name="li_uom[]" id="pluom_${idx}" style="width:90px;">${_uomOptionsHtml(item, d.uom)}</select></td>
+    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||(item?item.main_rate:0)||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
+    <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
     <td><input type="number" class="li-inp" id="plt_${idx}"  name="li_taxable_disp[]" value="${d.taxable||0}" readonly
          style="width:76px;background:#fffbeb;color:#92400e;font-weight:600;" title="Qty × Rate − Discount"></td>
-    <td><input type="text" class="li-inp" name="li_tax_code[]" id="pltc_${idx}" value="${d.tax_code||'VAT15'}" readonly style="width:78px;background:#f3f4f6;"></td>
+    <td><select class="li-inp" name="li_tax_code[]" id="pltc_${idx}" onchange="recalcLi(${idx})" style="width:78px;">${liTaxOptionsHtml(d.tax_code)}
+    </select></td>
     <td><input type="number" class="li-inp" id="plta_${idx}" name="li_tax_amount_disp[]" value="${d.tax_amount||0}" readonly style="width:62px;background:#f3f4f6;"></td>
     <td><input type="number" class="li-inp" id="pltot_${idx}" name="li_total_disp[]" value="${d.total||0}" readonly style="width:76px;background:#f0fdf4;font-weight:700;color:#166534;"></td>
+    <td><button type="button" onclick="removeLi(${idx})"
+                style="width:22px;height:22px;border-radius:5px;border:none;background:#fee2e2;color:#b91c1c;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">
+      <i class="fas fa-times" style="font-size:9px;"></i></button></td>
   </tr>`;
   document.getElementById('liBody').insertAdjacentHTML('beforeend', row);
   recalcLi(idx);
   updLiCount();
 }
 
-// Handles both a real tax code ("VAT15"/"VAT0"/"EXEMPT") and an
-// already-resolved display string (e.g. "15%") -- the latter is what an
-// EXISTING saved line carries once its tax_code has been resolved, so a
-// plain `=== 'VAT15'` check would wrongly show/recompute 0% when editing
-// one instead of reading back the real rate.
+function removeLi(idx) {
+  const r = document.getElementById('plr_'+idx);
+  if (r) r.remove();
+  recalcSummary();
+  updLiCount();
+}
+
+// TAX_CODES: [{tax_code, account_code, section}] -- account_code holds the
+// short code (P1, PC, ...), tax_code holds the rate text ("VAT 15%", ...).
 function taxRateOf(code) {
-  if (code === 'VAT15') return 15;
-  if (code === 'VAT0' || code === 'EXEMPT') return 0;
-  const m = String(code || '').match(/(\d+(?:\.\d+)?)\s*%/);
-  return m ? parseFloat(m[1]) : 0;
+  const t = TAX_CODES.find(x => x.account_code === code);
+  if (t) {
+    const m = String(t.tax_code || '').match(/(\d+(?:\.\d+)?)\s*%/);
+    return m ? parseFloat(m[1]) : 0;
+  }
+  // `code` can already be the resolved display text (e.g. "15%") rather
+  // than an account_code -- this happens when editing an existing document
+  // whose saved line carries that text as its tax_code. Parse the rate
+  // directly instead of returning 0 just because no account_code matched.
+  const m2 = String(code || '').match(/(\d+(?:\.\d+)?)\s*%/);
+  return m2 ? parseFloat(m2[1]) : 0;
 }
 
 function recalcLi(idx) {
@@ -1059,7 +1310,7 @@ async function openAddPO() {
   document.getElementById('po_id').value = '';
   document.getElementById('poTitle').innerHTML =
     '<i class="fas fa-plus-circle me-2"></i>' + (IS_AR ? 'إضافة أمر شراء' : 'Add Purchase Order');
-  ['po_supplier_ref','po_remarks','po_supplier_name'].forEach(id => {
+  ['po_supplier_ref','po_remarks'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = '';
   });
   const today = new Date().toISOString().split('T')[0];
@@ -1076,7 +1327,8 @@ async function openAddPO() {
   document.getElementById('poDocBadge').textContent = '...';
   document.getElementById('po_terms').innerHTML = DEFAULT_TERMS;
 
-  document.getElementById('po_account_code').innerHTML = accountCodeOptionsHtml('');
+  document.getElementById('po_account_code').innerHTML = accountCodeOptionsHtml('P1');
+  _setPoAccountCodeLocked(false);
 
   // ⭐ Fetch fresh document number
   await fetchDocNo();
@@ -1093,8 +1345,10 @@ async function openAddPO() {
     const ch = btn.querySelector('.fa-chevron-up,.fa-chevron-down');
     if (ch) { ch.className = 'fas fa-chevron-up'; ch.style.cssText = 'color:#2563eb;font-size:11px;'; }
   });
+  await loadItemMaster();
+  await loadLevelFive();
   addLiRow();
-  
+
   if (!_poModal) {
     const modalEl = document.getElementById('poModal');
     if (modalEl) {
@@ -1126,8 +1380,6 @@ function openEditPO(id) {
       document.getElementById('po_pq_id').value = d.pq_id || '';
       document.getElementById('po_supplier').value = d.supplier_id || '';
       document.getElementById('po_supplier_ref').value = d.supplier_ref_no || '';
-      const vnEl = document.getElementById('po_supplier_name');
-      if (vnEl) vnEl.value = d.supplier_name || '';
       const rmEl = document.getElementById('po_remarks');
       if (rmEl) rmEl.value = d.remarks || '';
       document.getElementById('po_terms').innerHTML = d.terms_conditions || DEFAULT_TERMS;
@@ -1138,6 +1390,7 @@ function openEditPO(id) {
 
       const accVal = d.account_code || (TAX_CODES.length ? TAX_CODES[0].account_code : '');
       document.getElementById('po_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+      _setPoAccountCodeLocked(!!d.pq_id);
 
       document.getElementById('liBody').innerHTML = '';
       (d.items || []).forEach(li => addLiRow(li));
@@ -1176,6 +1429,32 @@ function openEditPO(id) {
 }
 
 /* ══ Save ══ */
+function validatePoLineItems() {
+  const rows = document.querySelectorAll('#liBody tr');
+  if (!rows.length) {
+    alert(IS_AR ? 'أضف صنفاً واحداً على الأقل.' : 'Add at least one line item.');
+    return false;
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+    const n = i + 1;
+    if (!g('li_item_code').trim()) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب اختيار كود الصنف واسمه.' : ': Item Code and Item Name must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_qty')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال كمية أكبر من صفر.' : ': Quantity must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_rate')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال سعر أكبر من صفر.' : ': Rate must be selected.'));
+      return false;
+    }
+  }
+  return true;
+}
+
 async function savePO() {
   // ⭐ Ensure we have a document number
   const docNo = document.getElementById('po_doc_no').value;
@@ -1189,15 +1468,16 @@ async function savePO() {
     }
   }
   
-  if (!document.getElementById('po_pq_id').value) {
-    alert(IS_AR ? 'يجب اختيار عرض سعر معتمد' : 'An Approved Purchase Quotation must be selected');
+  if (!document.getElementById('po_supplier').value) {
+    alert(IS_AR ? 'يجب اختيار المورد' : 'Supplier must be selected');
     return;
   }
   if (_pqPullInProgress) {
     alert(IS_AR ? 'يرجى الانتظار حتى يتم تحميل بيانات عرض السعر' : 'Please wait — still loading data from the Purchase Quotation');
     return;
   }
-  
+  if (!validatePoLineItems()) { return; }
+
   const id  = document.getElementById('po_id').value;
   const url = id ? `/purchase/orders/${id}/edit` : '/purchase/orders/add';
   const fd  = new FormData();
@@ -1401,9 +1681,9 @@ const cols = [
   {headerName:IS_AR?'اسم المورد':'Supplier Name',field:'supplier_name',minWidth:180,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'رقم مرجع المورد':'Supplier Ref No',field:'supplier_ref_no',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:115,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:115,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الشحن':'Freight',field:'total_freight',width:120,cellRenderer:rSAR,floatingFilter:false},

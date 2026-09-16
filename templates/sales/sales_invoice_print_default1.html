@@ -1,0 +1,373 @@
+{% set ar = current_locale == 'ar' %}
+{% set accent = (owner.report_color if owner and owner.report_color else '#0f2642') %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if ar %}فاتورة ضريبية{% else %}Tax Invoice{% endif %} · {{ doc.doc_no }}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+@page { size: A4; margin: 0; }
+html { font-size:12px; }
+html, body { background:#e6e9ef; }
+body {
+  display:flex; justify-content:center; align-items:center; min-height:100vh;
+  font-family:'Segoe UI','Arial',sans-serif; padding:20px 0; color:#111827;
+}
+.invoice-wrapper {
+  position:relative; width:210mm; min-height:297mm; background:white; box-shadow:0 12px 30px rgba(0,0,0,.15);
+  border:1px solid #d0d5de; padding:10mm 12mm; overflow:hidden;
+}
+.toolbar { width:210mm; margin:0 auto 10px; display:flex; justify-content:flex-end; gap:10px; }
+.toolbar button, .toolbar a {
+  display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:7px;
+  font-size:13px; font-weight:600; cursor:pointer; border:none; text-decoration:none;
+}
+
+/* Owner-configured watermark, behind everything else on the page */
+.bg-logo { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:140mm; opacity:.06; z-index:0; pointer-events:none; }
+.content { position:relative; z-index:1; }
+
+/* ── Header: logo pinned to the left, company identity filling the rest,
+   right-aligned within it -- explicit flex-start + flex:1 rather than
+   space-between, so the logo stays anchored left regardless of how wide
+   the company info block ends up being. ── */
+.f-header { display:flex; justify-content:flex-start; align-items:center; gap:14px; padding-bottom:.5rem; }
+.f-logo-slot { width:80px; flex-shrink:0; }
+.f-logo { max-width:80px; max-height:80px; object-fit:contain; display:block; }
+.f-company { flex:1; text-align:right; }
+.f-company-ar { font-size:1.2rem; font-weight:700; color:{{ accent }}; }
+.f-company-en { font-size:1.15rem; font-weight:700; color:#0b1a33; }
+.f-company-meta { font-size:.85rem; margin-top:.15rem; color:#374151; }
+
+/* ── Title bar: TAX INVOICE | فاتورة ضريبية, split by a divider ── */
+.title-bar { display:flex; border:1px solid #000; border-radius:8px; overflow:hidden; margin-top:.6rem; }
+.title-bar > div { flex:1; text-align:center; padding:.5rem; font-size:1.15rem; font-weight:700; color:{{ accent }}; }
+.title-bar > div:first-child { border-right:1px solid #000; }
+
+/* ── Invoice No bar ── */
+.invno-bar { display:flex; border:1px solid #000; border-radius:8px; overflow:hidden; margin-top:.5rem; font-size:.95rem; font-weight:700; }
+.invno-bar > div { flex:1; padding:.4rem .8rem; }
+.invno-bar > div:first-child { border-right:1px solid #000; }
+
+/* ── Generic bilingual-header info table (meta info + bank details) ── */
+.info-table { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:.5rem; font-size:.78rem; border:none; }
+.info-table .w1 { width:16.6667%; }
+.info-table .w2 { width:33.3334%; }
+.info-table th, .info-table td { border:1px solid #000; padding:.35rem .4rem; text-align:center; }
+.info-table th { background:{{ accent }}; color:white; font-weight:600; }
+.info-table th small { display:block; font-weight:400; font-size:.72rem; opacity:.9; }
+.info-table td { font-weight:600; color:#111827; }
+
+/* ── Seller/Buyer mirrored bilingual detail table -- boxed ERP style,
+   neutral grey header row (not the owner's report colour, unlike "By
+   Default" which now colours Seller/Buyer headers -- this is the one
+   difference between the two templates), solid black borders around
+   the section and every field. Rows 3-6 pack TWO fields per row; the
+   Arabic half mirrors the English half's field order (read right-to-left,
+   the first Arabic field lines up with the first English field). ── */
+tr.party-hdr-row td { background:#d1d5db; color:#111827; font-weight:700; padding:.35rem .6rem; font-size:.9rem; border-left:1px solid #000; border-right:1px solid #000; border-top:none; border-bottom:.25px solid #000; }
+.party-table { width:100%; min-width:0; border-collapse:collapse; font-size:.75rem; margin-bottom:0; border:none; }
+.party-table td { border-left:1px solid #000; border-right:1px solid #000; border-top:.25px solid #000; border-bottom:.25px solid #000; padding:.18rem .5rem; }
+.party-table-left td:last-child { border-right:none; }
+.party-table .lbl-en { font-weight:600; color:#374151; width:12%; }
+.party-table .val-en { text-align:left; width:38%; }
+.party-table .val-ar { text-align:right; direction:rtl; width:38%; }
+.party-table .lbl-ar { font-weight:600; color:#374151; text-align:right; direction:rtl; width:12%; }
+.party-table .lbl-en2 { font-weight:600; color:#374151; width:9%; white-space:nowrap; }
+.party-table .val-en2 { text-align:left; width:16%; }
+.party-table .val-ar2 { text-align:right; direction:rtl; width:12%; }
+.party-table .lbl-ar2 { font-weight:600; color:#374151; text-align:right; direction:rtl; width:13%; white-space:nowrap; }
+
+/* ── Items table ── */
+.items-table { width:100%; border-collapse:collapse; margin-top:0; font-size:.78rem; border:none; }
+.items-table th { background:{{ accent }}; color:white; font-weight:600; padding:.35rem .3rem; border-left:1px solid #000; border-right:1px solid #000; border-bottom:1px solid #000; border-top:none; text-align:center; }
+.items-table th small { display:block; font-weight:400; font-size:.68rem; opacity:.9; }
+.items-table td { padding:.3rem .3rem; border:1px solid #000; text-align:center; }
+.items-table .desc-cell { text-align:left; padding-left:.5rem; font-size:1rem; }
+.items-table tr { page-break-inside:avoid; }
+.nothing-follows { text-align:center; font-size:.75rem; color:#6b7280; border:1px solid #000; border-top:none; padding:.3rem; }
+
+/* ── Bottom block: QR + totals as ONE table grid, QR is a rowspan cell sharing the same border lines ── */
+.totals-table { border-collapse:collapse; width:100%; margin-top:.4rem; font-size:.8rem; border:1px solid #000; }
+.totals-table td { border:1px solid #000; padding:.3rem .6rem; }
+.totals-table .tt-qr { width:175px; text-align:center; vertical-align:middle; padding:.3rem; }
+.totals-table .tt-qr img { display:block; width:100%; height:auto; max-width:175px; margin:0 auto; image-rendering:pixelated; }
+.totals-table .tt-en { width:23%; font-weight:600; }
+.totals-table .tt-val { width:14%; text-align:center; font-weight:700; }
+.totals-table .tt-ar { text-align:right; direction:rtl; font-weight:600; }
+.totals-table .tt-bold td { background:#f1f5f9; font-size:.88rem; }
+
+.words-box { margin-top:.3rem; border:1px solid #000; padding:.3rem .7rem; font-size:.78rem; }
+.words-box .ar-line { direction:rtl; text-align:right; margin-top:.15rem; font-weight:600; }
+.disclaimer { text-align:center; font-size:.68rem; color:#b45309; margin-top:.3rem; }
+.f-footer { margin-top:.25rem; padding-top:.25rem; border-top:1px solid #cbd5e1; font-size:.68rem; color:#4b5563; text-align:center; }
+.f-footer .page-no { text-align:left; font-size:.68rem; color:#9ca3af; }
+
+@media print {
+  html { font-size:12px; }
+  body { background:white; padding:0; display:block; }
+  .toolbar { display:none; }
+  .invoice-wrapper { width:210mm; min-height:297mm; box-shadow:none; border:none; margin:0; page-break-after:avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="{{ url_for('sales.sinv_view', id=doc.sales_invoice_id) }}" style="background:white;color:#374151;border:1.5px solid #d1d5db;"><i class="fas fa-arrow-left"></i>{% if ar %}رجوع{% else %}Back{% endif %}</a>
+  <button onclick="window.print()" style="background:#2563eb;color:white;"><i class="fas fa-print"></i>{% if ar %}طباعة{% else %}Print{% endif %}</button>
+  <a href="{{ url_for('sales.sinv_pdf', id=doc.sales_invoice_id) }}" style="background:#15803d;color:white;"><i class="fas fa-file-pdf"></i>{% if ar %}تنزيل PDF{% else %}Download PDF{% endif %}</a>
+</div>
+
+<div class="invoice-wrapper">
+  {% if bg_logo_data_uri %}<img class="bg-logo" src="{{ bg_logo_data_uri }}" alt="">{% endif %}
+  <div class="content">
+
+    {# Header: logo pinned left, bilingual company identity filling the rest #}
+    <div class="f-header">
+      <div class="f-logo-slot">{% if logo_data_uri %}<img class="f-logo" src="{{ logo_data_uri }}" alt="logo">{% endif %}</div>
+      <div class="f-company">
+        <div class="f-company-ar">{{ owner.name_ar if owner and owner.name_ar else '—' }}</div>
+        <div class="f-company-en">{{ owner.name if owner else '—' }}</div>
+        <div class="f-company-meta">C.R : {{ owner.crn if owner and owner.crn else '—' }} &nbsp; VAT : {{ owner.vat_number if owner and owner.vat_number else '—' }}</div>
+      </div>
+    </div>
+
+    {# Title bar #}
+    <div class="title-bar">
+      <div>TAX INVOICE</div>
+      <div>فاتورة ضريبية</div>
+    </div>
+
+    {# Invoice No bar #}
+    <div class="invno-bar">
+      <div>Invoice No: {{ doc.doc_no }}</div>
+      <div style="direction:rtl;">: الفاتورة رقم {{ doc.doc_no }}</div>
+    </div>
+
+    {# Meta info table -- row 1: 6 columns, row 2: 2 columns #}
+    <table class="info-table">
+      <thead>
+        <tr>
+          <th class="w1">Invoice Date<small>تاريخ الفاتورة</small></th>
+          <th class="w1">Invoice Month<small>شهر الفاتورة</small></th>
+          <th class="w1">Invoice Period<small>فترة الفاتورة</small></th>
+          <th class="w1">Due Date<small>تاريخ الاستحقاق</small></th>
+          <th class="w1">Project / Ref No.<small>رقم المرجع / المشروع</small></th>
+          <th class="w1">Contract / PO No.<small>رقم أمر الشراء</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ doc.document_date.strftime('%d-%b-%Y') if doc.document_date else '—' }}</td>
+          <td>{{ doc.to_date.strftime('%b-%y') if doc.to_date else '—' }}</td>
+          <td>{{ (doc.from_date.strftime('%d-%b-%y') + ' To ' + doc.to_date.strftime('%d-%b-%y')) if doc.from_date and doc.to_date else '—' }}</td>
+          <td>{{ doc.delivery_date.strftime('%d-%b-%Y') if doc.delivery_date else '—' }}</td>
+          <td>{{ doc.project_ref or '—' }}</td>
+          <td>{{ doc.sales_order.doc_no if doc.sales_order else '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {# Bank details table -- the Owner's own active bank account (its
+       is_primary=True row, or the first one on file), not whichever bank
+       (if any) this specific invoice happens to reference -- this row
+       tells the buyer where to pay the Owner. #}
+    <table class="info-table">
+      <thead>
+        <tr>
+          <th class="w1">Account Number<small>رقم الحساب</small></th>
+          <th class="w1">Bank<small>المصرف</small></th>
+          <th class="w1">Branch<small>فرع</small></th>
+          <th class="w1">Swift<small>السويفت</small></th>
+          <th class="w2">IBAN<small>رقم الايبان</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ owner_active_bank.account_number if owner_active_bank else '—' }}</td>
+          <td>{{ owner_active_bank.bank_name if owner_active_bank else '—' }}</td>
+          <td>{{ owner_active_bank.branch if owner_active_bank else '—' }}</td>
+          <td>{{ owner_active_bank.swift_code if owner_active_bank else '—' }}</td>
+          <td>{{ owner_active_bank.iban if owner_active_bank else '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {# Seller Details -- mirrored bilingual table, boxed ERP style. Name and
+       Street Name each get their own full-width row; the remaining 8
+       fields are packed 2-per-row (Building No+City, Addl No+District,
+       Postal Code+Country, VAT Number+CRN). On every row the Arabic half
+       mirrors the English half's field order -- reading the Arabic side
+       right-to-left lands on the same field, in the same sequence, as
+       reading the English side left-to-right. #}
+    <div style="display:flex;gap:0;">
+      <table class="party-table party-table-left" style="width:50%;">
+        <tr class="party-hdr-row"><td colspan="4" style="text-align:center;">Seller Details</td></tr>
+        <tr><td class="lbl-en">Name:</td><td class="val-en" colspan="3">{{ owner.name if owner else '—' }}</td></tr>
+        <tr><td class="lbl-en">Street Name:</td><td class="val-en" colspan="3">{{ owner.street_name if owner and owner.street_name else '—' }}</td></tr>
+        <tr>
+          <td class="lbl-en2">Building No:</td><td class="val-en2">{{ owner.building_number if owner and owner.building_number else '—' }}</td>
+          <td class="lbl-en2">City:</td><td class="val-en2">{{ owner.city if owner and owner.city else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lbl-en2">Addl. No:</td><td class="val-en2">{{ owner.additional_number if owner and owner.additional_number else '—' }}</td>
+          <td class="lbl-en2">District:</td><td class="val-en2">{{ owner.district if owner and owner.district else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lbl-en2">Postal Code:</td><td class="val-en2">{{ owner.postal_code if owner and owner.postal_code else '—' }}</td>
+          <td class="lbl-en2">Country:</td><td class="val-en2">{{ owner.country if owner and owner.country else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lbl-en2">VAT Number:</td><td class="val-en2" style="font-weight:700;">{{ owner.vat_number if owner and owner.vat_number else '—' }}</td>
+          <td class="lbl-en2">CRN:</td><td class="val-en2">{{ owner.crn if owner and owner.crn else '—' }}</td>
+        </tr>
+      </table>
+      <table class="party-table party-table-right" style="width:50%;">
+        <tr class="party-hdr-row"><td colspan="4" style="text-align:center;direction:rtl;">المورد</td></tr>
+        <tr><td class="val-ar" colspan="3" style="text-align:justify;">{{ owner.name_ar if owner and owner.name_ar else '—' }}</td><td class="lbl-ar">الاسم:</td></tr>
+        <tr><td class="val-ar" colspan="3" style="text-align:justify;">{{ owner.street_name_ar if owner and owner.street_name_ar else '—' }}</td><td class="lbl-ar">اسم الشارع:</td></tr>
+        <tr>
+          <td class="val-ar2">{{ owner.city_ar if owner and owner.city_ar else (owner.city if owner else '—') }}</td><td class="lbl-ar2">المدينة:</td>
+          <td class="val-ar2">{{ (owner.building_number | ar_digits) if owner and owner.building_number else '—' }}</td><td class="lbl-ar2">رقم المبنى:</td>
+        </tr>
+        <tr>
+          <td class="val-ar2">{{ owner.district_ar if owner and owner.district_ar else (owner.district if owner else '—') }}</td><td class="lbl-ar2">الحي:</td>
+          <td class="val-ar2">{{ (owner.additional_number | ar_digits) if owner and owner.additional_number else '—' }}</td><td class="lbl-ar2">الرقم الإضافي:</td>
+        </tr>
+        <tr>
+          <td class="val-ar2">{{ owner.country_ar if owner and owner.country_ar else (owner.country if owner else '—') }}</td><td class="lbl-ar2">البلد:</td>
+          <td class="val-ar2">{{ (owner.postal_code | ar_digits) if owner and owner.postal_code else '—' }}</td><td class="lbl-ar2">الرمز البريدي:</td>
+        </tr>
+        <tr>
+          <td class="val-ar2">{{ (owner.crn | ar_digits) if owner and owner.crn else '—' }}</td><td class="lbl-ar2">معرف آخر:</td>
+          <td class="val-ar2" style="font-weight:700;">{{ (owner.vat_number | ar_digits) if owner and owner.vat_number else '—' }}</td><td class="lbl-ar2">الرقم الضريبي:</td>
+        </tr>
+      </table>
+    </div>
+
+    {# Buyer Detail -- same boxed structure and same neutral grey header
+       row as Seller Details above. #}
+    <div style="display:flex;gap:0;">
+      <table class="party-table party-table-left" style="width:50%;">
+        <tr class="party-hdr-row"><td colspan="4" style="text-align:center;">Buyer Detail</td></tr>
+        <tr><td class="lbl-en">Name:</td><td class="val-en" colspan="3">{{ doc.buyer.buyer_name_en if doc.buyer else '—' }}</td></tr>
+        <tr><td class="lbl-en">Street Name:</td><td class="val-en" colspan="3">{{ doc.buyer.street_name if doc.buyer and doc.buyer.street_name else '—' }}</td></tr>
+        <tr>
+          <td class="lbl-en2">Building No:</td><td class="val-en2">{{ doc.buyer.building_number if doc.buyer and doc.buyer.building_number else '—' }}</td>
+          <td class="lbl-en2">City:</td><td class="val-en2">{{ doc.buyer.city if doc.buyer and doc.buyer.city else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lbl-en2">Addl. No:</td><td class="val-en2">{{ doc.buyer.additional_number if doc.buyer and doc.buyer.additional_number else '—' }}</td>
+          <td class="lbl-en2">District:</td><td class="val-en2">{{ doc.buyer.district if doc.buyer and doc.buyer.district else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lbl-en2">Postal Code:</td><td class="val-en2">{{ doc.buyer.postal_code if doc.buyer and doc.buyer.postal_code else '—' }}</td>
+          <td class="lbl-en2">Country:</td><td class="val-en2">{{ doc.buyer.country if doc.buyer and doc.buyer.country else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lbl-en2">VAT Number:</td><td class="val-en2">{{ doc.buyer.vat_number if doc.buyer and doc.buyer.vat_number else '—' }}</td>
+          <td class="lbl-en2">CRN:</td><td class="val-en2">{{ doc.buyer.crn if doc.buyer and doc.buyer.crn else '—' }}</td>
+        </tr>
+      </table>
+      <table class="party-table party-table-right" style="width:50%;">
+        <tr class="party-hdr-row"><td colspan="4" style="text-align:center;direction:rtl;">تفاصيل شركة العميل</td></tr>
+        <tr><td class="val-ar" colspan="3" style="text-align:justify;">{{ doc.buyer.buyer_name_ar if doc.buyer and doc.buyer.buyer_name_ar else '—' }}</td><td class="lbl-ar">الاسم:</td></tr>
+        <tr><td class="val-ar" colspan="3" style="text-align:justify;">{{ doc.buyer.street_name_ar if doc.buyer and doc.buyer.street_name_ar else '—' }}</td><td class="lbl-ar">اسم الشارع:</td></tr>
+        <tr>
+          <td class="val-ar2">{{ doc.buyer.city_ar if doc.buyer and doc.buyer.city_ar else (doc.buyer.city if doc.buyer else '—') }}</td><td class="lbl-ar2">المدينة:</td>
+          <td class="val-ar2">{{ (doc.buyer.building_number | ar_digits) if doc.buyer and doc.buyer.building_number else '—' }}</td><td class="lbl-ar2">رقم المبنى:</td>
+        </tr>
+        <tr>
+          <td class="val-ar2">{{ doc.buyer.district_ar if doc.buyer and doc.buyer.district_ar else (doc.buyer.district if doc.buyer else '—') }}</td><td class="lbl-ar2">الحي:</td>
+          <td class="val-ar2">{{ (doc.buyer.additional_number | ar_digits) if doc.buyer and doc.buyer.additional_number else '—' }}</td><td class="lbl-ar2">الرقم الإضافي:</td>
+        </tr>
+        <tr>
+          <td class="val-ar2">{{ doc.buyer.country_ar if doc.buyer and doc.buyer.country_ar else (doc.buyer.country if doc.buyer else '—') }}</td><td class="lbl-ar2">البلد:</td>
+          <td class="val-ar2">{{ (doc.buyer.postal_code | ar_digits) if doc.buyer and doc.buyer.postal_code else '—' }}</td><td class="lbl-ar2">الرمز البريدي:</td>
+        </tr>
+        <tr>
+          <td class="val-ar2">{{ (doc.buyer.crn | ar_digits) if doc.buyer and doc.buyer.crn else '—' }}</td><td class="lbl-ar2">معرف آخر:</td>
+          <td class="val-ar2">{{ (doc.buyer.vat_number | ar_digits) if doc.buyer and doc.buyer.vat_number else '—' }}</td><td class="lbl-ar2">الرقم الضريبي:</td>
+        </tr>
+      </table>
+    </div>
+
+    {# Items #}
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Description<small>الوصف</small></th>
+          <th>UoM<small>وحدة القياس</small></th>
+          <th>Quantity<small>الكمية</small></th>
+          <th>Rate<small>سعر الوحدة</small></th>
+          <th>Discount<small>الخصومات</small></th>
+          <th>Taxable Amount<small>الخاضع للضريبة</small></th>
+          <th>Tax %<small>نسبة الضريبة</small></th>
+          <th>Tax Amount<small>مبلغ الضريبة</small></th>
+          <th>Total with Tax<small>الإجمالي مع الضريبة</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for li in item_rows %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="desc-cell">{{ li.description or '—' }}</td>
+          <td>{{ li.uom|upper or '—' }}</td>
+          <td>{{ '{:,.2f}'.format(li.quantity) }}</td>
+          <td>{{ '{:,.2f}'.format(li.rate) }}</td>
+          <td>{{ '{:,.2f}'.format(li.discount) if li.discount else '-' }}</td>
+          <td>{{ '{:,.2f}'.format(li.taxable) }}</td>
+          <td>{{ li.tax_pct }}</td>
+          <td>{{ '{:,.2f}'.format(li.tax_amount) }}</td>
+          <td style="font-weight:700;">{{ '{:,.2f}'.format(li.total) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" style="text-align:center;padding:14px;color:#9ca3af;">No items</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="nothing-follows">***** Nothing follow / لا شيء يتبع *****</div>
+
+    {# QR + Totals: one shared table grid, QR is a rowspan cell so it can never exceed the frame #}
+    <table class="totals-table">
+      <tr>
+        <td class="tt-qr" rowspan="7">{% if qr_b64 %}<img src="data:image/png;base64,{{ qr_b64 }}" alt="QR">{% endif %}</td>
+        <td class="tt-en">Gross Total (SAR)</td><td class="tt-val">{{ '{:,.2f}'.format(doc.total_before_discount or 0) }}</td><td class="tt-ar">الإجمالي العام (ريال&nbsp;سعودي)</td>
+      </tr>
+      <tr><td class="tt-en">Total Discount (SAR)</td><td class="tt-val">{{ '{:,.2f}'.format(doc.total_discount or 0) if doc.total_discount else '-' }}</td><td class="tt-ar">إجمالي الخصم (ريال&nbsp;سعودي)</td></tr>
+      <tr><td class="tt-en">Total excl. VAT (SAR)</td><td class="tt-val">{{ '{:,.2f}'.format(doc.total_excl_vat or 0) }}</td><td class="tt-ar">الإجمالي غير شامل ضريبة القيمة المضافة (ريال&nbsp;سعودي)</td></tr>
+      <tr><td class="tt-en">VAT Amount (SAR)</td><td class="tt-val">{{ '{:,.2f}'.format(doc.vat_amount or 0) }}</td><td class="tt-ar">مبلغ ضريبة القيمة المضافة (ريال&nbsp;سعودي)</td></tr>
+      <tr><td class="tt-en">Amount Incl. VAT (SAR)</td><td class="tt-val">{{ '{:,.2f}'.format(doc.total_incl_vat or 0) }}</td><td class="tt-ar">المبلغ شاملاً ضريبة القيمة المضافة (ريال&nbsp;سعودي)</td></tr>
+      <tr><td class="tt-en">Less: 0% Retention (SAR)</td><td class="tt-val">-</td><td class="tt-ar">يُخصم: 0% مبالغ محتجزة (ريال&nbsp;سعودي)</td></tr>
+      <tr class="tt-bold"><td class="tt-en">Balance Due (SAR)</td><td class="tt-val">{{ '{:,.2f}'.format(doc.total_incl_vat or 0) }}</td><td class="tt-ar">الرصيد المستحق (ريال&nbsp;سعودي)</td></tr>
+    </table>
+
+    {# Amount in words #}
+    <div class="words-box">
+      <div>Amount in words: {{ amount_in_words_en }}</div>
+      <div class="ar-line">{{ amount_in_words_ar }}</div>
+    </div>
+
+    <div class="disclaimer">*This is a computer generated document, no Signature required.</div>
+
+    <div class="f-footer">
+      {%- set faddr_en = [owner.street_name, owner.district, owner.country] | select | join(', ') if owner else '' -%}
+      {%- set faddr_ar = [owner.street_name_ar, owner.district_ar, owner.country_ar] | select | join('، ') if owner else '' -%}
+      {% if faddr_en %}<div>{{ faddr_en }} {% if owner and owner.phone %}Tel: {{ owner.phone }}{% endif %} {% if owner and owner.postal_code %}Postal Code: {{ owner.postal_code }}{% endif %} {% if owner and owner.additional_number %}Add. No: {{ owner.additional_number }}{% endif %}</div>{% endif %}
+      {% if faddr_ar %}<div style="direction:rtl;">{{ faddr_ar }}</div>{% endif %}
+    </div>
+
+  </div>
+</div>
+<script>
+{% if not is_preview %}
+window.addEventListener('load', function () { window.print(); });
+{% endif %}
+</script>
+</body>
+</html>

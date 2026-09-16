@@ -66,6 +66,8 @@
 .acc-head-icon.bank{background:#fff7ed;color:#ea580c;}
 .acc-head-icon.docs{background:#faf5ff;color:#7c3aed;}
 .acc-head-icon.warehouse{background:#ecfeff;color:#0891b2;}
+.acc-head-icon.email{background:#eef2ff;color:#4f46e5;}
+.acc-head-icon.report{background:#fffbeb;color:#d97706;}
 
 .doc-add-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;background:#7c3aed;color:#fff;font-size:12.5px;font-weight:700;transition:all .15s;margin-bottom:16px;}
 .doc-add-btn:hover{background:#6d28d9;transform:translateY(-1px);box-shadow:0 3px 10px rgba(124,58,237,.3);}
@@ -288,54 +290,7 @@ input[type=color].c-swatch{width:40px;height:38px;padding:2px;border:1.5px solid
               </div>
 
               <div class="fg-2">
-                <div>
-                  <div class="mono-lbl">{{ dual('email') }} <span class="req">*</span></div>
-                  <input type="email" name="email" id="f_email" class="sf-inp" dir="ltr" placeholder="info@company.com" oninput="validateEmail(this)">
-                  <div class="sf-err" id="err_email"><i class="fas fa-exclamation-circle"></i><span>{{ t('invalid_email') }}</span></div>
-                </div>
                 <div><div class="mono-lbl">{{ dual('website') }}</div><input type="text" name="website" id="f_website" class="sf-inp" dir="ltr" placeholder="www.company.com"></div>
-              </div>
-
-              <div style="font-weight:700;color:#374151;font-size:12px;margin-top:8px;border-top:1px solid #e5e7eb;padding-top:12px;">
-                <i class="fas fa-paper-plane me-1"></i>{{ dual('smtp_config') }}
-              </div>
-              <div class="fg-2">
-                <div>
-                  <div class="mono-lbl">SMTP Host</div>
-                  <input type="text" name="smtp_host" id="f_smtp_host" class="sf-inp" dir="ltr" placeholder="smtp.gmail.com">
-                </div>
-                <div>
-                  <div class="mono-lbl">SMTP Port</div>
-                  <input type="number" name="smtp_port" id="f_smtp_port" class="sf-inp" dir="ltr" placeholder="587" value="587">
-                </div>
-              </div>
-              <div class="fg-2">
-                <div>
-                  <div class="mono-lbl">SMTP {{ t('username') }}</div>
-                  <input type="text" name="smtp_username" id="f_smtp_username" class="sf-inp" dir="ltr" placeholder="info@company.com">
-                </div>
-                <div>
-                  <div class="mono-lbl">SMTP {{ t('password') }}</div>
-                  <input type="password" name="smtp_password" id="f_smtp_password" class="sf-inp" dir="ltr" placeholder="{{ t('leave_blank_pw') }}" autocomplete="new-password">
-                  <div class="sf-hint" id="smtp_pw_hint" style="font-size:11px;color:#6b7280;margin-top:3px;display:none;"><i class="fas fa-check-circle text-success"></i> {{ t('pw_already_set') }}</div>
-                </div>
-              </div>
-              <div class="fg-2">
-                <div style="display:flex;align-items:center;gap:8px;padding-top:6px;">
-                  <input type="checkbox" name="smtp_use_tls" id="f_smtp_use_tls" checked style="width:16px;height:16px;">
-                  <label for="f_smtp_use_tls" class="mono-lbl" style="margin:0;">{{ t('use_tls') }}</label>
-                </div>
-                <div></div>
-              </div>
-
-              <div class="fg-2">
-                <div>
-                  <div class="mono-lbl">{{ dual('report_color') }} <span class="req">*</span></div>
-                  <div class="color-wrap">
-                    <input type="text" name="report_color" id="f_rcolor" class="sf-inp" dir="ltr" value="#16a34a">
-                    <input type="color" id="f_rswatch" class="c-swatch" value="#16a34a" oninput="document.getElementById('f_rcolor').value=this.value">
-                  </div>
-                </div>
                 <div>
                   <div class="mono-lbl">{{ dual('second_language') }} <span class="req">*</span>
                     {% if not current_user.is_super_admin %}<i class="fas fa-lock ms-1" title="{{ t('second_lang_locked') }}" style="font-size:11px;color:#94a3b8;"></i>{% endif %}
@@ -349,65 +304,10 @@ input[type=color].c-swatch{width:40px;height:38px;padding:2px;border:1.5px solid
                   </select>
                 </div>
               </div>
-              <div class="fg-2">
-                <div>
-                  <div class="mono-lbl">{{ dual('logo') }}</div>
-                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="logoName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="logo" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'logoName')"></label>
-                </div>
-                <div>
-                  <div class="mono-lbl">{{ dual('bg_logo') }}</div>
-                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="bgLogoName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="bg_logo" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'bgLogoName')"></label>
-                </div>
-              </div>
-              <div class="fg-3">
-                <div>
-                  <div class="mono-lbl">{{ dual('header') }}</div>
-                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="headerName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="header" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'headerName')"></label>
-                </div>
-                <div>
-                  <div class="mono-lbl">{{ dual('footer') }}</div>
-                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="footerName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="footer" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'footerName')"></label>
-                </div>
-                <div>
-                  <div class="mono-lbl">{{ dual('stamp') }}</div>
-                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="stampName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="stamp" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'stampName')"></label>
-                </div>
-              </div>
             </div><!-- /body-basic -->
           </div><!-- /sec-basic -->
 
-          <!-- SECTION 2: WAREHOUSES -->
-          <div class="acc-section" id="sec-warehouse">
-            <div class="acc-head" onclick="toggleSection('warehouse')">
-              <div class="acc-head-left">
-                <div class="acc-head-icon warehouse"><i class="fas fa-warehouse"></i></div>
-                <div class="acc-head-title">{{ t('warehouses') }}<span class="ar-sub">{{ t_other('warehouses') }}</span>
-                  <span id="whCountBadge" style="background:#0891b2;color:#fff;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-inline-start:8px;display:none;">0</span>
-                </div>
-              </div>
-              <i class="fas fa-chevron-down acc-chevron" id="chev-warehouse"></i>
-            </div>
-            <div class="acc-body" id="body-warehouse">
-              <button type="button" class="bank-add-btn" style="background:#0891b2;" onclick="openWhModal()">
-                <i class="fas fa-plus"></i>{{ dual('add_warehouse') }}
-              </button>
-              <div id="whTblWrap" class="bank-tbl-wrap" style="display:none;">
-                <table class="bank-tbl">
-                  <thead><tr>
-                    <th>{{ dual('warehouse_field') }}</th>
-                    <th>{{ dual('location') }}</th>
-                    <th>{{ dual('actions_col') }}</th>
-                  </tr></thead>
-                  <tbody id="whTblBody"></tbody>
-                </table>
-              </div>
-              <div id="whEmptyMsg" class="bank-empty">
-                <i class="fas fa-warehouse"></i>{{ dual('no_warehouses_added') }}
-              </div>
-            </div><!-- /body-warehouse -->
-          </div><!-- /sec-warehouse -->
-
-          <!-- SECTION 3: ADDRESS INFORMATION -->
+          <!-- SECTION 2: ADDRESS INFORMATION -->
           <div class="acc-section" id="sec-address">
             <div class="acc-head" onclick="toggleSection('address')">
               <div class="acc-head-left">
@@ -467,7 +367,145 @@ input[type=color].c-swatch{width:40px;height:38px;padding:2px;border:1.5px solid
             </div><!-- /body-address -->
           </div><!-- /sec-address -->
 
-          <!-- SECTION 4: BANK INFORMATION -->
+          <!-- SECTION 3: EMAIL CONFIGURATION -->
+          <div class="acc-section" id="sec-email">
+            <div class="acc-head" onclick="toggleSection('email')">
+              <div class="acc-head-left">
+                <div class="acc-head-icon email"><i class="fas fa-envelope"></i></div>
+                <div><div class="acc-head-title">{{ t('email_configuration') }}<span class="ar-sub">{{ t_other('email_configuration') }}</span></div></div>
+              </div>
+              <i class="fas fa-chevron-down acc-chevron" id="chev-email"></i>
+            </div>
+            <div class="acc-body" id="body-email">
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">{{ dual('email') }} <span class="req">*</span></div>
+                  <input type="email" name="email" id="f_email" class="sf-inp" dir="ltr" placeholder="info@company.com" oninput="validateEmail(this)">
+                  <div class="sf-err" id="err_email"><i class="fas fa-exclamation-circle"></i><span>{{ t('invalid_email') }}</span></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding-top:6px;">
+                  <input type="checkbox" name="smtp_use_tls" id="f_smtp_use_tls" checked style="width:16px;height:16px;">
+                  <label for="f_smtp_use_tls" class="mono-lbl" style="margin:0;">{{ t('use_tls') }}</label>
+                </div>
+              </div>
+
+              <div style="font-weight:700;color:#374151;font-size:12px;margin-top:8px;border-top:1px solid #e5e7eb;padding-top:12px;">
+                <i class="fas fa-paper-plane me-1"></i>{{ dual('smtp_config') }}
+              </div>
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">SMTP Host</div>
+                  <input type="text" name="smtp_host" id="f_smtp_host" class="sf-inp" dir="ltr" placeholder="smtp.gmail.com">
+                </div>
+                <div>
+                  <div class="mono-lbl">SMTP Port</div>
+                  <input type="number" name="smtp_port" id="f_smtp_port" class="sf-inp" dir="ltr" placeholder="587" value="587">
+                </div>
+              </div>
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">SMTP {{ t('username') }}</div>
+                  <input type="text" name="smtp_username" id="f_smtp_username" class="sf-inp" dir="ltr" placeholder="info@company.com">
+                </div>
+                <div>
+                  <div class="mono-lbl">SMTP {{ t('password') }}</div>
+                  <input type="password" name="smtp_password" id="f_smtp_password" class="sf-inp" dir="ltr" placeholder="{{ t('leave_blank_pw') }}" autocomplete="new-password">
+                  <div class="sf-hint" id="smtp_pw_hint" style="font-size:11px;color:#6b7280;margin-top:3px;display:none;"><i class="fas fa-check-circle text-success"></i> {{ t('pw_already_set') }}</div>
+                </div>
+              </div>
+            </div><!-- /body-email -->
+          </div><!-- /sec-email -->
+
+          <!-- SECTION 4: REPORT AND PRINT -->
+          <div class="acc-section" id="sec-report">
+            <div class="acc-head" onclick="toggleSection('report')">
+              <div class="acc-head-left">
+                <div class="acc-head-icon report"><i class="fas fa-print"></i></div>
+                <div><div class="acc-head-title">{{ t('report_and_print') }}<span class="ar-sub">{{ t_other('report_and_print') }}</span></div></div>
+              </div>
+              <i class="fas fa-chevron-down acc-chevron" id="chev-report"></i>
+            </div>
+            <div class="acc-body" id="body-report">
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">{{ dual('report_color') }} <span class="req">*</span></div>
+                  <div class="color-wrap">
+                    <input type="text" name="report_color" id="f_rcolor" class="sf-inp" dir="ltr" value="#16a34a">
+                    <input type="color" id="f_rswatch" class="c-swatch" value="#16a34a" oninput="document.getElementById('f_rcolor').value=this.value">
+                  </div>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('sinv_print_template') }}</div>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <select name="sinv_print_template" id="f_sinv_print_template" class="sf-inp" dir="ltr" style="flex:1;">
+                      <option value="formal">{{ dual('print_template_formal') }}</option>
+                      <option value="default1">{{ dual('print_template_default1') }}</option>
+                      <option value="classic">{{ dual('print_template_classic') }}</option>
+                      <option value="letterhead">{{ dual('print_template_letterhead') }}</option>
+                    </select>
+                    <button type="button" class="bank-add-btn" style="background:#2563eb;margin-bottom:0;white-space:nowrap;" onclick="previewSinvTemplate()"><i class="fas fa-eye"></i>{{ dual('preview') }}</button>
+                  </div>
+                </div>
+              </div>
+              <div class="fg-2">
+                <div>
+                  <div class="mono-lbl">{{ dual('logo') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="logoName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="logo" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'logoName')"></label>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('bg_logo') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="bgLogoName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="bg_logo" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'bgLogoName')"></label>
+                </div>
+              </div>
+              <div class="fg-3">
+                <div>
+                  <div class="mono-lbl">{{ dual('header') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="headerName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="header" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'headerName')"></label>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('footer') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="footerName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="footer" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'footerName')"></label>
+                </div>
+                <div>
+                  <div class="mono-lbl">{{ dual('stamp') }}</div>
+                  <label class="file-lbl"><i class="fas fa-cloud-upload-alt"></i><span id="stampName" class="file-name">{{ t('choose_file') }}</span><input type="file" name="stamp" accept=".jpg,.jpeg,.png" class="d-none" onchange="setFName(this,'stampName')"></label>
+                </div>
+              </div>
+            </div><!-- /body-report -->
+          </div><!-- /sec-report -->
+
+          <!-- SECTION 5: WAREHOUSES -->
+          <div class="acc-section" id="sec-warehouse">
+            <div class="acc-head" onclick="toggleSection('warehouse')">
+              <div class="acc-head-left">
+                <div class="acc-head-icon warehouse"><i class="fas fa-warehouse"></i></div>
+                <div class="acc-head-title">{{ t('warehouses') }}<span class="ar-sub">{{ t_other('warehouses') }}</span>
+                  <span id="whCountBadge" style="background:#0891b2;color:#fff;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-inline-start:8px;display:none;">0</span>
+                </div>
+              </div>
+              <i class="fas fa-chevron-down acc-chevron" id="chev-warehouse"></i>
+            </div>
+            <div class="acc-body" id="body-warehouse">
+              <button type="button" class="bank-add-btn" style="background:#0891b2;" onclick="openWhModal()">
+                <i class="fas fa-plus"></i>{{ dual('add_warehouse') }}
+              </button>
+              <div id="whTblWrap" class="bank-tbl-wrap" style="display:none;">
+                <table class="bank-tbl">
+                  <thead><tr>
+                    <th>{{ dual('warehouse_field') }}</th>
+                    <th>{{ dual('location') }}</th>
+                    <th>{{ dual('actions_col') }}</th>
+                  </tr></thead>
+                  <tbody id="whTblBody"></tbody>
+                </table>
+              </div>
+              <div id="whEmptyMsg" class="bank-empty">
+                <i class="fas fa-warehouse"></i>{{ dual('no_warehouses_added') }}
+              </div>
+            </div><!-- /body-warehouse -->
+          </div><!-- /sec-warehouse -->
+
+          <!-- SECTION 6: BANK INFORMATION -->
           <div class="acc-section" id="sec-bank">
             <div class="acc-head" onclick="toggleSection('bank')">
               <div class="acc-head-left">
@@ -696,6 +734,16 @@ function toggleSection(key){
   const isOpen = sec.classList.contains('open');
   sec.classList.toggle('open', !isOpen);
   chev.className = 'fas acc-chevron ' + (isOpen ? 'fa-chevron-down' : 'fa-chevron-up');
+}
+
+/* Opens the most recent Sales Invoice's print view using whichever
+   template is CURRENTLY selected in the dropdown -- even if that choice
+   hasn't been saved yet -- so a template can be compared visually before
+   committing to it. */
+function previewSinvTemplate(){
+  const sel = document.getElementById('f_sinv_print_template');
+  const template = sel ? sel.value : 'formal';
+  window.open('/sales/invoices/preview-template?template=' + encodeURIComponent(template), '_blank');
 }
 
 const _T={}, _B={};
@@ -1044,6 +1092,7 @@ function clearAllFields(){
   const sw=document.getElementById('f_rswatch');if(sw)sw.value='#16a34a';
   const st=document.getElementById('f_status');if(st)st.value='active';
   const sl=document.getElementById('f_second_language');if(sl)sl.value='Arabic';
+  const pt=document.getElementById('f_sinv_print_template');if(pt)pt.value='formal';
   ['logoName','bgLogoName','headerName','footerName','stampName'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=I18N.chooseFile;});
   document.querySelectorAll('.sf-spin').forEach(e=>e.innerHTML='');
   _banks=[];_bankSeq=0;renderBankTable();
@@ -1097,6 +1146,7 @@ function openEditModal(id){
     document.getElementById('f_additional').value = d.additional_number||'';
     document.getElementById('f_postal').value     = d.postal_code||'';
     const sl=document.getElementById('f_second_language');if(sl)sl.value=d.second_language||'Arabic';
+    const pt=document.getElementById('f_sinv_print_template');if(pt)pt.value=d.sinv_print_template||'formal';
     _banks=(d.banks||[]).map(b=>({...b,bank_name_ar:b.bank_name_ar||'',_dbId:b.id}));
     renderBankTable();
     fetch('/owners/'+id+'/warehouses').then(r=>r.json()).then(list=>{

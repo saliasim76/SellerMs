@@ -46,6 +46,11 @@
     <a href="{{ url_for('sales.sinv_list') }}" class="btn-act" style="background:white;color:#374151;border:1.5px solid #d1d5db;"><i class="fas fa-arrow-left"></i>{% if ar %}رجوع{% else %}Back{% endif %}</a>
     
     <a href="{{ url_for('sales.sinv_print', id=doc.sales_invoice_id) }}" target="_blank" class="btn-act" style="background:#2563eb;color:white;"><i class="fas fa-print"></i>{% if ar %}طباعة{% else %}Print{% endif %}</a>
+    {% if (doc.zatca_status or 'not_generated') == 'not_generated' and doc.posting_status == 'Posted' %}
+    <button type="button" class="btn-act" style="background:#1e3a5f;color:white;" onclick="createZatcaInvoice({{ doc.sales_invoice_id }})">
+      <i class="fas fa-shield-halved"></i>{% if ar %}إنشاء فاتورة زاتكا{% else %}Create ZATCA Invoice{% endif %}
+    </button>
+    {% endif %}
   </div>
 
   {# Hero #}
@@ -54,7 +59,7 @@
       <h3><i class="fas fa-file-invoice me-2"></i>{{ doc.doc_no }}</h3>
       <div>
         <span class="pur-vbadge {{ doc.status }}">{{ doc.status }}</span>
-        {% if doc.buyer_name %}<span class="pur-vbadge"><i class="fas fa-store" style="font-size:9px;"></i>{{ doc.buyer_name }}</span>{% endif %}
+        {% if doc.buyer %}<span class="pur-vbadge"><i class="fas fa-store" style="font-size:9px;"></i>{{ doc.buyer.buyer_name_en }}</span>{% endif %}
       </div>
     </div>
     <div style="text-align:right;">
@@ -70,7 +75,7 @@
       <div class="d-grid">
         <div>
           <div class="d-row"><div class="d-lbl">{% if ar %}رقم المستند{% else %}Doc No{% endif %}</div><div class="d-val hi">{{ doc.doc_no }}</div></div>
-          <div class="d-row"><div class="d-lbl">{% if ar %}رقم أمر البيع{% else %}PO No{% endif %}</div><div class="d-val">{{ doc.so_doc_no or '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}رقم أمر البيع{% else %}SO No{% endif %}</div><div class="d-val">{{ doc.sales_order.doc_no if doc.sales_order else '—' }}</div></div>
           <div class="d-row"><div class="d-lbl">{% if ar %}رقم مرجع المشتري{% else %}Buyer Ref{% endif %}</div><div class="d-val">{{ doc.buyer_ref_no or '—' }}</div></div>
         </div>
         <div>
@@ -79,9 +84,9 @@
           <div class="d-row"><div class="d-lbl">{% if ar %}تاريخ المستند{% else %}Doc Date{% endif %}</div><div class="d-val">{{ doc.document_date.strftime('%d %b %Y') if doc.document_date else '—' }}</div></div>
         </div>
         <div>
-          <div class="d-row"><div class="d-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}</div><div class="d-val">{{ doc.buyer_name or '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}المشتري{% else %}Buyer{% endif %}</div><div class="d-val">{{ doc.buyer.buyer_name_en if doc.buyer else '—' }}</div></div>
           <div class="d-row"><div class="d-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div><div class="d-val">{{ doc.status }}</div></div>
-          <div class="d-row"><div class="d-lbl">{% if ar %}ملاحظات{% else %}Remarks{% endif %}</div><div class="d-val">{{ doc.remarks or '—' }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}حالة الترحيل{% else %}Posting Status{% endif %}</div><div class="d-val">{{ doc.posting_status }}</div></div>
         </div>
       </div>
     </div>
@@ -89,12 +94,12 @@
 
   {# Line Items #}
   <div class="info-card">
-    <div class="ic-hdr"><i class="fas fa-list-ul"></i><span>{% if ar %}بنود الفاتورة{% else %}Invoice Items{% endif %} <span style="background:#eff6ff;color:#2563eb;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:6px;">{{ doc.items|length if doc.items else 0 }}</span></span></div>
+    <div class="ic-hdr"><i class="fas fa-list-ul"></i><span>{% if ar %}بنود الفاتورة{% else %}Invoice Items{% endif %} <span style="background:#eff6ff;color:#2563eb;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:6px;">{{ items|length }}</span></span></div>
     <div style="overflow-x:auto;padding:0;">
       <table class="li-vt">
         <thead><tr>
           <th>#</th><th>{% if ar %}الكود{% else %}Code{% endif %}</th><th>{% if ar %}الاسم{% else %}Name{% endif %}</th>
-          <th>{% if ar %}تاريخ الحاجة{% else %}Req. Date{% endif %}</th><th>{% if ar %}المستودع{% else %}Warehouse{% endif %}</th>
+          <th>{% if ar %}المستودع{% else %}Warehouse{% endif %}</th>
           <th>UoM</th><th style="text-align:right;">{% if ar %}الكمية{% else %}Qty{% endif %}</th>
           <th style="text-align:right;">{% if ar %}السعر{% else %}Rate{% endif %}</th>
           <th style="text-align:right;">{% if ar %}الخصم{% else %}Disc.{% endif %}</th>
@@ -105,12 +110,11 @@
           <th style="text-align:right;">{% if ar %}الإجمالي{% else %}Total{% endif %}</th>
         </tr></thead>
         <tbody>
-          {% for li in doc.items %}
+          {% for li in items %}
           <tr>
             <td style="color:#9ca3af;">{{ loop.index }}</td>
             <td>{{ li.item_code or '—' }}</td>
-            <td><strong>{{ li.item_desc or '—' }}</strong></td>
-            <td>{{ li.required_date.strftime('%d/%m/%Y') if li.required_date else '—' }}</td>
+            <td><strong>{{ li.description or '—' }}</strong></td>
             <td>{{ li.warehouse or '—' }}</td>
             <td>{{ li.uom|upper }}</td>
             <td style="text-align:right;">{{ '{:,.2f}'.format(li.quantity or 0) }}</td>
@@ -123,22 +127,64 @@
             <td style="text-align:right;font-weight:700;color:#166534;">{{ '{:,.2f}'.format(li.total or 0) }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="14" style="text-align:center;padding:20px;color:#9ca3af;">{% if ar %}لا توجد بنود{% else %}No items{% endif %}</td></tr>
+          <tr><td colspan="13" style="text-align:center;padding:20px;color:#9ca3af;">{% if ar %}لا توجد بنود{% else %}No items{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 
+  {# ZATCA e-Invoice #}
+  <div class="info-card">
+    <div class="ic-hdr"><i class="fas fa-qrcode"></i><span>{% if ar %}الفوترة الإلكترونية (زاتكا){% else %}ZATCA e-Invoice{% endif %}</span></div>
+    <div class="ic-body">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+        <div style="flex:1;min-width:220px;">
+          <div class="d-row"><div class="d-lbl">{% if ar %}الحالة{% else %}Status{% endif %}</div><div class="d-val">
+            <span class="pur-vbadge" style="background:{{ '#dcfce7;color:#15803d' if doc.zatca_status in ('generated','cleared') else ('#fee2e2;color:#991b1b' if doc.zatca_status=='failed' else '#f1f5f9;color:#6b7280') }};">{{ doc.zatca_status or 'not_generated' }}</span>
+          </div></div>
+          {% if doc.zatca_uuid %}
+          <div class="d-row"><div class="d-lbl">UUID</div><div class="d-val" style="font-size:11px;">{{ doc.zatca_uuid }}</div></div>
+          <div class="d-row"><div class="d-lbl">ICV</div><div class="d-val">{{ doc.zatca_icv }}</div></div>
+          <div class="d-row"><div class="d-lbl">{% if ar %}نوع الإرسال{% else %}Submission Type{% endif %}</div><div class="d-val">{{ doc.zatca_submission_type or '—' }}</div></div>
+          {% if zatca_attachment %}
+          <div class="d-row"><div class="d-lbl">XML</div><div class="d-val">
+            <a href="{{ url_for('sales.sales_attachment_download', att_id=zatca_attachment.id) }}" class="att-chip"><i class="fas fa-file-code"></i>{{ zatca_attachment.filename }}</a>
+          </div></div>
+          {% endif %}
+          {% if doc.zatca_response_message %}
+          <div class="d-row"><div class="d-lbl">{% if ar %}الرسالة{% else %}Message{% endif %}</div><div class="d-val" style="font-size:12px;color:#6b7280;">{{ doc.zatca_response_message }}</div></div>
+          {% endif %}
+          {% else %}
+          <p style="font-size:13px;color:#6b7280;margin:6px 0 12px;">
+            {% if ar %}لم يتم إنشاء فاتورة زاتكا لهذا المستند بعد.{% else %}No ZATCA invoice has been created for this document yet.{% endif %}
+          </p>
+          {% if doc.posting_status != 'Posted' %}
+          <p style="font-size:12px;color:#b45309;"><i class="fas fa-exclamation-triangle me-1"></i>{% if ar %}يجب ترحيل الفاتورة أولاً.{% else %}The invoice must be Posted first.{% endif %}</p>
+          {% else %}
+          <p style="font-size:12px;color:#6b7280;"><i class="fas fa-arrow-up me-1"></i>{% if ar %}استخدم زر "إنشاء فاتورة زاتكا" أعلى الصفحة.{% else %}Use the "Create ZATCA Invoice" button at the top of the page.{% endif %}</p>
+          {% endif %}
+          {% endif %}
+        </div>
+        {% if qr_b64 %}
+        <div style="text-align:center;">
+          <img src="data:image/png;base64,{{ qr_b64 }}" alt="ZATCA QR" style="width:140px;height:140px;">
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;">{{ 'ZATCA Phase 2' if doc.zatca_invoice_hash else 'ZATCA Phase 1' }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
   {# Summary + Attachments #}
   <div style="display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:0;">
     <div>
-      {% if doc.attachments %}
+      {% if attachments %}
       <div class="info-card">
-        <div class="ic-hdr"><i class="fas fa-paperclip"></i><span>{% if ar %}المرفقات{% else %}Attachments{% endif %} ({{ doc.attachments|length }})</span></div>
+        <div class="ic-hdr"><i class="fas fa-paperclip"></i><span>{% if ar %}المرفقات{% else %}Attachments{% endif %} ({{ attachments|length }})</span></div>
         <div class="ic-body">
-          {% for a in doc.attachments %}
-          <span class="att-chip"><i class="fas fa-file"></i>{{ a.filename }}</span>
+          {% for a in attachments %}
+          <a href="{{ url_for('sales.sales_attachment_download', att_id=a.id) }}" class="att-chip"><i class="fas fa-file"></i>{{ a.filename }}</a>
           {% endfor %}
         </div>
       </div>
@@ -150,13 +196,29 @@
       <div class="sum-row"><span>{% if ar %}الخصم{% else %}Total discount{% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_discount or 0) }}</span></div>
       <div class="sum-row"><span>{% if ar %}الشحن{% else %}Freight{% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_freight or 0) }}</span></div>
       <div class="sum-row"><span>{% if ar %}بدون ضريبة{% else %}Excl. VAT (SAR){% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_excl_vat or 0) }}</span></div>
-      <div class="sum-row"><span>{% if ar %}ضريبة القيمة المضافة{% else %}VAT Amount (SAR){% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.total_vat or 0) }}</span></div>
+      <div class="sum-row"><span>{% if ar %}ضريبة القيمة المضافة{% else %}VAT Amount (SAR){% endif %}</span><span style="font-weight:600;">SAR {{ '{:,.2f}'.format(doc.vat_amount or 0) }}</span></div>
       <div class="sum-total"><span style="font-weight:700;">{% if ar %}الإجمالي شامل الضريبة{% else %}Total Incl. VAT{% endif %}</span><span style="font-size:18px;font-weight:800;">SAR {{ '{:,.2f}'.format(doc.total_incl_vat or 0) }}</span></div>
       <div style="margin-top:10px;display:flex;justify-content:space-between;font-size:13px;">
         <span style="color:#374151;">{% if ar %}المرفقات{% else %}Documents Attached{% endif %}</span>
-        <span style="background:#eff6ff;color:#2563eb;padding:2px 12px;border-radius:10px;font-size:12px;font-weight:700;">{{ doc.attachments|length if doc.attachments else 0 }}</span>
+        <span style="background:#eff6ff;color:#2563eb;padding:2px 12px;border-radius:10px;font-size:12px;font-weight:700;">{{ attachments|length }}</span>
       </div>
     </div>
   </div>
 </div>
+<script>
+function createZatcaInvoice(id) {
+  if (!confirm('{% if ar %}هل تريد إنشاء فاتورة زاتكا لهذا المستند؟ لا يمكن التراجع عن هذا الإجراء.{% else %}Create a ZATCA invoice for this document? This cannot be undone.{% endif %}')) return;
+  fetch('/sales/invoices/' + id + '/zatca/generate', {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token() }}'},
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { location.reload(); }
+    else {
+      let msg = d.error || 'Failed to create ZATCA invoice';
+      if (d.onboarding_required) msg += '\n\n{% if ar %}اذهب إلى إعدادات زاتكا لإكمال التسجيل.{% else %}Go to ZATCA Settings to complete onboarding.{% endif %}';
+      alert(msg);
+    }
+  }).catch(e => alert('Error: ' + e.message));
+}
+</script>
 {% endblock %}

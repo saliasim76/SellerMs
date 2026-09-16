@@ -486,6 +486,7 @@ def ledger_export_excel():
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
+    from database.routes.shared import xlsx_safe
 
     p = _ledger_request_params()
     if not p['account_code']:
@@ -500,7 +501,7 @@ def ledger_export_excel():
     wb = Workbook()
     ws = wb.active
     ws.title = 'Ledger'
-    ws.append([f'Account: {account.code} - {account.drawers or ""}'])
+    ws.append([f'Account: {account.code} - {xlsx_safe(account.drawers) or ""}'])
     ws.append([f'From: {p["from_date"].isoformat() if p["from_date"] else "—"}   '
                f'To: {p["to_date"].isoformat() if p["to_date"] else "—"}'])
     ws.append([])
@@ -530,9 +531,9 @@ def ledger_export_excel():
         debit = float(row.debit or 0)
         credit = float(row.credit or 0)
         ws.cell(row=r, column=1, value=row.posting_date.isoformat() if row.posting_date else '')
-        ws.cell(row=r, column=2, value=row.origin_type or '')
-        ws.cell(row=r, column=3, value=row.origion or '')
-        ws.cell(row=r, column=4, value=(row.line_narration or row.je_narration or row.refrence or ''))
+        ws.cell(row=r, column=2, value=xlsx_safe(row.origin_type) or '')
+        ws.cell(row=r, column=3, value=xlsx_safe(row.origion) or '')
+        ws.cell(row=r, column=4, value=xlsx_safe(row.line_narration or row.je_narration or row.refrence or ''))
         if debit:
             ws.cell(row=r, column=5, value=debit).number_format = money_fmt
         if credit:
@@ -573,7 +574,7 @@ def ledger_print():
         credit = float(row.credit or 0)
         balance = round(opening_balance + float(row.cum or 0), 2)
         rows.append({
-            'posting_date': row.posting_date.isoformat() if row.posting_date else '',
+            'posting_date': row.posting_date.strftime('%d-%b-%y') if row.posting_date else '',
             'document_type': row.origin_type or '', 'document_no': row.origion or '',
             'description': (row.line_narration or row.je_narration or row.refrence or ''),
             'debit_display': _fmt_amount(debit, blank_if_zero=True),

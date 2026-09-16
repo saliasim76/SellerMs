@@ -140,7 +140,7 @@ body { display:flex; justify-content:center; font-family:'Segoe UI','Arial',sans
 
   <div class="sign-row">
     <div class="sign-box">{% if ar %}أعده{% else %}Prepared By{% endif %}<br>{{ current_user_name }}</div>
-    <div class="sign-box">{% if ar %}تاريخ الطباعة{% else %}Printed Date/Time{% endif %}<br>{{ printed_at.strftime('%Y-%m-%d %H:%M') }}</div>
+    <div class="sign-box">{% if ar %}تاريخ الطباعة{% else %}Printed Date/Time{% endif %}<br>{{ printed_at.strftime('%d/%m/%Y %H:%M') }}</div>
   </div>
   <div class="print-footer">{% if ar %}الصفحة{% else %}Page{% endif %} 1</div>
 

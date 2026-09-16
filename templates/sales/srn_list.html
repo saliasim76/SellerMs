@@ -389,7 +389,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="srn_kind" class="f-inp" onchange="onSrnKindChange()">
+                  <select id="srn_kind" class="f-inp" onchange="onSrnKindChange()" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من طلب الإرجاع{% else %}Derived from the Sales Return Request{% endif %}">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
@@ -462,7 +462,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
-                  <select id="srn_account_code" class="f-inp" onchange="onPrnAccountCodeChange()" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                  <select id="srn_account_code" class="f-inp" onchange="onPrnAccountCodeChange()" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من طلب الإرجاع{% else %}Derived from the Sales Return Request{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                   </select>
                 </div>
@@ -692,7 +692,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 {% if is_basic_mode %}disabled title="{% if ar %}الترحيل مقفل في الخطة الأساسية{% else %}Posting is locked on the Basic plan{% endif %}"{% endif %}>
           <i class="fas fa-check me-1"></i>{% if ar %}ترحيل وحفظ{% else %}Post & Save{% endif %}
         </button>
-        <button class="btn-f btn-save" onclick="savePRN()">
+        <button class="btn-f btn-save" id="srnSaveBtn" onclick="savePRN()">
           <i class="fas fa-save me-1"></i>{% if ar %}حفظ مذكرة إرجاع البيع{% else %}Save Sale Return Note{% endif %}
         </button>
       </div>
@@ -756,11 +756,25 @@ function grlCollapseSec(){
    once this Sale Return Note has already been posted (duplicate-posting prevention). */
 function grlUpdatePostBtnState(){
   const btn = document.getElementById('grlPostBtn');
-  if(!btn) return;
-  btn.disabled = _prnPosted;
-  btn.style.opacity = _prnPosted ? '0.55' : '1';
-  btn.style.cursor = _prnPosted ? 'not-allowed' : 'pointer';
-  btn.title = _prnPosted ? (IS_AR?'تم ترحيل مذكرة إرجاع البيع هذه مسبقاً.':'This Sale Return Note has already been posted.') : '';
+  const saveBtn = document.getElementById('srnSaveBtn');
+  const statusEl = document.getElementById('srn_status');
+  const notApproved = !_prnPosted && statusEl && statusEl.value !== 'Approved';
+  if(btn){
+    btn.disabled = _prnPosted || notApproved;
+    btn.style.opacity = (_prnPosted || notApproved) ? '0.55' : '1';
+    btn.style.cursor = (_prnPosted || notApproved) ? 'not-allowed' : 'pointer';
+    btn.title = _prnPosted
+      ? (IS_AR?'تم ترحيل مذكرة إرجاع البيع هذه مسبقاً.':'This Sale Return Note has already been posted.')
+      : notApproved
+        ? (IS_AR?'يجب أن تكون الحالة "معتمد" قبل الترحيل.':'Status must be Approved before posting.')
+        : '';
+  }
+  if(saveBtn){
+    saveBtn.disabled = _prnPosted;
+    saveBtn.style.opacity = _prnPosted ? '0.55' : '1';
+    saveBtn.style.cursor = _prnPosted ? 'not-allowed' : 'pointer';
+    saveBtn.title = _prnPosted ? (IS_AR?'تم ترحيل مذكرة إرجاع البيع هذه مسبقاً.':'This Sale Return Note has already been posted.') : '';
+  }
 }
 
 /* ══ Document Number Fetch - FIXED: Ensures proper increment ══ */
@@ -847,6 +861,10 @@ async function onGrrChange() {
     // right Kind (Item Master vs. Level Five) from the start.
     if (srr.kind) document.getElementById('srn_kind').value = srr.kind;
 
+    // ⭐ Auto-fill Account Code from the selected Sales Return Request
+    const srrAccVal = srr.account_code || (TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
+    document.getElementById('srn_account_code').innerHTML = accountCodeOptionsHtml(srrAccVal);
+
     // ⭐ Auto-fill line items from SRR
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0;
@@ -855,6 +873,10 @@ async function onGrrChange() {
     } else {
       addLiRow();
     }
+    // ⭐ Every line's Tax Code follows the header Account Code -- setting
+    // srn_account_code above doesn't fire its own onchange, so this must be
+    // called explicitly once the lines exist.
+    onPrnAccountCodeChange();
     recalcSummary(); updLiCount();
     if(typeof grlPreviewFromSRR==='function') grlPreviewFromSRR(srrId);
   } catch (e) {
@@ -877,6 +899,7 @@ function onPrnStatusChange() {
     postEl.disabled = true;
     postEl.value = '';
   }
+  grlUpdatePostBtnState();
 }
 
 /* ══ Section toggle ══ */
@@ -1086,19 +1109,15 @@ function addLiRow(d) {
   d = d || {};
   const servicesKind = _isServicesKind();
   const item = (!servicesKind && d.item_code) ? _itemMaster.find(it => it.item_code === d.item_code) : null;
-  const codeOptsHtml = servicesKind ? _glCodeOptionsHtml(d.item_code||'') : _itemCodeOptionsHtml(d.item_code||'');
-  const nameOptsHtml = servicesKind ? _glNameOptionsHtml(d.item_code||'') : _itemNameOptionsHtml(d.item_code||'');
+  const desc = d.item_desc || _defaultDescFor(d.item_code||'', servicesKind, item);
   const row = `<tr id="plr_${idx}">
     <td style="text-align:center;color:#9ca3af;font-size:11px;padding:4px;">${_liIdx}</td>
-    <td><select class="li-inp" name="li_item_code[]" id="plic_${idx}" onchange="onLiItemChange(${idx},'code')" style="width:110px;">${codeOptsHtml}</select></td>
-    <td>
-      <select class="li-inp" id="plname_${idx}" onchange="onLiItemChange(${idx},'name')" style="min-width:160px;">${nameOptsHtml}</select>
-      <input type="hidden" name="li_item_desc[]" id="plid_${idx}" value="${d.item_desc||_defaultDescFor(d.item_code||'', servicesKind, item)}">
-    </td>
+    <td><input type="text"   class="li-inp" name="li_item_code[]" id="plic_${idx}" value="${d.item_code||''}" readonly style="width:80px;background:#f3f4f6;"></td>
+    <td><input type="text"   class="li-inp" name="li_item_desc[]" id="plid_${idx}" value="${desc}" readonly style="min-width:130px;background:#f3f4f6;"></td>
     <td><select class="li-inp" name="li_warehouse[]" id="plwh_${idx}" style="min-width:100px;">${_warehouseOptionsHtml(d.warehouse||'')}</select></td>
     <td><select class="li-inp" name="li_uom[]" id="pluom_${idx}" style="width:90px;">${_uomOptionsHtml(item, d.uom)}</select></td>
-    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
-    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||(item?item.main_rate:0)||0}" min="0" step="0.01" oninput="recalcLi(${idx})" style="width:62px;"></td>
+    <td><input type="number" class="li-inp" name="li_qty[]"      id="plq_${idx}"  value="${d.quantity||0}"  readonly style="width:62px;background:#f3f4f6;"></td>
+    <td><input type="number" class="li-inp" name="li_rate[]"     id="plrt_${idx}" value="${d.rate||(item?item.main_rate:0)||0}" readonly style="width:62px;background:#f3f4f6;"></td>
     <td><input type="number" class="li-inp" name="li_discount[]" id="pld_${idx}"  value="${d.discount||0}"  min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
     <td><input type="number" class="li-inp" name="li_freight[]"  id="plf_${idx}"  value="${d.freight||0}"   min="0" step="0.01" oninput="recalcLi(${idx})" style="width:58px;"></td>
     <td><input type="number" class="li-inp" id="plt_${idx}"  name="li_taxable_disp[]" value="${d.taxable||0}" readonly
@@ -1282,6 +1301,7 @@ function openEditPRN(id) {
     document.getElementById('srn_doc_no').value = d.doc_no || '';
     document.getElementById('prnDocBadge').textContent = d.doc_no || '';
     document.getElementById('srn_status').value = d.status || 'Open';
+    grlUpdatePostBtnState();
     document.getElementById('srn_kind').value = d.kind || 'Goods';
     document.getElementById('srn_buyer').value = d.buyer_id || '';
     const vn = document.getElementById('srn_buyer_name'); if(vn) vn.value = d.buyer_name||'';
@@ -1559,9 +1579,9 @@ const cols = [
   {headerName:IS_AR?'المالك':'Owner',field:'owner_name',minWidth:150,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'رمز الحساب':'Account Code',field:'account_code',width:120,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total Before Discount',field:'total_before_discount',width:150,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Total Discount',field:'total_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الشحن':'Total Freight',field:'total_freight',width:130,cellRenderer:rSAR,floatingFilter:false},

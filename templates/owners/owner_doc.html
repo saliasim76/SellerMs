@@ -373,9 +373,10 @@ function renderExpiry(p){
   if(!p.value) return '<span style="color:var(--gray-400);">—</span>';
   const d = new Date(p.value); d.setHours(0,0,0,0);
   const diff = d - TODAY;
-  if(diff < 0)       return `<span class="exp-past"><i class="fas fa-exclamation-triangle me-1"></i>${p.value}</span>`;
-  if(diff < WARN_MS) return `<span class="exp-warn"><i class="fas fa-clock me-1"></i>${p.value}</span>`;
-  return `<span class="exp-ok"><i class="fas fa-check-circle me-1"></i>${p.value}</span>`;
+  const disp = window.GridKit.fmtDate(p.value);
+  if(diff < 0)       return `<span class="exp-past"><i class="fas fa-exclamation-triangle me-1"></i>${disp}</span>`;
+  if(diff < WARN_MS) return `<span class="exp-warn"><i class="fas fa-clock me-1"></i>${disp}</span>`;
+  return `<span class="exp-ok"><i class="fas fa-check-circle me-1"></i>${disp}</span>`;
 }
 
 function renderSize(p){
@@ -450,7 +451,7 @@ const colDefs = [
     cellRenderer: renderDocName, ...commonFilter },
 
   { field:'issue_date', headerName:IS_AR?'تاريخ الإصدار':'Issue Date', width:130,
-    filter:'agDateColumnFilter',
+    filter:'agDateColumnFilter', valueFormatter:p=>window.GridKit.fmtDate(p.value),
     filterParams:{buttons:['apply','reset','clear'],closeOnApply:true} },
 
   { field:'expiry_date', headerName:IS_AR?'تاريخ الانتهاء':'Expiry Date', width:145,

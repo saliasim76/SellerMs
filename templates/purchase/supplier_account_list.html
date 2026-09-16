@@ -66,7 +66,7 @@ agGrid.createGrid(document.getElementById('supAcctGrid'), {
     {headerName: IS_AR?'رقم القيد':'JE No', field:'je_no', minWidth:130, filter:'agTextColumnFilter'},
     {headerName: IS_AR?'المصدر':'Origin', field:'origion', minWidth:130, filter:'agTextColumnFilter'},
     {headerName: IS_AR?'نوع المصدر':'Origin Type', field:'origin_type', width:110, filter:'agTextColumnFilter', enableRowGroup:true},
-    {headerName: IS_AR?'تاريخ الترحيل':'Posting Date', field:'posting_date', width:130, filter:'agTextColumnFilter'},
+    {headerName: IS_AR?'تاريخ الترحيل':'Posting Date', field:'posting_date', width:130, filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
     {headerName: IS_AR?'الرمز':'Code', field:'code', width:120, filter:'agTextColumnFilter'},
     {headerName: IS_AR?'اسم الحساب':'Account Name', field:'account_name', minWidth:170, filter:'agTextColumnFilter'},
     {headerName: IS_AR?'البيان':'Narration', field:'narration', minWidth:170, filter:'agTextColumnFilter'},

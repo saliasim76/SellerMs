@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% set ar = current_locale == 'ar' %}
+{% block title %}{% if ar %}إعدادات زاتكا{% else %}ZATCA Settings{% endif %} – Seller MS{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">{% if ar %}الرئيسية{% else %}Home{% endif %}</a></li>
+<li class="breadcrumb-item active">{% if ar %}إعدادات زاتكا{% else %}ZATCA Settings{% endif %}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.zs-card{background:white;border-radius:12px;border:1.5px solid #e2e8f0;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.04);}
+.zs-hdr{padding:12px 18px;background:#f8fafc;border-bottom:1.5px solid #e2e8f0;font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.4px;}
+.zs-body{padding:16px 18px;}
+.zs-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;}
+.zs-item label{display:block;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;}
+.zs-item input, .zs-item select{width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;}
+.zs-item input[readonly]{background:#f8fafc;color:#6b7280;}
+.zs-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;color:white;background:#1e3a5f;}
+.zs-btn:disabled{background:#9ca3af;cursor:not-allowed;}
+.zs-stepper{display:flex;gap:0;margin-bottom:10px;}
+.zs-step{flex:1;text-align:center;padding:10px 6px;font-size:11px;font-weight:700;color:#9ca3af;border-bottom:3px solid #e2e8f0;}
+.zs-step.done{color:#15803d;border-bottom-color:#22c55e;}
+.zs-step.active{color:#2563eb;border-bottom-color:#2563eb;}
+.zs-hdr-collapsible{font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;background:#f8fafc;}
+.zs-hdr-collapsible .fa-chevron-down.open{transform:rotate(180deg);}
+.zs-banner{padding:10px 16px;border-radius:8px;font-size:12.5px;margin-bottom:14px;}
+.zs-banner.live{background:#fee2e2;color:#991b1b;}
+.zs-banner.deferred{background:#fffbeb;color:#92400e;}
+.zs-banner.success{background:#dcfce7;color:#15803d;}
+.zs-banner.error{background:#fee2e2;color:#991b1b;}
+textarea.zs-pre{width:100%;min-height:140px;font-family:monospace;font-size:11px;padding:10px;border:1.5px solid #d1d5db;border-radius:7px;}
+table.zs-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+table.zs-tbl th{background:#1e3a5f;color:white;padding:8px 10px;text-align:left;font-size:11px;}
+table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="proledg-page" style="max-width:1000px;">
+  <h2 class="page-heading"><i class="fas fa-shield-halved me-2"></i>{% if ar %}إعدادات زاتكا للفوترة الإلكترونية{% else %}ZATCA e-Invoicing Settings{% endif %}</h2>
+
+  <div class="zs-banner {{ 'live' if live_enabled else 'deferred' }}">
+    {% if live_enabled %}
+      <i class="fas fa-broadcast-tower me-1"></i>
+      {% if ar %}المكالمات المباشرة مع زاتكا مفعّلة.{% else %}Live ZATCA calls are ENABLED for this deployment.{% endif %}
+    {% else %}
+      <i class="fas fa-flask me-1"></i>
+      {% if ar %}المكالمات المباشرة مع زاتكا معطلة (المرحلة الثانية). يتم إنشاء الفواتير وتوقيعها محلياً فقط.{% else %}Live ZATCA calls are disabled (Phase 2 deferred). Invoices are generated and signed locally only.{% endif %}
+    {% endif %}
+  </div>
+
+  <div id="zs_flash" class="zs-banner" style="display:none;"></div>
+
+  <div class="zs-stepper">
+    {% set stage = settings.onboarding_stage or 'not_started' %}
+    <div class="zs-step {{ 'done' if stage != 'not_started' else 'active' }}">1. {% if ar %}إنشاء CSR{% else %}Generate CSR{% endif %}</div>
+    <div class="zs-step {{ 'done' if stage in ('compliance_checks_passed','production_csid_issued') else ('active' if stage=='csr_generated' else '') }}">2. {% if ar %}شهادة الامتثال{% else %}Compliance CSID{% endif %}</div>
+    <div class="zs-step {{ 'done' if stage=='production_csid_issued' else ('active' if stage=='compliance_csid_issued' else '') }}">3. {% if ar %}فحوصات الامتثال{% else %}Compliance Checks{% endif %}</div>
+    <div class="zs-step {{ 'active' if stage=='production_csid_issued' else '' }}">4. {% if ar %}شهادة الإنتاج{% else %}Production CSID{% endif %}</div>
+  </div>
+
+  <div class="zs-card">
+    <div class="zs-hdr">{% if ar %}البيئة وموضوع الشهادة{% else %}Environment &amp; CSR Subject{% endif %}</div>
+    <div class="zs-body">
+      <div class="zs-grid">
+        <div class="zs-item">
+          <label>{% if ar %}البيئة{% else %}Environment{% endif %}</label>
+          <select id="zs_environment" {{ 'disabled' if settings.csr_pem else '' }}>
+            <option value="sandbox" {{ 'selected' if settings.environment=='sandbox' else '' }}>Sandbox</option>
+            <option value="simulation" {{ 'selected' if settings.environment=='simulation' else '' }}>Simulation</option>
+            <option value="production" {{ 'selected' if settings.environment=='production' else '' }} {{ 'disabled' if not settings.has_production_csid else '' }}>Production</option>
+          </select>
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}الرقم الضريبي (من بيانات المالك){% else %}VAT Number (from Owner){% endif %}</label>
+          <input type="text" value="{{ owner.vat_number if owner else '' }}" readonly>
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}اسم الشركة (من بيانات المالك){% else %}Organization Name (from Owner){% endif %}</label>
+          <input type="text" value="{{ owner.name if owner else '' }}" readonly>
+        </div>
+        <div class="zs-item">
+          <label>Common Name</label>
+          <input type="text" id="zs_common_name" value="{{ settings.csr_common_name or '' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}الوحدة التنظيمية{% else %}Organizational Unit{% endif %}</label>
+          <input type="text" id="zs_org_unit" value="{{ settings.csr_organization_unit or '' }}" {{ 'readonly' if settings.csr_pem else '' }}
+                 placeholder="{% if ar %}مثال: الفرع الرئيسي، فرع جدة{% else %}e.g. Head Office, Jeddah Branch{% endif %}">
+          <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+            {% if ar %}اسم الفرع أو وحدة العمل التي تُصدر لها هذه الشهادة. استخدم قيمة مختلفة لكل فرع/جهاز يحتاج شهادته الخاصة.{% else %}The branch or business unit this certificate/device is being issued for. Use a distinct value per branch or device that needs its own CSID.{% endif %}
+          </div>
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}الموقع{% else %}Location{% endif %}</label>
+          <input type="text" id="zs_location" value="{{ settings.csr_location or '' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}النشاط{% else %}Industry / Business Category{% endif %}</label>
+          <input type="text" id="zs_industry" value="{{ settings.csr_industry or '' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+        </div>
+        <div class="zs-item">
+          <label>Invoice Type Flags</label>
+          <input type="text" id="zs_invoice_type" value="{{ settings.csr_invoice_type or '1100' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+        </div>
+      </div>
+      {% if not settings.csr_pem %}
+      <div style="margin-top:14px;">
+        <button type="button" class="zs-btn" style="background:#2563eb;" onclick="saveEnvironment()">
+          <i class="fas fa-save"></i>{% if ar %}حفظ{% else %}Save{% endif %}
+        </button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="zs-card">
+    <div class="zs-hdr">{% if ar %}المفتاح وطلب توقيع الشهادة (CSR){% else %}Keypair &amp; CSR{% endif %}</div>
+    <div class="zs-body">
+      {% if settings.has_csr %}
+        <p style="font-size:12.5px;color:#15803d;"><i class="fas fa-check-circle me-1"></i>{% if ar %}تم إنشاء المفتاح وطلب توقيع الشهادة.{% else %}Keypair and CSR have been generated.{% endif %}</p>
+        <textarea class="zs-pre" id="zs_csr_text" readonly onclick="this.select();">{{ settings.csr_pem if settings.csr_pem else '' }}</textarea>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button type="button" class="zs-btn" style="background:#15803d;" onclick="copyCsr()"><i class="fas fa-copy"></i>{% if ar %}نسخ CSR{% else %}Copy CSR{% endif %}</button>
+          <a href="{{ url_for('zatca.zatca_csr_download') }}" class="zs-btn" style="background:#374151;text-decoration:none;"><i class="fas fa-download"></i>{% if ar %}تنزيل CSR{% else %}Download CSR{% endif %}</a>
+          <button type="button" class="zs-btn" style="background:#b91c1c;" onclick="clearCsr()"><i class="fas fa-trash-alt"></i>{% if ar %}مسح CSR{% else %}Clear CSR{% endif %}</button>
+        </div>
+      {% else %}
+        <p style="font-size:12.5px;color:#6b7280;">{% if ar %}احفظ الحقول أعلاه ثم أنشئ المفتاح وطلب توقيع الشهادة (CSR). يمكنك مسحه لاحقاً وإعادة إنشائه إذا احتجت.{% else %}Save the fields above, then generate the keypair and CSR. You can clear it and generate a fresh one later if you need to.{% endif %}</p>
+        <button type="button" class="zs-btn" onclick="generateCsr()"><i class="fas fa-key"></i>{% if ar %}إنشاء المفتاح وCSR{% else %}Generate Keypair &amp; CSR{% endif %}</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="zs-card">
+    <button type="button" class="zs-hdr zs-hdr-collapsible" onclick="toggleZsSection(this)" style="width:100%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;text-align:left;">
+      <span>{% if ar %}استيراد شهادة موجودة (شهادة فعلية/إنتاج){% else %}Import an Existing Certificate{% endif %}</span>
+      <i class="fas fa-chevron-down" style="font-size:11px;transition:transform .15s;"></i>
+    </button>
+    <div class="zs-body" hidden>
+      <p style="font-size:12.5px;color:#6b7280;">
+        {% if ar %}
+        إذا كان لديك بالفعل شهادة زاتكا (امتثال أو إنتاج) صادرة مسبقاً من نظام آخر، يمكنك إضافتها هنا مباشرة بدلاً من إنشاء CSR جديد.
+        <strong>يجب توفير المفتاح الخاص المطابق لهذه الشهادة</strong> — الشهادة وحدها لا تكفي، لأن التوقيع يتطلب المفتاح الخاص الذي أُصدرت الشهادة بناءً عليه. إذا لم يكن المفتاح الخاص متوفراً لديك، فلا يمكن استخدام هذه الشهادة هنا؛ يجب طلب شهادة جديدة عبر CSR الذي يُنشئه هذا النظام.
+        {% else %}
+        Already have a ZATCA certificate (Compliance or Production) issued previously through another system? Add it here directly instead of generating a new CSR.
+        <strong>The matching private key is required</strong> — the certificate alone is not enough, since signing needs the exact private key that certificate was issued against. If you don't have that private key, this certificate cannot be used here; you'll need to request a new one via the CSR this system generates instead.
+        {% endif %}
+      </p>
+      <div class="zs-grid">
+        <div class="zs-item">
+          <label>{% if ar %}نوع الشهادة{% else %}Certificate Type{% endif %}</label>
+          <select id="zs_import_type">
+            <option value="compliance">Compliance</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}البيئة{% else %}Environment{% endif %}</label>
+          <select id="zs_import_env">
+            <option value="sandbox" {{ 'selected' if settings.environment=='sandbox' else '' }}>Sandbox</option>
+            <option value="simulation" {{ 'selected' if settings.environment=='simulation' else '' }}>Simulation</option>
+            <option value="production" {{ 'selected' if settings.environment=='production' else '' }}>Production</option>
+          </select>
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}رمز السر (Secret){% else %}Secret{% endif %}</label>
+          <input type="text" id="zs_import_secret" placeholder="{% if ar %}السر المرتبط بالشهادة من زاتكا{% else %}The secret ZATCA issued alongside this certificate{% endif %}">
+        </div>
+        <div class="zs-item">
+          <label>{% if ar %}رقم الطلب (اختياري){% else %}Request ID (optional){% endif %}</label>
+          <input type="text" id="zs_import_request_id">
+        </div>
+      </div>
+      <div class="zs-item" style="margin-top:12px;">
+        <label>{% if ar %}الشهادة (Binary Security Token){% else %}Certificate (Binary Security Token){% endif %}</label>
+        <textarea class="zs-pre" id="zs_import_cert" placeholder="{% if ar %}الصق نص الشهادة كما استلمته من زاتكا{% else %}Paste the certificate text exactly as returned by ZATCA{% endif %}"></textarea>
+      </div>
+      <div class="zs-item" style="margin-top:12px;">
+        <label>{% if ar %}CSR (اختياري){% else %}CSR (optional){% endif %}</label>
+        <textarea class="zs-pre" id="zs_import_csr" placeholder="-----BEGIN CERTIFICATE REQUEST-----&#10;...&#10;-----END CERTIFICATE REQUEST-----"></textarea>
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+          {% if ar %}طلب توقيع الشهادة الذي صدرت منه هذه الشهادة، إن وُجد. غير مطلوب لتوقيع الفواتير، لكنه يكمّل سجل الشهادة ويُفعّل بطاقة "المفتاح وCSR" أعلاه.{% else %}The CSR this certificate was issued from, if you still have it. Not required for signing invoices, but completes the certificate record and populates the "Keypair &amp; CSR" card above.{% endif %}
+        </div>
+      </div>
+      <div class="zs-item" style="margin-top:12px;">
+        <label>{% if ar %}المفتاح الخاص (PEM){% else %}Private Key (PEM){% endif %}</label>
+        <textarea class="zs-pre" id="zs_import_key" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"></textarea>
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+          {% if ar %}يُشفَّر ويُخزَّن بأمان، ولا يُعرض مرة أخرى بعد الحفظ.{% else %}Encrypted before storage; never shown again once saved.{% endif %}
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button type="button" class="zs-btn" style="background:#b45309;" onclick="importCertificate()">
+          <i class="fas fa-file-import"></i>{% if ar %}استيراد الشهادة{% else %}Import Certificate{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="zs-card">
+    <div class="zs-hdr">{% if ar %}شهادة الامتثال (Compliance CSID){% else %}Compliance CSID{% endif %}</div>
+    <div class="zs-body">
+      {% if settings.has_compliance_csid %}
+        <p style="font-size:12.5px;color:#15803d;"><i class="fas fa-check-circle me-1"></i>{% if ar %}تم الحصول على شهادة الامتثال.{% else %}Compliance CSID has been issued.{% endif %}</p>
+      {% elif settings.has_csr %}
+        <p style="font-size:12.5px;color:#6b7280;">
+          {% if ar %}أدخل رمز التحقق (OTP) الذي حصلت عليه من بوابة فاتورة (Fatoora) لهذه البيئة.{% else %}Enter the OTP you obtained from the Fatoora portal for this environment.{% endif %}
+        </p>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div class="zs-item" style="max-width:220px;">
+            <label>OTP</label>
+            <input type="text" id="zs_otp" placeholder="000000">
+          </div>
+          <button type="button" class="zs-btn" onclick="requestComplianceCsid()"><i class="fas fa-certificate"></i>{% if ar %}طلب شهادة الامتثال{% else %}Request Compliance CSID{% endif %}</button>
+        </div>
+      {% else %}
+        <p style="font-size:12.5px;color:#9ca3af;">{% if ar %}أنشئ CSR أولاً.{% else %}Generate a CSR first.{% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="zs-card">
+    <div class="zs-hdr">{% if ar %}فحوصات الامتثال وشهادة الإنتاج{% else %}Compliance Checks &amp; Production CSID{% endif %}</div>
+    <div class="zs-body">
+      <p style="font-size:12.5px;color:#9ca3af;">
+        {% if ar %}هذه الخطوة جزء من المرحلة الثانية (الإرسال المباشر) ولم يتم تفعيلها بعد لهذا النظام.{% else %}This step is part of Phase 2 (live submission) and is not yet enabled for this deployment.{% endif %}
+      </p>
+      <button type="button" class="zs-btn" disabled><i class="fas fa-lock"></i>{% if ar %}معطل{% else %}Disabled until Phase 2{% endif %}</button>
+    </div>
+  </div>
+
+  <div class="zs-card">
+    <div class="zs-hdr">{% if ar %}سجل الشهادات{% else %}Certificate History{% endif %}</div>
+    <div class="zs-body" style="padding:0;">
+      <div style="overflow-x:auto;">
+        <table class="zs-tbl">
+          <thead><tr>
+            <th>{% if ar %}النوع{% else %}Type{% endif %}</th><th>{% if ar %}الاسم{% else %}Name{% endif %}</th>
+            <th>{% if ar %}البيئة{% else %}Environment{% endif %}</th>
+            <th>{% if ar %}رقم الطلب{% else %}Request ID{% endif %}</th><th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
+            <th>{% if ar %}تاريخ الإصدار{% else %}Issued At{% endif %}</th>
+            <th>{% if ar %}تنزيل{% else %}Download{% endif %}</th>
+          </tr></thead>
+          <tbody>
+            {% for h in history %}
+            <tr>
+              <td>{{ h.cert_type }}</td>
+              <td style="font-size:11px;">{{ h.common_name or '—' }}</td>
+              <td>{{ h.environment or '—' }}</td>
+              <td style="font-size:11px;">{{ h.request_id or '—' }}</td><td>{{ h.status }}</td>
+              <td>{{ h.issued_at.strftime('%d/%m/%Y %H:%M') if h.issued_at else '—' }}</td>
+              <td>
+                {% if h.csid_binary %}
+                <a href="{{ url_for('zatca.zatca_history_download', id=h.id) }}" class="zs-btn" style="padding:4px 10px;font-size:11px;"><i class="fas fa-download"></i>{% if ar %}تنزيل{% else %}Download{% endif %}</a>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:16px;">{% if ar %}لا يوجد سجل بعد{% else %}No history yet{% endif %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_AR = {{ 'true' if ar else 'false' }};
+const CSRF = '{{ csrf_token() }}';
+
+function toggleZsSection(btn) {
+  const body = btn.nextElementSibling;
+  const chevron = btn.querySelector('.fa-chevron-down');
+  body.hidden = !body.hidden;
+  if (chevron) chevron.classList.toggle('open', !body.hidden);
+}
+
+/* ══ Every action on this page (success, validation failure, server
+   error, or network failure) reports through this one flash banner --
+   never a silent reload and never a bare native alert(). ══ */
+function showZsFlash(type, text) {
+  const el = document.getElementById('zs_flash');
+  if (!el) return;
+  el.className = 'zs-banner ' + type;
+  const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle';
+  el.innerHTML = '<i class="fas ' + icon + ' me-1"></i>' + text;
+  el.style.display = 'block';
+  el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+// A successful step reloads the page to show its new state (CSR text,
+// updated stepper, certificate history, ...) -- the success message is
+// stashed across that reload and shown once the fresh page loads.
+function showZsFlashAndReload(text) {
+  try { sessionStorage.setItem('zs_flash_success', text); } catch (e) {}
+  location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  try {
+    const stashed = sessionStorage.getItem('zs_flash_success');
+    if (stashed) {
+      showZsFlash('success', stashed);
+      sessionStorage.removeItem('zs_flash_success');
+    }
+  } catch (e) {}
+});
+
+function zsNetworkErrorText(e) {
+  return (IS_AR ? 'تعذّر الاتصال بالخادم: ' : 'Could not reach the server: ') + e.message;
+}
+
+function saveEnvironment() {
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF);
+  fd.set('environment', document.getElementById('zs_environment').value);
+  fd.set('csr_common_name', document.getElementById('zs_common_name').value);
+  fd.set('csr_organization_unit', document.getElementById('zs_org_unit').value);
+  fd.set('csr_location', document.getElementById('zs_location').value);
+  fd.set('csr_industry', document.getElementById('zs_industry').value);
+  fd.set('csr_invoice_type', document.getElementById('zs_invoice_type').value);
+  fetch('/zatca/settings/save-environment', {method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd})
+    .then(r => r.json()).then(d => {
+      if (d.ok) showZsFlashAndReload(IS_AR ? 'تم حفظ الإعدادات بنجاح.' : 'Settings saved successfully.');
+      else showZsFlash('error', d.error || (IS_AR ? 'فشل الحفظ' : 'Failed to save'));
+    })
+    .catch(e => showZsFlash('error', zsNetworkErrorText(e)));
+}
+
+function copyCsr() {
+  const ta = document.getElementById('zs_csr_text');
+  if (!ta) return;
+  const text = ta.value;
+  const done = () => showZsFlash('success', IS_AR ? 'تم نسخ CSR إلى الحافظة.' : 'CSR copied to clipboard.');
+  const fail = () => {
+    // Clipboard API unavailable (e.g. non-HTTPS context) -- fall back to
+    // select-and-let-the-user-Ctrl+C, which always works on a textarea.
+    ta.focus();
+    ta.select();
+    showZsFlash('error', IS_AR
+      ? 'تعذّر النسخ تلقائياً. تم تحديد النص، اضغط Ctrl+C للنسخ يدوياً.'
+      : 'Could not copy automatically. The text is now selected -- press Ctrl+C to copy it manually.');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(fail);
+  } else {
+    fail();
+  }
+}
+
+function generateCsr() {
+  if (!confirm(IS_AR ? 'هل تريد إنشاء المفتاح وCSR؟' : 'Generate the keypair and CSR?')) return;
+  fetch('/zatca/settings/generate-csr', {method:'POST', headers:{'X-CSRFToken':CSRF}})
+    .then(r => r.json()).then(d => {
+      if (d.ok) showZsFlashAndReload(IS_AR ? 'تم إنشاء المفتاح وطلب توقيع الشهادة (CSR) بنجاح.' : 'Keypair and CSR generated successfully.');
+      else showZsFlash('error', d.error || (IS_AR ? 'فشل إنشاء CSR' : 'Failed to generate CSR'));
+    })
+    .catch(e => showZsFlash('error', zsNetworkErrorText(e)));
+}
+
+function clearCsr() {
+  if (!confirm(IS_AR
+      ? 'سيتم مسح المفتاح الخاص وCSR الحاليين نهائياً. لن تتمكن من التراجع عن هذا الإجراء، لكن يمكنك إنشاء CSR جديد مباشرة بعده. متابعة؟'
+      : 'This permanently discards the current private key and CSR. You cannot undo this, but you can generate a fresh CSR right after. Continue?')) return;
+  fetch('/zatca/settings/clear-csr', {method:'POST', headers:{'X-CSRFToken':CSRF}})
+    .then(r => r.json()).then(d => {
+      if (d.ok) showZsFlashAndReload(IS_AR ? 'تم مسح CSR بنجاح.' : 'CSR cleared successfully.');
+      else showZsFlash('error', d.error || (IS_AR ? 'فشل مسح CSR' : 'Failed to clear CSR'));
+    })
+    .catch(e => showZsFlash('error', zsNetworkErrorText(e)));
+}
+
+function importCertificate() {
+  const cert = document.getElementById('zs_import_cert').value.trim();
+  const key  = document.getElementById('zs_import_key').value.trim();
+  const secret = document.getElementById('zs_import_secret').value.trim();
+  if (!cert || !key || !secret) {
+    showZsFlash('error', IS_AR ? 'الشهادة والسر والمفتاح الخاص كلها مطلوبة' : 'Certificate, secret, and private key are all required');
+    return;
+  }
+  if (!confirm(IS_AR
+      ? 'سيتم استخدام هذا المفتاح الخاص لتوقيع كل فاتورة زاتكا من الآن فصاعداً. تأكد من أنه المفتاح الصحيح المطابق لهذه الشهادة.'
+      : 'This private key will be used to sign every ZATCA invoice from now on. Make sure it is the correct key matching this certificate.')) return;
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF);
+  fd.set('cert_type', document.getElementById('zs_import_type').value);
+  fd.set('environment', document.getElementById('zs_import_env').value);
+  fd.set('binary_token', cert);
+  fd.set('secret', secret);
+  fd.set('private_key_pem', key);
+  fd.set('csr_pem', document.getElementById('zs_import_csr').value.trim());
+  fd.set('request_id', document.getElementById('zs_import_request_id').value.trim());
+  fetch('/zatca/settings/import-certificate', {method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd})
+    .then(r => r.json()).then(d => {
+      if (d.ok) showZsFlashAndReload(IS_AR ? 'تم استيراد الشهادة بنجاح.' : 'Certificate imported successfully.');
+      else showZsFlash('error', d.error || (IS_AR ? 'فشل استيراد الشهادة' : 'Failed to import certificate'));
+    })
+    .catch(e => showZsFlash('error', zsNetworkErrorText(e)));
+}
+
+function requestComplianceCsid() {
+  const otp = document.getElementById('zs_otp').value.trim();
+  if (!otp) { showZsFlash('error', IS_AR ? 'أدخل رمز التحقق أولاً' : 'Enter the OTP first'); return; }
+  const fd = new FormData();
+  fd.set('csrf_token', CSRF);
+  fd.set('otp', otp);
+  fetch('/zatca/settings/request-compliance-csid', {method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd})
+    .then(r => r.json()).then(d => {
+      if (d.ok) showZsFlashAndReload(IS_AR ? 'تم الحصول على شهادة الامتثال بنجاح.' : 'Compliance CSID obtained successfully.');
+      else showZsFlash('error', d.error || (IS_AR ? 'فشل طلب شهادة الامتثال' : 'Failed to request Compliance CSID'));
+    })
+    .catch(e => showZsFlash('error', zsNetworkErrorText(e)));
+}
+</script>
+{% endblock %}

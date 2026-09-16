@@ -25,6 +25,7 @@ Data sources (spec: "all field come from employee table"):
 """
 
 import io
+import hashlib
 from datetime import date, datetime, timedelta
 
 from flask import (
@@ -35,7 +36,7 @@ from flask_login import login_required, current_user
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-from sqlalchemy import func, case, literal
+from sqlalchemy import func, case, literal, text
 
 from models import (
     db, SalaryConsolidation, Employee, EmployeeWorkAllocation,
@@ -43,7 +44,7 @@ from models import (
     LevelFive, NoActiveFinancialYearError,
 )
 from database.routes.employees import _emp_profession_str
-from database.routes.shared import _next_grl_no, _get_auto_code
+from database.routes.shared import _next_grl_no, _get_auto_code, xlsx_safe
 
 payroll_bp = Blueprint('payroll', __name__)
 
@@ -230,6 +231,20 @@ def _can_override(user):
     return role in ('admin', 'administrator', 'payroll manager', 'payroll_manager')
 
 
+def _is_superadmin(user):
+    return bool(getattr(user, 'effectively_super_admin', False))
+
+
+def _is_admin_or_superadmin(user):
+    """Plain Admin (role == 'admin', the same check base.html/admin_required
+    use elsewhere) or Super Admin -- deliberately narrower than
+    _can_override above, which also lets a Payroll Manager through. Used
+    only for the payroll-status permission rules in payroll_set_flow:
+    Payroll Manager may move a payroll forward (Initial -> Ready -> Post)
+    but not backward out of Ready, and never touch a Posted one at all."""
+    return _is_superadmin(user) or bool(getattr(user, 'is_admin', None) and user.is_admin())
+
+
 # ══════════════════════════════════════════════════════════════════
 #  Pages
 # ══════════════════════════════════════════════════════════════════
@@ -247,9 +262,10 @@ def payroll_list():
 def payroll_filters():
     """Distinct kafeel / buyer / buyer_department / location / salary_category
     -- for the Stage 1 header dropdowns. Department and Location are matched
-    (and populated here) from EmployeeWorkAllocation; Salary Order still
-    cascades separately from the selected Buyer (see
-    /payroll/buyer/<id>/context)."""
+    (and populated here) from EmployeeWorkAllocation; Salary Order cascades
+    separately from the selected Buyer (see /payroll/buyer/<id>/context) --
+    it's a stored/display field only, never part of the duplicate-check/
+    selection criteria (see payroll_generate's comment)."""
     def _distinct(col):
         vals = (db.session.query(col)
                 .filter(col.isnot(None), col != '')
@@ -277,10 +293,12 @@ def payroll_filters():
 @payroll_bp.route('/buyer/<int:buyer_id>/context')
 @login_required
 def payroll_buyer_context(buyer_id):
-    """Department / Location / Salary Order all cascade from the selected
-    Buyer (spec: 'department, location and salary order refresh from
-    buyer'). Departments+locations come from that buyer's own
-    BuyerDepartment rows; Salary Order is the buyer's own fixed value."""
+    """Salary Order cascades from the selected Buyer (spec: 'salary order
+    refresh from buyer'), for display/storage on the generated rows only --
+    it plays no part in employee matching or the duplicate-payroll check
+    (see payroll_generate's comment). Departments/locations are returned
+    too but the frontend doesn't use them from here -- those two are
+    independent dropdowns sourced from EmployeeWorkAllocation instead."""
     buyer = BuyerMaster.query.get_or_404(buyer_id)
     dept_rows = BuyerDepartment.query.filter_by(buyer_id=buyer_id).all()
     departments = sorted({d.department_name for d in dept_rows if d.department_name})
@@ -454,6 +472,48 @@ def _employee_snapshot(e):
     )
 
 
+def _latest_joining_date(emp_id):
+    """Employee's joining date, read from the SAME 'latest' EmployeeWorkAllocation
+    row (highest id) that _wa_buyer_snapshot uses -- an employee with multiple
+    joining/allocation records is judged on the most recent one only, never an
+    older one, and never returns more than one date per employee."""
+    wa = (EmployeeWorkAllocation.query
+          .filter_by(employee_id=emp_id)
+          .order_by(EmployeeWorkAllocation.id.desc())
+          .first())
+    return wa.joining_date if wa else None
+
+
+def _employee_overlap_conflict(employee_id, from_date, to_date, exclude_payroll_id):
+    """First existing SalaryConsolidation row for this employee, belonging to
+    a DIFFERENT payroll batch, whose own individual payable period overlaps
+    [from_date, to_date] -- or None if there's no conflict. This is a
+    cross-payroll double-payment guard: the same employee must never be
+    paid twice for the same calendar day across two separate payroll runs.
+
+    Rows in the SAME payroll_id (exclude_payroll_id) are never compared --
+    re-adding the same employee into the same batch is the existing,
+    intentional 'Double' feature (see payroll_add_employee), a different
+    concept from paying someone twice via two unrelated payroll batches.
+    This also naturally excludes a row from conflicting with itself when
+    checking an edit on that same row.
+
+    Falls back to month_from/month_to for rows created before
+    emp_from_date/emp_to_date existed."""
+    rows = (SalaryConsolidation.query
+            .filter(SalaryConsolidation.employee_id == employee_id)
+            .filter(SalaryConsolidation.payroll_id != exclude_payroll_id)
+            .all())
+    for row in rows:
+        r_from = row.emp_from_date or row.month_from
+        r_to = row.emp_to_date or row.month_to
+        if not r_from or not r_to:
+            continue
+        if r_from <= to_date and r_to >= from_date:
+            return row
+    return None
+
+
 def _wa_buyer_snapshot(emp_id):
     """Buyer / Department / Location, read from the employee's LATEST
     EmployeeWorkAllocation row (not the header selection, not BuyerMaster).
@@ -475,16 +535,53 @@ def _wa_buyer_snapshot(emp_id):
     )
 
 
-def _build_row(e, payroll_id, salary_order, d1, d2, month_name,
-               days, fridays, salary_category):
+def _buyer_salary_order(buyer_id):
+    """The buyer's own fixed Salary Order value, or '' if there's no buyer
+    or the buyer has none set."""
+    if not buyer_id:
+        return ''
+    buyer = BuyerMaster.query.get(buyer_id)
+    return (buyer.salary_order or '') if buyer else ''
+
+
+def _build_row(e, payroll_id, d1, d2, month_name, salary_category):
     """Create one SalaryConsolidation row for an employee (unsaved).
     Buyer/Department/Location come from the employee's own (latest) work
     allocation record -- not the header selection -- so they're refreshable
-    per-row exactly like the Employee-sourced fields."""
+    per-row exactly like the Employee-sourced fields.
+
+    Salary Order is NOT stored on EmployeeWorkAllocation at all -- it comes
+    from BuyerMaster, keyed by THIS employee's own resolved buyer_id (from
+    the same work-allocation snapshot below), never from the header form's
+    Buyer filter directly. This matters when the header's Buyer filter is
+    left blank ("Any"): a batch can then contain employees belonging to
+    several different buyers, each of whom must get their OWN buyer's
+    Salary Order, not all be left blank just because no single buyer was
+    selected as the filter criterion.
+
+    month_from/month_to always stay the payroll BATCH's master period (d1/d2),
+    identical on every row. emp_from_date/emp_to_date are this employee's own
+    payable period: emp_from_date is MAX(d1, latest joining date) so someone
+    who joined mid-period is only paid from their actual joining date, not
+    the whole batch period -- days/fridays (which drive every downstream
+    salary/OT/invoice formula in _recalc) are counted over THIS narrower
+    range, not the batch's. emp_from_date is user-editable afterwards (see
+    payroll_edit); emp_to_date normally just mirrors d2."""
+    latest_joining = _latest_joining_date(e.id)
+    emp_from = d1
+    if latest_joining and latest_joining > d1:
+        emp_from = latest_joining
+    emp_to = d2
+    days, fridays = _count_days_and_fridays(emp_from, emp_to)
+
+    buyer_snapshot = _wa_buyer_snapshot(e.id)
+    salary_order = _buyer_salary_order(buyer_snapshot.get('buyer_id'))
+
     row = SalaryConsolidation(
         payroll_id=payroll_id, employ_payroll_status='Single',
         salary_order=salary_order,
         month_from=d1, month_to=d2, month=month_name,
+        emp_from_date=emp_from, emp_to_date=emp_to,
         sheet_no='',
         employee_id=e.id,
         days=days, fridays=fridays, holidays=0, absent=0,
@@ -492,7 +589,7 @@ def _build_row(e, payroll_id, salary_order, d1, d2, month_name,
         bonus=0, deduction=0, advance=0, credit=0, paid=0,
         payroll_status='Initial',
         **_employee_snapshot(e),
-        **_wa_buyer_snapshot(e.id),
+        **buyer_snapshot,
     )
     _recalc(row)
     return row
@@ -510,18 +607,25 @@ def payroll_check():
     buyer_department = (f.get('buyer_department') or '').strip()
     location = (f.get('location') or '').strip()
     kafeel = (f.get('kafeel') or '').strip()
-    salary_order = (f.get('salary_order') or '').strip()
     salary_category = (f.get('salary_category') or '').strip()
+    salary_type = (f.get('salary_type') or '').strip()
 
+    # Salary Order is NOT part of the payroll-identity criteria -- it's a
+    # stored/display field only. Two generate attempts for the same buyer/
+    # department/location/kafeel/month must be caught as duplicates even if
+    # their Salary Order text happens to differ (a typo or a different
+    # auto-filled default was exactly how an unwanted duplicate payroll used
+    # to slip past this check).
     q = (SalaryConsolidation.query
          .filter(SalaryConsolidation.month == month_name)
          .filter(SalaryConsolidation.buyer_id == buyer_id)
          .filter(SalaryConsolidation.buyer_department == buyer_department)
          .filter(SalaryConsolidation.location == location)
-         .filter(SalaryConsolidation.kafeel == kafeel)
-         .filter(SalaryConsolidation.salary_order == salary_order))
+         .filter(SalaryConsolidation.kafeel == kafeel))
     if salary_category:
         q = q.filter(SalaryConsolidation.salary_category == salary_category)
+    if salary_type:
+        q = q.filter(SalaryConsolidation.salary_type == salary_type)
     existing = q.first()
     if existing and existing.payroll_id:
         return jsonify({'exists': True, 'payroll_id': existing.payroll_id})
@@ -529,13 +633,28 @@ def payroll_check():
 
 
 def _matching_employee_ids(kafeel, buyer_id, buyer_department, location,
-                            salary_category):
+                            salary_category, to_date, salary_type=''):
     """Employees who qualify for this payroll:
-    - Buyer / Department / Location: matched via EmployeeWorkAllocation.
+    - Buyer / Department / Location: matched via EmployeeWorkAllocation. When
+      Kafeel and Buyer are both given but Department/Location are left blank
+      ("All"), every department and location for that Kafeel+Buyer is
+      included automatically -- only an *explicit* Department or Location
+      choice narrows it further.
     - Kafeel: matched against the employee's own record (Employee.kafeel_name),
-      not the work-allocation snapshot.
+      not the work-allocation snapshot. Blank ("Any") matches every kafeel.
     - Salary Category: matched against the employee's own record (already
       a live Employee field).
+    - Salary Type: matched against the employee's own record (Employee.
+      salary_type). A closed enum -- 'month' (Per Month) or 'hour' (Per
+      Hour) only; blank means no filter.
+    - Status: Employee.is_active, read live from the Employee Master --
+      there is no separate payroll-only status.
+    - Latest Joining Date: the employee's latest EmployeeWorkAllocation
+      joining_date must be on or before `to_date` (the payroll's Month To).
+      An employee who joins AFTER the payroll period ends is not eligible
+      for that payroll, regardless of Month From -- only Month To decides
+      this (see _latest_joining_date / _build_row for how their payable
+      days still start from their own joining date once included).
 
     NOTE: 'active' work allocation is treated as status == 'active' OR
     status is blank/NULL. Rows created before a `status` value existed (or
@@ -574,6 +693,11 @@ def _matching_employee_ids(kafeel, buyer_id, buyer_department, location,
             continue
         if salary_category and (e.salary_category or '') != salary_category:
             continue
+        if salary_type and (e.salary_type or '') != salary_type:
+            continue
+        latest_joining = _latest_joining_date(eid)
+        if not latest_joining or latest_joining > to_date:
+            continue
         out.append(e)
     return out
 
@@ -588,73 +712,146 @@ def payroll_generate():
         return jsonify({'ok': False, 'error': _t('Select a valid month range.',
                                                  'اختر نطاق شهر صالح.')}), 400
     if d2 < d1:
-        return jsonify({'ok': False, 'error': _t('Month From cannot be after Month To.',
-                                                 'تاريخ البداية لا يمكن أن يكون بعد النهاية.')}), 400
+        return jsonify({'ok': False, 'error': _t(
+            'To Date cannot be earlier than From Date.',
+            'لا يمكن أن يكون تاريخ النهاية قبل تاريخ البداية.')}), 400
     if (d2 - d1).days + 1 > 31:
         return jsonify({'ok': False, 'error': _t(
-            'The date range cannot exceed 31 days.',
-            'لا يمكن أن يتجاوز النطاق الزمني 31 يومًا.')}), 400
+            'Payroll period cannot exceed 31 days. Please select a valid From Date and To Date.',
+            'لا يمكن أن تتجاوز فترة كشف الرواتب 31 يومًا. الرجاء اختيار تاريخ بداية ونهاية صالحين.')}), 400
 
     buyer_id = _int(f.get('buyer_id')) or None
     buyer_department = (f.get('buyer_department') or '').strip()
     location = (f.get('location') or '').strip()
     kafeel = (f.get('kafeel') or '').strip()
-    salary_order = (f.get('salary_order') or '').strip()
+    # Salary Order is NOT derived from this header filter's buyer_id -- when
+    # Buyer is left blank ("Any"), there's no single buyer to derive it
+    # from, but the batch can still contain employees from several
+    # different buyers. Each row instead derives its own Salary Order from
+    # its own employee's resolved buyer (see _build_row).
     salary_category = (f.get('salary_category') or '').strip()
+    salary_type = (f.get('salary_type') or '').strip()
+    if salary_type not in ('', 'month', 'hour'):
+        return jsonify({'ok': False, 'error': _t(
+            'Salary Type must be Per Month or Per Hour.',
+            'يجب أن يكون نوع الراتب شهري أو بالساعة.')}), 400
     # Month is derived from Month To (e.g. Month To 25-Aug-2026 -> "Aug-26").
     month_name = d2.strftime('%b-%y')
 
-    # Duplicate-payroll guard (spec Stage 1 validation).
-    dq = (SalaryConsolidation.query
-          .filter(SalaryConsolidation.month == month_name)
-          .filter(SalaryConsolidation.buyer_id == buyer_id)
-          .filter(SalaryConsolidation.buyer_department == buyer_department)
-          .filter(SalaryConsolidation.location == location)
-          .filter(SalaryConsolidation.kafeel == kafeel)
-          .filter(SalaryConsolidation.salary_order == salary_order))
-    if salary_category:
-        dq = dq.filter(SalaryConsolidation.salary_category == salary_category)
-    existing = dq.first()
-    if existing and existing.payroll_id:
-        return jsonify({
-            'ok': False, 'duplicate': True,
-            'payroll_id': existing.payroll_id,
-            'error': _t(f'Payroll already exists. Payroll ID: {existing.payroll_id}',
-                        f'كشف الرواتب موجود بالفعل. رقم الكشف: {existing.payroll_id}')
-        }), 409
-
-    employees = _matching_employee_ids(kafeel, buyer_id, buyer_department,
-                                        location, salary_category)
-    if not employees:
+    # A MySQL named lock, keyed by the exact same criteria as the duplicate
+    # check below, closes the race that otherwise lets two near-simultaneous
+    # clicks of "Generate" (a double-click, a slow response re-clicked, two
+    # browser tabs) both pass the "no existing payroll" check before either
+    # has committed -- each would then create its own payroll_id with the
+    # identical employees for the identical period. GET_LOCK blocks (up to
+    # lock_timeout seconds) rather than failing outright, so a genuinely
+    # sequential second click just waits for the first to finish and then
+    # correctly sees it as a duplicate. Salary Order is deliberately NOT part
+    # of this key -- it must match the duplicate-check query below exactly,
+    # and that query no longer treats Salary Order as payroll-identity
+    # criteria (see its own comment).
+    lock_key = 'payroll_gen:' + hashlib.md5('|'.join(str(v) for v in (
+        month_name, buyer_id, buyer_department, location, kafeel,
+        salary_category, salary_type)).encode()).hexdigest()
+    lock_timeout = 10
+    got_lock = db.session.execute(
+        text('SELECT GET_LOCK(:k, :t)'), {'k': lock_key, 't': lock_timeout}
+    ).scalar()
+    if not got_lock:
         return jsonify({'ok': False, 'error': _t(
-            'No active employees match the selected criteria.',
-            'لا يوجد موظفون نشطون مطابقون للمعايير.')}), 400
+            'Another request is already generating this exact payroll. Please try again.',
+            'يوجد طلب آخر قيد إنشاء نفس كشف الرواتب هذا. الرجاء المحاولة مرة أخرى.')}), 409
 
-    days, fridays = _count_days_and_fridays(d1, d2)
-    payroll_id = next_payroll_id()
-    created = 0
-    for e in employees:
-        row = _build_row(e, payroll_id, salary_order, d1, d2, month_name,
-                         days, fridays, salary_category)
-        db.session.add(row)
-        created += 1
-
-    if not created:
-        db.session.rollback()
-        return jsonify({'ok': False, 'error': _t(
-            'No active employees match the selected criteria.',
-            'لا يوجد موظفون نشطون مطابقون للمعايير.')}), 400
-
-    _audit('create', None,
-           f'Generated payroll {payroll_id}: {created} employees, {month_name}')
     try:
+        # MySQL's default REPEATABLE READ fixes this request's snapshot at
+        # its FIRST query (e.g. flask-login loading current_user, long
+        # before GET_LOCK above) -- so without this, a request that just
+        # waited for another one's lock would still read a snapshot from
+        # BEFORE that other request committed, and the duplicate check right
+        # below would wrongly see no existing payroll. Committing here (a
+        # no-op on data, nothing has been written yet) discards that stale
+        # snapshot so the very next query starts a fresh one that correctly
+        # sees whatever the previous lock-holder just committed.
         db.session.commit()
-        return jsonify({'ok': True, 'created': created,
-                        'payroll_id': payroll_id})
-    except Exception:
-        db.session.rollback()
-        return jsonify({'ok': False, 'error': _t('Could not generate payroll.',
-                                                 'تعذّر إنشاء كشف الرواتب.')}), 500
+
+        # Duplicate-payroll guard (spec Stage 1 validation). Salary Order is
+        # deliberately excluded from this criteria set -- it's a stored/
+        # display field on each row, not part of what makes two payrolls
+        # "the same" one. Without this exclusion, two generate attempts for
+        # the same buyer/department/location/kafeel/month could slip past
+        # as non-duplicates just because their Salary Order text differed.
+        dq = (SalaryConsolidation.query
+              .filter(SalaryConsolidation.month == month_name)
+              .filter(SalaryConsolidation.buyer_id == buyer_id)
+              .filter(SalaryConsolidation.buyer_department == buyer_department)
+              .filter(SalaryConsolidation.location == location)
+              .filter(SalaryConsolidation.kafeel == kafeel))
+        if salary_category:
+            dq = dq.filter(SalaryConsolidation.salary_category == salary_category)
+        if salary_type:
+            dq = dq.filter(SalaryConsolidation.salary_type == salary_type)
+        existing = dq.first()
+        if existing and existing.payroll_id:
+            return jsonify({
+                'ok': False, 'duplicate': True,
+                'payroll_id': existing.payroll_id,
+                'error': _t(f'Payroll already exists. Payroll ID: {existing.payroll_id}',
+                            f'كشف الرواتب موجود بالفعل. رقم الكشف: {existing.payroll_id}')
+            }), 409
+
+        employees = _matching_employee_ids(kafeel, buyer_id, buyer_department,
+                                            location, salary_category, d2,
+                                            salary_type)
+        if not employees:
+            return jsonify({'ok': False, 'error': _t(
+                'No active employees match the selected criteria.',
+                'لا يوجد موظفون نشطون مطابقون للمعايير.')}), 400
+
+        payroll_id = next_payroll_id()
+        created = 0
+        skipped_overlap = []
+        for e in employees:
+            row = _build_row(e, payroll_id, d1, d2, month_name, salary_category)
+            # Cross-payroll double-payment guard: skip (don't include) an
+            # employee whose individual payable period overlaps a DIFFERENT
+            # existing payroll's period for them -- everyone else who
+            # matches the criteria still gets generated normally.
+            conflict = _employee_overlap_conflict(e.id, row.emp_from_date,
+                                                   row.emp_to_date, payroll_id)
+            if conflict:
+                skipped_overlap.append(
+                    f'{e.employee_code} - {e.name} '
+                    f'(overlaps payroll {conflict.payroll_id})')
+                continue
+            db.session.add(row)
+            created += 1
+
+        if not created:
+            db.session.rollback()
+            if skipped_overlap:
+                return jsonify({'ok': False, 'error': _t(
+                    'Every matching employee already has an overlapping payroll: ',
+                    'كل الموظفين المطابقين لديهم بالفعل كشف رواتب متداخل: ')
+                    + '; '.join(skipped_overlap)}), 400
+            return jsonify({'ok': False, 'error': _t(
+                'No active employees match the selected criteria.',
+                'لا يوجد موظفون نشطون مطابقون للمعايير.')}), 400
+
+        _audit('create', None,
+               f'Generated payroll {payroll_id}: {created} employees, {month_name}'
+               + (f'; skipped (date overlap): {"; ".join(skipped_overlap)}' if skipped_overlap else ''))
+        try:
+            db.session.commit()
+            resp = {'ok': True, 'created': created, 'payroll_id': payroll_id}
+            if skipped_overlap:
+                resp['skipped_overlap'] = skipped_overlap
+            return jsonify(resp)
+        except Exception:
+            db.session.rollback()
+            return jsonify({'ok': False, 'error': _t('Could not generate payroll.',
+                                                     'تعذّر إنشاء كشف الرواتب.')}), 500
+    finally:
+        db.session.execute(text('SELECT RELEASE_LOCK(:k)'), {'k': lock_key})
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -705,6 +902,34 @@ def payroll_edit(row_id):
         row.status = f.get('status')
     if 'payment_status' in f and f.get('payment_status') in ('Ready', 'Hold'):
         row.payment_status = f.get('payment_status')
+    if 'emp_from_date' in f:
+        new_from = _pd(f.get('emp_from_date'))
+        who = f'{row.employee_code} - {row.employee_name}'
+        if not new_from:
+            return jsonify({'ok': False, 'error': _t(
+                f'{who}: Invalid From Date.',
+                f'{who}: تاريخ بداية غير صالح.')}), 400
+        lo, hi = row.month_from, (row.emp_to_date or row.month_to)
+        if lo and hi and (new_from < lo or new_from > hi):
+            return jsonify({'ok': False, 'error': _t(
+                f'{who}: Individual From Date must be between '
+                f'{lo.strftime("%d-%m-%Y")} and {hi.strftime("%d-%m-%Y")}.',
+                f'{who}: يجب أن يكون تاريخ البداية الفردي بين '
+                f'{lo.strftime("%d-%m-%Y")} و {hi.strftime("%d-%m-%Y")}.')}), 400
+        # Cross-payroll double-payment guard (see _employee_overlap_conflict)
+        # -- an edit narrowing/widening this row's own period must not newly
+        # overlap a DIFFERENT payroll's period for the same employee.
+        conflict = _employee_overlap_conflict(row.employee_id, new_from, hi, row.payroll_id)
+        if conflict:
+            c_from = conflict.emp_from_date or conflict.month_from
+            c_to = conflict.emp_to_date or conflict.month_to
+            return jsonify({'ok': False, 'error': _t(
+                f'{who}: new From Date ({new_from} to {hi}) would overlap existing '
+                f'payroll {conflict.payroll_id} ({c_from} to {c_to}).',
+                f'{who}: تاريخ البداية الجديد يتداخل مع كشف رواتب موجود '
+                f'{conflict.payroll_id}.')}), 400
+        row.emp_from_date = new_from
+        row.days, row.fridays = _count_days_and_fridays(new_from, hi)
     for fld in _EDITABLE_NUM:
         if fld in f:
             val = _num(f.get(fld))
@@ -751,6 +976,7 @@ def payroll_refresh_row(row_id):
         setattr(row, k, v)
     for k, v in _wa_buyer_snapshot(e.id).items():
         setattr(row, k, v)
+    row.salary_order = _buyer_salary_order(row.buyer_id)
     _recalc(row)
     _audit('refresh', row.id, f'Refreshed payroll row {row.id} from Employee Master')
     try:
@@ -782,6 +1008,7 @@ def payroll_refresh_all(payroll_id):
             setattr(row, k, v)
         for k, v in _wa_buyer_snapshot(e.id).items():
             setattr(row, k, v)
+        row.salary_order = _buyer_salary_order(row.buyer_id)
         _recalc(row)
         refreshed += 1
     _audit('refresh_all', None, f'Refreshed {refreshed} rows in payroll {payroll_id}')
@@ -813,6 +1040,41 @@ def payroll_delete(row_id):
                                                  'تعذّر الحذف.')}), 500
 
 
+@payroll_bp.route('/<payroll_id>/delete-all', methods=['POST'])
+@login_required
+def payroll_delete_batch(payroll_id):
+    """Delete an ENTIRE payroll batch -- every row sharing this payroll_id --
+    in one action. Only while the whole batch is still Initial (every row in
+    a batch always shares the same payroll_status -- see payroll_set_flow),
+    the same restriction the single-row delete above already enforces. A
+    Ready/Post payroll must be moved back to Initial first via 'Edit Payroll
+    Status', which already reverses any GL posting (_unpost_payroll_gl) --
+    so this route never needs to touch GRL/JournalEntry itself."""
+    rows = SalaryConsolidation.query.filter_by(payroll_id=payroll_id).all()
+    if not rows:
+        return jsonify({'ok': False, 'error': _t('Payroll not found.',
+                                                 'الكشف غير موجود.')}), 404
+    if _flow(rows[0]) != 'Initial':
+        return jsonify({'ok': False, 'error': _t(
+            'Only an Initial-stage payroll can be deleted. Move it back to '
+            'Initial first (Edit Payroll Status).',
+            'يمكن حذف كشف الرواتب في حالة "أولي" فقط. أعد الحالة إلى "أولي" '
+            'أولاً (تعديل حالة الكشف).')}), 403
+
+    count = len(rows)
+    _audit('delete_payroll', None,
+           f'Deleted entire payroll {payroll_id} ({count} employees)')
+    try:
+        for r in rows:
+            db.session.delete(r)
+        db.session.commit()
+        return jsonify({'ok': True, 'deleted': count})
+    except Exception:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': _t('Could not delete payroll.',
+                                                 'تعذّر حذف كشف الرواتب.')}), 500
+
+
 # ── Add missing employee (constrained to payroll criteria) ────────
 @payroll_bp.route('/<payroll_id>/available-employees')
 @login_required
@@ -827,7 +1089,8 @@ def payroll_available_employees(payroll_id):
 
     employees = _matching_employee_ids(ref.kafeel, ref.buyer_id,
                                         ref.buyer_department, ref.location,
-                                        ref.salary_category)
+                                        ref.salary_category, ref.month_to,
+                                        ref.salary_type)
     out = [{
         'employee_id': e.id, 'employee_name': e.name or '',
         'profession': _emp_profession_str(e),
@@ -858,16 +1121,27 @@ def payroll_add_employee(payroll_id):
     # Confirm the employee matches the payroll criteria (filter-only check).
     matching_ids = {m.id for m in _matching_employee_ids(
         ref.kafeel, ref.buyer_id, ref.buyer_department, ref.location,
-        ref.salary_category)}
+        ref.salary_category, ref.month_to, ref.salary_type)}
     if emp_id not in matching_ids:
         return jsonify({'ok': False, 'error': _t(
             'Employee does not match this payroll\'s criteria.',
             'الموظف لا يطابق معايير هذا الكشف.')}), 400
 
-    days, fridays = _count_days_and_fridays(ref.month_from, ref.month_to)
-    row = _build_row(e, ref.payroll_id, ref.salary_order,
-                     ref.month_from, ref.month_to, ref.month, days, fridays,
-                     ref.salary_category)
+    row = _build_row(e, ref.payroll_id, ref.month_from, ref.month_to,
+                     ref.month, ref.salary_category)
+
+    # Cross-payroll double-payment guard (see _employee_overlap_conflict).
+    conflict = _employee_overlap_conflict(e.id, row.emp_from_date,
+                                           row.emp_to_date, ref.payroll_id)
+    if conflict:
+        c_from = conflict.emp_from_date or conflict.month_from
+        c_to = conflict.emp_to_date or conflict.month_to
+        who = f'{e.employee_code} - {e.name}'
+        return jsonify({'ok': False, 'error': _t(
+            f'{who}: payable period ({row.emp_from_date} to {row.emp_to_date}) '
+            f'overlaps existing payroll {conflict.payroll_id} ({c_from} to {c_to}).',
+            f'{who}: الفترة المستحقة تتداخل مع كشف رواتب موجود '
+            f'{conflict.payroll_id}.')}), 400
 
     # If this employee is already present, mark both as Double.
     dupes = (SalaryConsolidation.query
@@ -1057,15 +1331,20 @@ def payroll_grl_preview(payroll_id):
 @login_required
 def payroll_set_flow(payroll_id):
     """Direct set to any of the 3 fixed payroll-status values, via the
-    'Edit Payroll Status' dropdown (Initial / Ready / Post)."""
+    'Edit Payroll Status' dropdown (Initial / Ready / Post).
+
+    Permission rules:
+    - Currently Post (leaving Post, in any direction): Super Admin only --
+      even a plain Admin cannot touch it, since un-posting reverses real
+      GL entries (_unpost_payroll_gl).
+    - Ready -> Initial (a backward move): Admin or Super Admin only.
+    - Everything else (Initial -> Ready, Ready -> Post): the existing,
+      broader Payroll Manager / Administrator permission (_can_override).
+    """
     target = (request.form.get('flow') or '').strip()
     if target not in ('Initial', 'Ready', 'Post'):
         return jsonify({'ok': False, 'error': _t('Invalid state.',
                                                  'حالة غير صالحة.')}), 400
-    if not _can_override(current_user):
-        return jsonify({'ok': False, 'error': _t(
-            'You are not authorized to change the payroll workflow state.',
-            'ليس لديك صلاحية لتغيير حالة سير العمل.')}), 403
 
     rows = (SalaryConsolidation.query
             .filter_by(payroll_id=payroll_id).all())
@@ -1074,6 +1353,22 @@ def payroll_set_flow(payroll_id):
                                                  'الكشف غير موجود.')}), 404
 
     current = _flow(rows[0])
+
+    if current == 'Post':
+        if not _is_superadmin(current_user):
+            return jsonify({'ok': False, 'error': _t(
+                'This payroll is Posted. Only a Super Admin can change its status.',
+                'تم ترحيل هذا الكشف. يمكن لمسؤول عام فقط تغيير حالته.')}), 403
+    elif current == 'Ready' and target == 'Initial':
+        if not _is_admin_or_superadmin(current_user):
+            return jsonify({'ok': False, 'error': _t(
+                'Only an Admin or Super Admin can move a payroll back from Ready to Initial.',
+                'يمكن لمسؤول أو مسؤول عام فقط إعادة الكشف من "جاهز" إلى "أولي".')}), 403
+    elif not _can_override(current_user):
+        return jsonify({'ok': False, 'error': _t(
+            'You are not authorized to change the payroll workflow state.',
+            'ليس لديك صلاحية لتغيير حالة سير العمل.')}), 403
+
     try:
         if target == 'Post' and current != 'Post':
             _post_payroll_gl(payroll_id, rows)
@@ -1194,7 +1489,7 @@ def payroll_export():
     for r, row in enumerate(rows, 2):
         d = row.to_dict()
         for c, (h, f) in enumerate(EXPORT_COLUMNS, 1):
-            ws.cell(row=r, column=c, value=d.get(f))
+            ws.cell(row=r, column=c, value=xlsx_safe(d.get(f)))
 
     buf = io.BytesIO()
     wb.save(buf)

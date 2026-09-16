@@ -3,10 +3,28 @@
 Kept in one place so every sub-module (professions, buyers, items, ...) uses the
 exact same admin check and translation helper that the original lookups.py had.
 """
+import re
 from functools import wraps
 
 from flask import request, redirect, url_for, flash, session, jsonify
 from flask_login import current_user
+
+# XML 1.0 (and therefore .xlsx) forbids most ASCII control characters --
+# openpyxl raises IllegalCharacterError and aborts the WHOLE export the
+# moment any single cell anywhere contains one of these, e.g. text pasted
+# from Word/PDF/an old system. Every openpyxl-based export in this app
+# (Payroll, Journal/Ledger, Chart of Accounts, Employee import templates,
+# the generic io_tools.py exporter) should run every cell value through
+# xlsx_safe() before writing it, rather than writing raw DB values.
+_ILLEGAL_XLSX_CHARS_RE = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f]')
+
+
+def xlsx_safe(v):
+    """Strip characters openpyxl/XML can't represent, leaving everything
+    else (including tabs/newlines and non-string values) untouched."""
+    if isinstance(v, str):
+        return _ILLEGAL_XLSX_CHARS_RE.sub('', v)
+    return v
 
 
 def admin_required(f):
@@ -53,11 +71,12 @@ def current_tenant_customer():
 def is_basic_mode():
     """True while the current tenant's SaaS plan is 'basic' -- Chart of
     Accounts is fully locked and every Post & Save action is blocked for
-    everyone in that tenant, except a Super Admin user
-    (current_user.is_super_admin), who always has full control regardless
-    of plan. Always False outside a tenant session."""
+    everyone in that tenant, except a Super Admin (current_user.
+    effectively_super_admin -- the real platform account, or a tenant's
+    own local SuperAdmin), who always has full control regardless of
+    plan. Always False outside a tenant session."""
     try:
-        if current_user and getattr(current_user, 'is_super_admin', False):
+        if current_user and getattr(current_user, 'effectively_super_admin', False):
             return False
     except RuntimeError:
         pass
@@ -76,6 +95,71 @@ def block_in_basic_mode_json(f):
             return jsonify({'ok': False, 'error': _t(
                 'Posting is locked on the Basic plan. Upgrade to Expert to unlock it.',
                 'الترحيل مقفل في الخطة الأساسية. قم بالترقية إلى خطة الخبير لتفعيله.')}), 403
+        return f(*a, **k)
+    return d
+
+
+# ── SaaS trial-user shared-data write gate ──────────────────────────
+def is_trial_user():
+    """True when the signed-in user is logged into a SaaS trial
+    customer's own account. Trial customers share SellerMs's single
+    database (see tenant_provisioning.py's docstring on why every paid
+    customer instead gets their own dedicated one), so unlike a paid
+    tenant, letting a trial user add or delete platform-wide reference
+    data -- Chart of Accounts, Tax Codes, Auto Code Selection -- would
+    affect every other trial customer and the platform's own shared
+    defaults, not just their own account. Always False for the
+    platform's own Super Admin, and for a paid tenant's own users
+    (session['tenant_db'] already means their own isolated database, so
+    there is no shared-data risk to guard against there)."""
+    try:
+        if not current_user or not current_user.is_authenticated:
+            return False
+        if getattr(current_user, 'is_super_admin', False):
+            return False
+    except RuntimeError:
+        return False
+    if session.get('tenant_db'):
+        return False
+    from models import Customer
+    customer = Customer.query.filter_by(email=current_user.email).first()
+    return bool(customer and not customer.database_name)
+
+
+def block_trial_write(f):
+    """Blocks a SaaS trial customer's own login from adding/deleting
+    shared reference data through a flash+redirect style route (Chart of
+    Accounts) -- see is_trial_user() above. Editing an existing row is
+    deliberately left alone; only add/delete are gated."""
+    @wraps(f)
+    def d(*a, **k):
+        if is_trial_user():
+            flash(_t(
+                'Trial accounts cannot add or delete this shared reference data -- '
+                'it is shared with every other trial customer. Upgrade to a paid '
+                'plan for your own dedicated database.',
+                'لا يمكن للحسابات التجريبية إضافة أو حذف هذه البيانات المرجعية المشتركة '
+                '-- فهي مشتركة مع كل عميل تجريبي آخر. قم بالترقية إلى خطة مدفوعة '
+                'للحصول على قاعدة بياناتك الخاصة.'), 'warning')
+            return redirect(request.referrer or url_for('dashboard.index'))
+        return f(*a, **k)
+    return d
+
+
+def block_trial_write_json(f):
+    """JSON-response counterpart of block_trial_write(), for routes that
+    reply with jsonify() instead of flash+redirect (Purchase/Sales Tax
+    Codes, Auto Code Selection add/delete)."""
+    @wraps(f)
+    def d(*a, **k):
+        if is_trial_user():
+            return jsonify({'ok': False, 'error': _t(
+                'Trial accounts cannot add or delete this shared reference data -- '
+                'it is shared with every other trial customer. Upgrade to a paid '
+                'plan for your own dedicated database.',
+                'لا يمكن للحسابات التجريبية إضافة أو حذف هذه البيانات المرجعية المشتركة '
+                '-- فهي مشتركة مع كل عميل تجريبي آخر. قم بالترقية إلى خطة مدفوعة '
+                'للحصول على قاعدة بياناتك الخاصة.')}), 403
         return f(*a, **k)
     return d
 

@@ -417,9 +417,9 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               </div>
               <div class="f-grid4">
                 <div class="f-item">
-                  <div class="f-lbl">{% if ar %}رقم طلب الشراء{% else %}Purchase Request No{% endif %} <span class="f-req">*</span></div>
+                  <div class="f-lbl">{% if ar %}رقم طلب الشراء{% else %}Purchase Request No{% endif %}</div>
                   <select id="pq_pr_id" class="f-inp" onchange="onPrChange()">
-                    <option value="">-- {% if ar %}اختر طلب شراء معتمد{% else %}Select an Approved PR{% endif %} --</option>
+                    <option value="">-- {% if ar %}بدون طلب شراء (عرض مستقل){% else %}No PR (standalone quotation){% endif %} --</option>
                     {% for pr in prs %}<option value="{{ pr.id }}">{{ pr.doc_no }}</option>{% endfor %}
                   </select>
                 </div>
@@ -842,9 +842,24 @@ function validatePqDates() {
 /* ══ Pull header + line items from the selected Approved PR ══ */
 let _prPullInProgress = false;
 
+// Account Code is inherited from the linked PR and locked while that link
+// is active -- it only becomes freely editable again for a standalone
+// quotation (no PR selected). Locking (not just disabling the <select>)
+// also stops onPqAccountCodeChange() from letting the user override the
+// tax code on every line via the header cascade while linked.
+function _setPqAccountCodeLocked(locked) {
+  const el = document.getElementById('pq_account_code');
+  if (!el) return;
+  el.disabled = locked;
+  el.style.background = locked ? '#f8fafc' : '';
+  el.title = locked
+    ? (IS_AR ? 'يُحدَّد تلقائيًا من طلب الشراء المرتبط' : 'Derived from the linked Purchase Request')
+    : (IS_AR ? 'رمز الحساب' : 'Account Code');
+}
+
 async function onPrChange() {
   const prId = document.getElementById('pq_pr_id').value;
-  if (!prId) return;
+  if (!prId) { _setPqAccountCodeLocked(false); return; }
   _prPullInProgress = true;
   try {
     const res = await fetch('/purchase/requests/' + prId + '/summary');
@@ -856,6 +871,8 @@ async function onPrChange() {
     if (pr.required_date) document.getElementById('pq_req_date').value   = pr.required_date;
     if (pr.purchase_type) document.getElementById('pq_ptype').value = pr.purchase_type;
     if (pr.kind)           document.getElementById('pq_kind').value  = pr.kind;
+    document.getElementById('pq_account_code').innerHTML = accountCodeOptionsHtml(pr.account_code || '');
+    _setPqAccountCodeLocked(true);
 
     document.getElementById('liBody').innerHTML = '';
     _liIdx = 0;
@@ -1203,6 +1220,7 @@ async function openAddPQ() {
   document.getElementById('pq_ptype').value = 'Expense';
   document.getElementById('pq_supplier').value = '';
   document.getElementById('pq_pr_id').value = '';
+  _setPqAccountCodeLocked(false);
 
   // ⭐ FIX: Clear and fetch fresh document number
   document.getElementById('pq_doc_no').value = '';
@@ -1277,6 +1295,7 @@ function openEditPQ(id) {
 
       const accVal = d.account_code || 'P1';
       document.getElementById('pq_account_code').innerHTML = accountCodeOptionsHtml(accVal);
+      _setPqAccountCodeLocked(!!d.purchase_request_id);
 
       await loadItemMaster();
       await loadLevelFive();
@@ -1357,10 +1376,6 @@ async function savePQ() {
     }
   }
   
-  if (!document.getElementById('pq_pr_id').value) {
-    alert(IS_AR ? 'يجب اختيار طلب شراء معتمد' : 'An Approved Purchase Request must be selected');
-    return;
-  }
   if (!document.getElementById('pq_supplier').value) {
     alert(IS_AR ? 'يجب اختيار المورد' : 'Supplier Name must be selected');
     return;
@@ -1581,10 +1596,10 @@ const cols = [
   {headerName:IS_AR?'المورد':'Supplier',field:'supplier_name',minWidth:180,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'رقم مرجع المورد':'Supplier Ref No',field:'supplier_ref_no',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'صالح حتى':'Valid Until',field:'valid_until',width:115,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الشحن':'Freight',field:'total_freight',width:120,cellRenderer:rSAR,floatingFilter:false},

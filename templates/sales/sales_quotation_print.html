@@ -155,7 +155,7 @@ body { font-family:'Segoe UI','Arial',sans-serif; color:#111c2e; }
 
           {# ── Quotation Information: left-aligned stacked lines ── #}
           <div class="qi-stack">
-            <div class="qi-line"><span class="qi-lbl">{% if ar %}التاريخ{% else %}Date{% endif %}:</span> <span class="qi-val">{{ doc.posting_date.strftime('%d-%b-%Y') if doc.posting_date else '—' }}</span></div>
+            <div class="qi-line"><span class="qi-lbl">{% if ar %}التاريخ{% else %}Date{% endif %}:</span> <span class="qi-val">{{ doc.posting_date.strftime('%d-%b-%y') if doc.posting_date else '—' }}</span></div>
             <div class="qi-line"><span class="qi-lbl">{% if ar %}إلى{% else %}To{% endif %}:</span> <span class="qi-val">{{ doc.buyer.buyer_name_en if doc.buyer else '—' }}</span></div>
             <div class="qi-line"><span class="qi-lbl">{% if ar %}الموضوع{% else %}Subject{% endif %}:</span> <span class="qi-val">{{ doc.subject or '—' }}</span></div>
             {% if doc.body %}

@@ -132,7 +132,7 @@ const COLS=[
   {headerName:IS_AR?'حساب التحكم':'Control Account', field:'control_account', width:130},
   {headerName:IS_AR?'رقم مرجع المورد':'Reference Code', field:'reference_code', width:140},
   {headerName:IS_AR?'اسم الحساب':'Account Name', field:'account_name', minWidth:170, flex:1},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting', field:'posting_date', width:130},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting', field:'posting_date', width:130,valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'مدين':'Debit', field:'debit', width:115, valueFormatter:p=>Number(p.value||0).toFixed(2)},
   {headerName:IS_AR?'دائن':'Credit', field:'credit', width:115, valueFormatter:p=>Number(p.value||0).toFixed(2)},
   {headerName:IS_AR?'البيان':'Narration', field:'line_narration', minWidth:150},

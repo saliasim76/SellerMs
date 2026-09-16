@@ -49,6 +49,25 @@
     pivot: 'Pivot', pivotTitle: 'Pivot Table', pivotHint: 'Drag fields to build groups / pivot / aggregates', pivotClose: 'Close'
   };
 
+  /* ── Shared date display formatter ────────────────────────────
+     ISO 'YYYY-MM-DD' (optionally with a time part) -> '01-Apr-26'.
+     Display-only: use it as an ag-grid column's valueFormatter, never
+     to rewrite the underlying cell value -- most date fields in this
+     app are also used to populate a native <input type="date"> in an
+     edit form, which requires the raw ISO string to work. Leaves
+     anything that isn't a recognizable ISO date untouched (already-
+     formatted strings, blanks, non-date text) so it's safe to apply
+     even to columns that mix real dates with placeholder text. */
+  var MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function fmtDate(v) {
+    if (v == null || v === '') return '';
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+    if (!m) return v;
+    var mon = MONTHS_EN[parseInt(m[2], 10) - 1];
+    if (!mon) return v;
+    return m[3] + '-' + mon + '-' + m[1].slice(-2);
+  }
+
   /* ── Version bridge ───────────────────────────────────────────
      v31: column ops live on columnApi.  v33: they moved to api.   */
   function cols(ctx) {
@@ -889,5 +908,5 @@
     });
   }
 
-  window.GridKit = { enhance: enhance };
+  window.GridKit = { enhance: enhance, fmtDate: fmtDate };
 })();

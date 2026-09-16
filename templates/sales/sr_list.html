@@ -847,7 +847,7 @@ async function openAdd() {
   const ownerSel = document.getElementById('sr_owner');
   ownerSel.selectedIndex = ownerSel.options.length > 1 ? 1 : 0;
   const accSel = document.getElementById('sr_account_code');
-  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.length ? TAX_CODES[0].account_code : '');
+  accSel.innerHTML = accountCodeOptionsHtml(TAX_CODES.some(t => t.account_code === TAX_DEFAULT_CODE) ? TAX_DEFAULT_CODE : (TAX_CODES.length ? TAX_CODES[0].account_code : ''));
   await loadOwnerWarehouses(ownerSel.value);
   document.getElementById('liBody').innerHTML = '';
   document.getElementById('attList').innerHTML = '';
@@ -956,11 +956,34 @@ function openEdit(id) {
     });
 }
 
+function validateSrLineItems() {
+  const rows = document.querySelectorAll('#liBody tr');
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const g = n => row.querySelector(`[name="${n}[]"]`)?.value || '';
+    const n = i + 1;
+    if (!g('li_item_code').trim()) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب اختيار كود الصنف واسمه.' : ': Item Code and Item Name must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_qty')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال كمية أكبر من صفر.' : ': Quantity must be selected.'));
+      return false;
+    }
+    if (!(parseFloat(g('li_rate')) > 0)) {
+      alert((IS_AR ? 'السطر ' : 'Row ') + n + (IS_AR ? ': يجب إدخال سعر أكبر من صفر.' : ': Rate must be selected.'));
+      return false;
+    }
+  }
+  return true;
+}
+
 /* ══ Save ══ */
 async function savePR() {
   console.log('savePR() called');
   if (!validatePrDates()) { return; }
-  
+  if (!validateSrLineItems()) { return; }
+
   try {
     const id  = document.getElementById('sr_id').value;
     const url = id ? `/sales/requests/${id}/edit` : '/sales/requests/add';
@@ -1106,10 +1129,10 @@ const cols = [
   {headerName:IS_AR?'المستخدم':'Requester',field:'requester',width:120,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'اسم مقدم الطلب':'Requester Name',field:'requester_name',minWidth:160,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'صالح حتى':'Valid Until',field:'valid_until',width:115,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},

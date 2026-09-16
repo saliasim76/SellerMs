@@ -378,7 +378,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
               <div class="f-grid4" style="margin-bottom:12px;">
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}نوع الشراء{% else %}Purchase Type{% endif %}</div>
-                  <select id="grr_ptype" class="f-inp">
+                  <select id="grr_ptype" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من فاتورة الشراء{% else %}Derived from the Purchase Invoice{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                     <option value="Assets">{% if ar %}أصول{% else %}Assets{% endif %}</option>
                     <option value="Expense" selected>{% if ar %}مصروف{% else %}Expense{% endif %}</option>
@@ -386,7 +386,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}النوع{% else %}Kind{% endif %}<span class="f-req">*</span></div>
-                  <select id="grr_kind" class="f-inp">
+                  <select id="grr_kind" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من فاتورة الشراء{% else %}Derived from the Purchase Invoice{% endif %}">
                     <option value="Goods">Goods / بضائع</option>
                     <option value="Services">Services / خدمات</option>
                   </select>
@@ -450,7 +450,7 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
                 </div>
                 <div class="f-item">
                   <div class="f-lbl">{% if ar %}رمز الحساب{% else %}Account Code{% endif %}</div>
-                  <select id="grr_account_code" class="f-inp" title="{% if ar %}رمز الحساب{% else %}Account Code{% endif %}">
+                  <select id="grr_account_code" class="f-inp" disabled style="background:#f3f4f6;" title="{% if ar %}يتم تحديده من فاتورة الشراء{% else %}Derived from the Purchase Invoice{% endif %}">
                     <option value="">{% if ar %}-- اختر --{% else %}-- Select --{% endif %}</option>
                   </select>
                 </div>
@@ -693,6 +693,7 @@ async function onPIChange() {
     if (pinv.supplier_ref_no) document.getElementById('grr_supplier_ref').value = pinv.supplier_ref_no;
     if (pinv.purchase_type) document.getElementById('grr_ptype').value = pinv.purchase_type;
     if (pinv.kind) document.getElementById('grr_kind').value = pinv.kind;
+    document.getElementById('grr_account_code').innerHTML = accountCodeOptionsHtml(pinv.account_code || '');
 
     // ⭐ Auto-fill line items from invoice -- only lines that still have
     // remaining (unreturned) quantity; fully-returned lines are skipped.
@@ -1318,9 +1319,9 @@ const cols = [
   {headerName:IS_AR?'رقم مرجع المورد':'Supplier Ref No',field:'supplier_ref_no',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'شخص الاتصال':'Contact Person',field:'contact_person',width:140,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:100,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ التسليم':'Delivery Date',field:'delivery_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'كود الضريبة':'Tax Code',field:'tax_code',width:110,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},

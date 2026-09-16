@@ -70,8 +70,8 @@ body { display:flex; justify-content:center; align-items:center; min-height:100v
     <div class="field-group"><span class="label">{% if ar %}الدفع إلى{% else %}Pay To{% endif %}</span><span class="value">{{ doc.pay_to_type }}{% if doc._pay_to_name() %} — {{ doc._pay_to_name() }}{% endif %}</span></div>
     <div class="field-group"><span class="label">{% if ar %}نوع الدفعة{% else %}Payment Type{% endif %}</span><span class="value">{{ doc.payment_type or '—' }}</span></div>
     <div class="field-group"><span class="label">{% if ar %}الحالة{% else %}Status{% endif %}</span><span class="value">{{ doc.status }}</span></div>
-    <div class="field-group"><span class="label">{% if ar %}تاريخ الدفع{% else %}Payment Date{% endif %}</span><span class="value">{{ doc.payment_date or '—' }}</span></div>
-    <div class="field-group"><span class="label">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</span><span class="value">{{ doc.posting_date or '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}تاريخ الدفع{% else %}Payment Date{% endif %}</span><span class="value">{{ doc.payment_date.strftime('%d-%b-%y') if doc.payment_date else '—' }}</span></div>
+    <div class="field-group"><span class="label">{% if ar %}تاريخ الترحيل{% else %}Posting Date{% endif %}</span><span class="value">{{ doc.posting_date.strftime('%d-%b-%y') if doc.posting_date else '—' }}</span></div>
     <div class="field-group"><span class="label">{% if ar %}طريقة الدفع{% else %}Payment Method{% endif %}</span><span class="value">{{ doc.payment_method.name if doc.payment_method else '—' }}</span></div>
     <div class="field-group"><span class="label">{% if ar %}حساب الدفع{% else %}Payment Account{% endif %}</span><span class="value">{{ doc.payment_account_id or '—' }}</span></div>
     <div class="field-group"><span class="label">{% if ar %}الرقم المرجعي{% else %}Reference No{% endif %}</span><span class="value">{{ doc.reference_no or '—' }}</span></div>

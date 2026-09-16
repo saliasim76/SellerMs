@@ -16,7 +16,19 @@ from .lookups import lookups_bp, admin_required, _t
 # ITEM MASTER
 # ══════════════════════════════════════════════════════════════════
 import urllib.request, urllib.parse, json as _json
-from models import ItemMaster, ItemCategory, ItemSubCategory, SupplierMaster, LevelFive
+from models import ItemMaster, ItemCategory, ItemSubCategory, SupplierMaster, LevelFive, StoreTransaction
+
+@lookups_bp.route('/items/<path:item_code>/stock')
+@login_required
+def item_stock(item_code):
+    """Current on-hand stock balance for one item -- same query shape as
+    _check_dn_stock_availability() in database/routes/sales.py, exposed so
+    forms that let a user freely pick an item (not derived from a locked
+    parent document) can warn about insufficient stock up front."""
+    balance = (db.session.query(db.func.coalesce(db.func.sum(StoreTransaction.quantity), 0))
+               .filter(StoreTransaction.item_code == item_code, StoreTransaction.status == 'Active')
+               .scalar())
+    return jsonify({'item_code': item_code, 'stock_available': float(balance or 0)})
 
 @lookups_bp.route('/items')
 @login_required

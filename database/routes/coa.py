@@ -24,6 +24,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 
 from models import db, LevelOne, LevelTwo
+from database.routes.shared import block_trial_write
 
 coa_bp = Blueprint('coa', __name__, url_prefix='/coa')
 
@@ -156,6 +157,7 @@ def level_one_list():
 @coa_bp.route('/level-one/add', methods=['GET', 'POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_one_add():
     if request.method == 'GET':
         return _reject_get('coa.level_one_list')
@@ -222,6 +224,7 @@ def level_one_edit(id):
 @coa_bp.route('/level-one/<int:id>/delete', methods=['POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_one_delete(id):
     from database.routes.recycle_bin import soft_delete
     try:
@@ -278,6 +281,7 @@ def level_two_next_code():
 @coa_bp.route('/level-two/add', methods=['GET', 'POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_two_add():
     if request.method == 'GET':
         return _reject_get('coa.level_two_list')
@@ -369,6 +373,7 @@ def level_two_edit(id):
 @coa_bp.route('/level-two/<int:id>/delete', methods=['POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_two_delete(id):
     from database.routes.recycle_bin import soft_delete
     try:
@@ -477,6 +482,7 @@ def level_three_next_code():
 @coa_bp.route('/level-three/add', methods=['GET', 'POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_three_add():
     if request.method == 'GET':
         return _reject_get('coa.level_three_list')
@@ -535,6 +541,7 @@ def level_three_edit(id):
 @coa_bp.route('/level-three/<int:id>/delete', methods=['POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_three_delete(id):
     from database.routes.recycle_bin import soft_delete
     try:
@@ -586,6 +593,7 @@ def level_four_next_code():
 @coa_bp.route('/level-four/add', methods=['GET', 'POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_four_add():
     if request.method == 'GET':
         return _reject_get('coa.level_four_list')
@@ -644,6 +652,7 @@ def level_four_edit(id):
 @coa_bp.route('/level-four/<int:id>/delete', methods=['POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_four_delete(id):
     from database.routes.recycle_bin import soft_delete
     try:
@@ -695,6 +704,7 @@ def level_five_next_code():
 @coa_bp.route('/level-five/add', methods=['GET', 'POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_five_add():
     if request.method == 'GET':
         return _reject_get('coa.level_five_list')
@@ -755,6 +765,7 @@ def level_five_edit(id):
 @coa_bp.route('/level-five/<int:id>/delete', methods=['POST'])
 @login_required
 @admin_required
+@block_trial_write
 def level_five_delete(id):
     from database.routes.recycle_bin import soft_delete
     try:
@@ -1196,6 +1207,7 @@ def coa_export():
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
+    from database.routes.shared import xlsx_safe
 
     wb = Workbook()
     wb.remove(wb.active)
@@ -1214,7 +1226,7 @@ def coa_export():
         rows = coa_order(spec['model'].query, spec['model'].code).all()
         for r_i, row in enumerate(rows, 2):
             for c_i, (_, attr) in enumerate(spec['cols'], 1):
-                ws.cell(row=r_i, column=c_i, value=getattr(row, attr, '') or '')
+                ws.cell(row=r_i, column=c_i, value=xlsx_safe(getattr(row, attr, '')) or '')
 
     buf = _io.BytesIO()
     wb.save(buf)

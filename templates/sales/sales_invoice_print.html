@@ -53,8 +53,6 @@ body {
 .total-line .tvalue { font-weight:600; color:#0f1e34; }
 .total-line.bold { font-weight:700; font-size:1rem; border-bottom:2px solid #1b2f4a; }
 .footer-note { margin-top:.8rem; font-size:.7rem; color:#4f6183; border-top:1px solid #d2dae8; padding-top:.7rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:.4rem; }
-.qr-block { display:flex; justify-content:center; margin-top:1.2rem; }
-.qr-block img { width:140px; height:140px; image-rendering:pixelated; }
 /* Intentionally no small-screen reflow rule here -- the wrapper is a fixed
    A4 sheet (210mm) so the on-screen preview and the printed page always
    show the exact same layout; on a narrow viewport it scrolls horizontally
@@ -77,12 +75,13 @@ body {
 <div class="toolbar">
   <a href="{{ url_for('sales.sinv_view', id=doc.sales_invoice_id) }}" style="background:white;color:#374151;border:1.5px solid #d1d5db;"><i class="fas fa-arrow-left"></i>{% if ar %}رجوع{% else %}Back{% endif %}</a>
   <button onclick="window.print()" style="background:#2563eb;color:white;"><i class="fas fa-print"></i>{% if ar %}طباعة{% else %}Print{% endif %}</button>
+  <a href="{{ url_for('sales.sinv_pdf', id=doc.sales_invoice_id) }}" style="background:#15803d;color:white;"><i class="fas fa-file-pdf"></i>{% if ar %}تنزيل PDF{% else %}Download PDF{% endif %}</a>
 </div>
 
 <div class="invoice-wrapper">
 
-  {# HEADER: Seller (our own Owner company) identity + invoice badge #}
-  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;border-bottom:2px solid #1a2b42;padding-bottom:.4rem;">
+  {# HEADER: Seller (our own Owner company) identity + QR (top-right) #}
+  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a2b42;padding-bottom:.4rem;">
     <div>
       <div class="header-arabic">{{ owner.name_ar if owner and owner.name_ar else '—' }}</div>
       <div class="company-name">{{ owner.name if owner else '—' }}</div>
@@ -91,10 +90,16 @@ body {
         <span><span style="font-weight:600;">VAT :</span> {{ owner.vat_number if owner and owner.vat_number else '—' }}</span>
       </div>
     </div>
+    {% if qr_b64 %}<img src="data:image/png;base64,{{ qr_b64 }}" alt="QR" style="width:100px;height:100px;image-rendering:pixelated;flex-shrink:0;">{% endif %}
+  </div>
+
+  {# Invoice Date / Invoice Month / TAX INVOICE badge row #}
+  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-top:.5rem;gap:.6rem;">
+    <div style="font-size:.85rem;"><span style="font-weight:600;">Invoice Date:</span> {{ doc.document_date.strftime('%d-%b-%y') if doc.document_date else '—' }}</div>
+    <div style="font-size:.85rem;"><span style="font-weight:600;">Month:</span> {{ doc.to_date.strftime('%b %y') if doc.to_date else '—' }}</div>
     <div style="text-align:right;">
       <div style="background:#0f2642;color:white;padding:.3rem 1.2rem;border-radius:30px;font-weight:700;font-size:1.1rem;display:inline-block;">TAX INVOICE</div>
       <div style="font-weight:500;margin-top:.2rem;font-size:.9rem;">فاتورة ضريبية</div>
-      <div style="margin-top:.4rem;font-size:.85rem;"><span style="font-weight:600;">Invoice Date:</span> {{ doc.document_date.strftime('%d-%b-%Y') if doc.document_date else '—' }}</div>
     </div>
   </div>
 
@@ -109,7 +114,7 @@ body {
     <div class="field-group"><span class="label">Payment Method</span><span class="value">{{ doc.payment_method or '—' }}</span></div>
     <div class="field-group"><span class="label">Invoice Period</span><span class="value">—</span></div>
     <div class="field-group"><span class="label">Department / Branch</span><span class="value">—</span></div>
-    <div class="field-group"><span class="label">Due Date</span><span class="value">{{ doc.delivery_date.strftime('%d-%b-%Y') if doc.delivery_date else '—' }}</span></div>
+    <div class="field-group"><span class="label">Due Date</span><span class="value">{{ doc.delivery_date.strftime('%d-%b-%y') if doc.delivery_date else '—' }}</span></div>
     <div class="field-group"><span class="label">Bank</span><span class="value">{{ bank.bank_name if bank else '—' }}</span></div>
     <div class="field-group"><span class="label">Project / Ref No.</span><span class="value">{{ doc.buyer_ref_no or '—' }}</span></div>
     <div class="field-group"><span class="label">IBAN</span><span class="value">{{ bank.iban if bank else '—' }}</span></div>
@@ -198,14 +203,10 @@ body {
     <div class="total-line bold" style="border-bottom:2px solid #0b1f3b;"><span class="tlabel">Amount incl. VAT (SAR)</span><span class="tvalue">{{ '{:,.2f}'.format(doc.total_incl_vat or 0) }}</span></div>
   </div>
 
-  <div class="qr-block">
-    {% if qr_b64 %}<img src="data:image/png;base64,{{ qr_b64 }}" alt="QR">{% endif %}
-  </div>
-
   <div class="footer-note">
     <span>Invoice No: {{ doc.doc_no }} · VAT: {{ owner.vat_number if owner and owner.vat_number else '—' }}</span>
     <span>CR: {{ owner.crn if owner and owner.crn else '—' }} · IBAN: {{ bank.iban if bank else '—' }}</span>
-    <span><i class="far fa-calendar-alt"></i> {{ doc.document_date.strftime('%d-%b-%Y') if doc.document_date else '—' }}</span>
+    <span><i class="far fa-calendar-alt"></i> {{ doc.document_date.strftime('%d-%b-%y') if doc.document_date else '—' }}</span>
   </div>
 
 </div>
@@ -213,7 +214,9 @@ body {
 /* Print button on the list/view page should go straight into printing --
    this page IS the print destination, so trigger the print dialog on load
    instead of requiring a second click. */
+{% if not is_preview %}
 window.addEventListener('load', function () { window.print(); });
+{% endif %}
 </script>
 </body>
 </html>

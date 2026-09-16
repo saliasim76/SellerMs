@@ -5,6 +5,7 @@ Accounts sidebar section since it is COA-adjacent configuration data.
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 from models import db, AutoCodeSelection, Module, SystemForm, LevelFour, LevelFive
+from database.routes.shared import block_trial_write_json
 
 # Cash & Bank is not configured through this screen -- its Outgoing/
 # Incoming Payment forms now have their own "GL Account" dropdown, scoped
@@ -193,6 +194,7 @@ def _validate():
 # ── Create ──────────────────────────────────────────────────────
 @auto_code_bp.route('/auto-code-selection/add', methods=['POST'])
 @login_required
+@block_trial_write_json
 def auto_code_add():
     data, err = _validate()
     if err:
@@ -228,6 +230,7 @@ def auto_code_edit(id):
 # ── Delete ──────────────────────────────────────────────────────
 @auto_code_bp.route('/auto-code-selection/<int:id>/delete', methods=['POST'])
 @login_required
+@block_trial_write_json
 def auto_code_delete(id):
     row = AutoCodeSelection.query.get_or_404(id)
     try:

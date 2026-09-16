@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function(){
   agGrid.createGrid(document.getElementById('obListGrid'), {
     columnDefs: [
       {headerName: IS_AR?'رقم المستند':'Doc No.', field:'doc_no', width:150, cellRenderer:p=>p.value||'—'},
-      {headerName: IS_AR?'تاريخ الرصيد':'Balance Date', field:'balance_date', width:130},
+      {headerName: IS_AR?'تاريخ الرصيد':'Balance Date', field:'balance_date', width:130,valueFormatter:p=>window.GridKit.fmtDate(p.value)},
       {headerName: IS_AR?'الحالة':'Status', field:'status', width:110, cellRenderer:statusBadge},
       {headerName: IS_AR?'إجمالي المدين':'Total Debit', field:'total_debit', width:140, valueFormatter:p=>fmt2(p.value)},
       {headerName: IS_AR?'إجمالي الدائن':'Total Credit', field:'total_credit', width:140, valueFormatter:p=>fmt2(p.value)},

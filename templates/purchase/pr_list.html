@@ -314,8 +314,8 @@ select.li-inp{appearance:none;padding-right:16px;background-image:url("data:imag
     <div class="toolbar-left">
       <button class="tool-btn tool-btn-green" onclick="openAdd()"><i class="fas fa-plus"></i></button>
       <button class="tool-btn tool-btn-blue" onclick="loadData()"><i class="fas fa-sync-alt"></i></button>
-      <button class="tool-btn" onclick="gridApi&&gridApi.setFilterModel(null);document.getElementById('qs').value='';gridApi.setGridOption('quickFilterText','')"><i class="fas fa-times-circle"></i></button>
-      <button class="tool-btn" onclick="gridApi&&gridApi.exportDataAsCsv({fileName:'purchase_requests.csv'})" title="Export"><i class="fas fa-file-export"></i></button>
+      <button class="tool-btn tool-btn-gray" onclick="gridApi&&gridApi.setFilterModel(null);document.getElementById('qs').value='';gridApi.setGridOption('quickFilterText','')" title="{% if ar %}مسح الفلاتر{% else %}Clear Filters{% endif %}"><i class="fas fa-times-circle"></i></button>
+      <button class="tool-btn tool-btn-teal" onclick="gridApi&&gridApi.exportDataAsCsv({fileName:'purchase_requests.csv'})" title="{% if ar %}تصدير{% else %}Export{% endif %}"><i class="fas fa-file-export"></i></button>
     </div>
     <div class="toolbar-right d-flex align-items-center gap-3">
       <div class="sel-badge"><span id="selText">0 {% if ar %}طلب{% else %}requests{% endif %}</span></div>
@@ -1449,10 +1449,10 @@ const cols = [
   {headerName:IS_AR?'المستخدم':'Requester',field:'requester',width:120,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'اسم مقدم الطلب':'Requester Name',field:'requester_name',minWidth:160,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الحالة':'Status',field:'status',width:105,cellRenderer:rStatus,floatingFilter:false,filter:'agSetColumnFilter',filterParams:{values:['Open','Pending','Approved','Closed','Cancelled'],buttons:['apply','reset','clear']}},
-  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ الترحيل':'Posting Date',field:'posting_date',width:125,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'صالح حتى':'Valid Until',field:'valid_until',width:115,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter'},
-  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'تاريخ المستند':'Document Date',field:'document_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
+  {headerName:IS_AR?'التاريخ المطلوب':'Required Date',field:'required_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'الإجمالي قبل الخصم':'Total',field:'total_before_discount',width:130,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الخصم':'Discount',field:'total_discount',width:120,cellRenderer:rSAR,floatingFilter:false},
   {headerName:IS_AR?'الشحن':'Freight',field:'total_freight',width:120,cellRenderer:rSAR,floatingFilter:false},

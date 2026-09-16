@@ -178,7 +178,7 @@
             </li>
 
             {# ══ OWNER ═══════════════════════════════════════ #}
-            {% set owner_active = request.endpoint in ['sellers.list_owners','sellers.view_owner','sellers.list_owner_documents_page'] or (request.endpoint == 'lookups.items_list') or (request.endpoint and request.endpoint.startswith('uom.')) %}
+            {% set owner_active = request.endpoint in ['sellers.list_owners','sellers.view_owner','sellers.list_owner_documents_page'] or (request.endpoint == 'lookups.items_list') or (request.endpoint and request.endpoint.startswith('uom.')) or (request.endpoint and request.endpoint.startswith('zatca.')) %}
             <li class="nav-item">
                 <a class="nav-link nav-parent {% if owner_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuOwner" role="button" aria-expanded="{{ 'true' if owner_active else 'false' }}" aria-controls="menuOwner">
                     <i class="fas fa-users"></i>
@@ -198,6 +198,12 @@
                                class="nav-link {% if request.endpoint == 'sellers.list_owner_documents_page' %}active{% endif %}">
                                 <i class="fas fa-paperclip"></i>
                                 <span>{{ t('owner_documents') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('zatca.zatca_settings_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('zatca.') %}active{% endif %}">
+                                <i class="fas fa-shield-halved"></i>
+                                <span>{{ t('zatca_settings') }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -610,7 +616,7 @@
             {% set can_admin_recycle = can('administration', 'recycle_bin', 'view') %}
             {% set can_admin_audit = can('administration', 'audit_log', 'view') %}
             {% if can_admin_users or can_admin_roles or can_admin_recycle or can_admin_audit or (current_user.is_authenticated and (current_user.is_admin() or current_user.is_super_admin)) %}
-            {% set admin_active = request.endpoint and (request.endpoint.startswith('user_mgmt.') or request.endpoint.startswith('rbac_ui.') or request.endpoint.startswith('recycle_bin.') or request.endpoint.startswith('audit_ui.') or request.endpoint.startswith('db_backup.')) %}
+            {% set admin_active = request.endpoint and (request.endpoint.startswith('user_mgmt.') or request.endpoint.startswith('rbac_ui.') or request.endpoint.startswith('recycle_bin.') or request.endpoint.startswith('audit_ui.')) %}
             <li class="nav-item">
                 <a class="nav-link nav-parent {% if admin_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuAdmin" role="button" aria-expanded="{{ 'true' if admin_active else 'false' }}" aria-controls="menuAdmin">
                     <i class="fas fa-user-shield"></i>
@@ -657,22 +663,21 @@
                             </a>
                         </li>
                         {% endif %}
-                        {% if current_user.is_admin() %}
-                        <li class="nav-item">
-                            <a href="{{ url_for('db_backup.db_backup_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('db_backup.') %}active{% endif %}">
-                                <i class="fas fa-database"></i>
-                                <span>{{ t('backup_restore') }}</span>
-                            </a>
-                        </li>
-                        {% endif %}
                     </ul>
                 </div>
             </li>
             {% endif %}
 
-            {# ══ SUPERADMIN (SaaS Customers, SaaS Module Catalog, Auto Code Selection) ══ #}
-            {% if current_user.is_authenticated and current_user.is_super_admin %}
-            {% set superadmin_active = request.endpoint and (request.endpoint.startswith('saas_customers.') or request.endpoint.startswith('saas_admin.') or request.endpoint.startswith('auto_code.') or request.endpoint.startswith('support.support_tickets_queue')) %}
+            {# ══ SUPERADMIN (SaaS Customers, SaaS Module Catalog, Auto Code Selection, Backup/Restore) ══
+               Visible to any effectively_super_admin (the real platform account, or a tenant's own
+               local SuperAdmin -- see models.py), but the platform-wide links inside (Customers/
+               Module Catalog/Support Tickets show every OTHER customer's data; Backup & Restore is
+               hardcoded to the platform's own shared database regardless of which tenant session is
+               active, so it would silently operate on the wrong database from inside a tenant) stay
+               gated to current_user.is_super_admin (the flag alone) -- only Auto Code Selection is
+               genuinely per-tenant and safe to show either way. #}
+            {% if current_user.is_authenticated and current_user.effectively_super_admin %}
+            {% set superadmin_active = request.endpoint and (request.endpoint.startswith('saas_customers.') or request.endpoint.startswith('saas_admin.') or request.endpoint.startswith('auto_code.') or request.endpoint.startswith('support.support_tickets_queue') or request.endpoint.startswith('db_backup.')) %}
             <li class="nav-item">
                 <a class="nav-link nav-parent {% if superadmin_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuSuperAdmin" role="button" aria-expanded="{{ 'true' if superadmin_active else 'false' }}" aria-controls="menuSuperAdmin">
                     <i class="fas fa-user-cog"></i>
@@ -681,6 +686,7 @@
                 </a>
                 <div class="collapse {% if superadmin_active %}show{% endif %}" id="menuSuperAdmin">
                     <ul class="nav-sub">
+                        {% if current_user.is_super_admin %}
                         <li class="nav-item">
                             <a href="{{ url_for('saas_customers.list_saas_customers') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('saas_customers.') %}active{% endif %}">
                                 <i class="fas fa-building"></i>
@@ -693,18 +699,27 @@
                                 <span>{{ t('saas_module_catalog') }}</span>
                             </a>
                         </li>
+                        {% endif %}
                         <li class="nav-item">
                             <a href="{{ url_for('auto_code.auto_code_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('auto_code.') %}active{% endif %}">
                                 <i class="fas fa-magic"></i>
                                 <span>{{ t('auto_code_selection') }}</span>
                             </a>
                         </li>
+                        {% if current_user.is_super_admin %}
                         <li class="nav-item">
                             <a href="{{ url_for('support.support_tickets_queue') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('support.support_tickets_queue') %}active{% endif %}">
                                 <i class="fas fa-headset"></i>
                                 <span>{{ t('support_tickets') }}</span>
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('db_backup.db_backup_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('db_backup.') %}active{% endif %}">
+                                <i class="fas fa-database"></i>
+                                <span>{{ t('backup_restore') }}</span>
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                 </div>
             </li>

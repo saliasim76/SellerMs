@@ -14,7 +14,7 @@ the very next request with no restart, matching the security requirement.
 """
 import os
 from functools import wraps
-from flask import redirect, url_for, flash, jsonify, request, session
+from flask import redirect, url_for, flash, jsonify, request, session, current_app
 from flask_login import current_user
 
 from models import db, Module, SystemForm, Permission, Role, RolePermission, UserPermission, User
@@ -87,6 +87,9 @@ MODULE_FORM_CATALOG = [
         ('sales_return_note', 'Sale Return Note', 'مذكرة إرجاع البيع'),
         ('sales_credit_memo', 'Sales Credit Memo', 'إشعار دائن بيع'),
         ('so_quantity_tracking', 'SO Quantity Tracking', 'تتبع كميات أمر البيع'),
+    ]),
+    ('zatca', 'ZATCA e-Invoicing', 'الفوترة الإلكترونية (زاتكا)', [
+        ('zatca_settings', 'ZATCA Settings', 'إعدادات زاتكا'),
     ]),
     ('employee', 'Employee', 'الموظفون', [
         ('employee_master', 'Employee Master', 'بيانات الموظف'),
@@ -167,6 +170,17 @@ SUPER_ADMIN_USERNAME = 'SuperAdmin'
 # environment variable rather than relying on this literal, especially
 # since it must never match the database's own DB_PASSWORD.
 SUPER_ADMIN_PASSWORD = os.environ.get('SUPER_ADMIN_PASSWORD', 'Naqvi@76').strip()
+
+# Two more default bootstrap accounts, one per remaining role tier, so a
+# fresh install has a ready-to-use login for each of the three levels
+# (Super Admin / Admin / User) without anyone having to create Admin/User
+# by hand first. Same one-time-only-at-creation password rule as
+# SUPER_ADMIN_PASSWORD above -- override these in production via real env
+# vars rather than relying on the literals.
+DEFAULT_ADMIN_USERNAME = 'Admin'
+DEFAULT_ADMIN_PASSWORD = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'Admin@123').strip()
+DEFAULT_USER_USERNAME = 'User'
+DEFAULT_USER_PASSWORD = os.environ.get('DEFAULT_USER_PASSWORD', 'User@123').strip()
 
 
 def seed_rbac_catalog():
@@ -267,6 +281,53 @@ def seed_rbac_catalog():
         db.session.commit()
         print(f'RBAC: seeded {SUPER_ADMIN_USERNAME} account.')
 
+    # Dedicated default Admin/User accounts -- ONLY for a tenant app (no
+    # 'saas' bind configured; see app.py's init_db(), which skips its own
+    # legacy 'admin'/'staff' pair on exactly this same condition, in the
+    # opposite direction). The main shared app's own documented security
+    # policy is "SuperAdmin is the only shared-database login" (see
+    # README's Security Features) -- it must never get a generic
+    # Admin/User account of its own, since every SaaS tenant's Admin/User
+    # carries the exact same literal username/password by design, and a
+    # copy of them living in the shared app too would let anyone who
+    # knows those defaults land in the shared app instead of failing
+    # whenever the login screen's Organization field is left blank.
+    is_tenant_app = 'saas' not in current_app.config.get('SQLALCHEMY_BINDS', {})
+
+    # Skipped entirely if a user already has this username, e.g. someone
+    # already created their own "Admin" account by hand.
+    if is_tenant_app and not User.query.filter_by(username=DEFAULT_ADMIN_USERNAME).first():
+        admin_user = User(
+            username=DEFAULT_ADMIN_USERNAME,
+            email='admin@sellerms.local',
+            full_name='Admin',
+            role='admin',
+            role_id=roles['admin'].id,
+            is_super_admin=False,
+            is_protected=True,
+            is_active=True,
+        )
+        admin_user.set_password(DEFAULT_ADMIN_PASSWORD)
+        db.session.add(admin_user)
+        db.session.commit()
+        print(f'RBAC: seeded {DEFAULT_ADMIN_USERNAME} account.')
+
+    if is_tenant_app and not User.query.filter_by(username=DEFAULT_USER_USERNAME).first():
+        plain_user = User(
+            username=DEFAULT_USER_USERNAME,
+            email='user@sellerms.local',
+            full_name='User',
+            role='user',
+            role_id=roles['user'].id,
+            is_super_admin=False,
+            is_protected=True,
+            is_active=True,
+        )
+        plain_user.set_password(DEFAULT_USER_PASSWORD)
+        db.session.add(plain_user)
+        db.session.commit()
+        print(f'RBAC: seeded {DEFAULT_USER_USERNAME} account.')
+
 
 def _get_permission(module_code, form_code, action_code):
     return (Permission.query
@@ -339,8 +400,21 @@ def visible_users_query(viewer):
     """Every 'list users' query in the app must go through this -- the
     backend-level Super Admin invisibility filter. Not just a template
     conditional: this is the query itself, so no route/report/dropdown can
-    accidentally leak a Super Admin row to a non-Super-Admin viewer."""
-    q = User.query
-    if not (viewer and getattr(viewer, 'is_super_admin', False)):
-        q = q.filter(db.or_(User.is_super_admin == False, User.is_super_admin.is_(None)))  # noqa: E712 -- mssql rejects "IS 0"
+    accidentally leak a Super Admin row to a non-Super-Admin viewer.
+
+    Hiding (and the viewer exemption) is keyed off the super_admin ROLE,
+    not only the is_super_admin flag: a SaaS tenant's own local SuperAdmin
+    account has that flag deliberately set to False during provisioning
+    (see tenant_provisioning.py) so it's never mistaken for real
+    platform-level access, but it keeps its super_admin role -- and must
+    still be invisible to that tenant's own Admin/User accounts."""
+    q = User.query.outerjoin(Role, User.role_id == Role.id)
+    viewer_is_super_admin = bool(viewer) and getattr(viewer, 'effectively_super_admin', False)
+    if not viewer_is_super_admin:
+        q = q.filter(
+            db.and_(
+                db.or_(User.is_super_admin == False, User.is_super_admin.is_(None)),  # noqa: E712 -- mssql rejects "IS 0"
+                db.or_(Role.code.is_(None), Role.code != 'super_admin'),
+            )
+        )
     return q
