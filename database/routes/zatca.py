@@ -23,13 +23,35 @@ def _t(en, ar):
     return ar if session.get('lang') == 'ar' else en
 
 
+def _customer_scope_id():
+    """The current SaaS customer's id, or None for the platform's own
+    account (real Super Admin, or a standalone/non-SaaS install) -- see
+    ZatcaSettings.customer_id for why this scoping exists."""
+    from database.routes.shared import current_saas_customer
+    customer = current_saas_customer()
+    return customer.id if customer else None
+
+
+def zatca_settings_query():
+    """ZatcaSettings filtered to the signed-in SaaS customer, or to the
+    platform's own (customer_id IS NULL) row outside any customer context.
+    The single place every route in this file and sales.py's ZATCA
+    invoice signing must go through instead of ZatcaSettings.query
+    directly, so a trial customer (sharing the platform database with
+    every other trial customer) never sees or edits another customer's
+    VAT number, CSR, private key, or certificates."""
+    return ZatcaSettings.query.filter_by(customer_id=_customer_scope_id())
+
+
 def _get_or_build_settings():
-    """The one ZatcaSettings row, created (but not yet persisted) on first
-    view so the settings page always has something to render/edit."""
-    settings = ZatcaSettings.query.first()
+    """The current customer's one ZatcaSettings row, created (but not yet
+    persisted) on first view so the settings page always has something to
+    render/edit."""
+    settings = zatca_settings_query().first()
     if not settings:
         owner = Owner.query.first()
         settings = ZatcaSettings(
+            customer_id=_customer_scope_id(),
             owner_id=owner.id if owner else None,
             csr_organization_identity=(owner.vat_number if owner else '') or '',
             csr_organization_name=(owner.name if owner else '') or '',
@@ -57,9 +79,9 @@ def zatca_settings_page():
 @login_required
 @permission_required_json('zatca', 'zatca_settings', 'edit')
 def zatca_save_environment():
-    settings = ZatcaSettings.query.first()
+    settings = zatca_settings_query().first()
     if not settings:
-        settings = ZatcaSettings()
+        settings = ZatcaSettings(customer_id=_customer_scope_id())
         db.session.add(settings)
 
     owner = Owner.query.first()
@@ -89,7 +111,7 @@ def zatca_save_environment():
 @login_required
 @permission_required_json('zatca', 'zatca_settings', 'edit')
 def zatca_generate_csr():
-    settings = ZatcaSettings.query.first()
+    settings = zatca_settings_query().first()
     if not settings:
         return jsonify({'ok': False, 'error': _t(
             'Save the environment/CSR subject fields first.',
@@ -146,7 +168,7 @@ def zatca_clear_csr():
     invoice-hash chain, or the CSR subject fields (company name, VAT,
     location, ...), so generating again immediately after reuses the same
     subject data and EGS serial number without retyping anything."""
-    settings = ZatcaSettings.query.first()
+    settings = zatca_settings_query().first()
     if not settings or not settings.csr_pem:
         return jsonify({'ok': False, 'error': _t(
             'There is no CSR to clear.', 'لا يوجد طلب توقيع شهادة (CSR) لمسحه.')}), 400
@@ -167,7 +189,7 @@ def zatca_clear_csr():
 @permission_required('zatca', 'zatca_settings', 'view')
 def zatca_csr_download():
     from flask import Response, abort
-    settings = ZatcaSettings.query.first()
+    settings = zatca_settings_query().first()
     if not settings or not settings.csr_pem:
         abort(404)
     return Response(settings.csr_pem, mimetype='application/pkcs10',
@@ -185,7 +207,12 @@ def zatca_history_download(id):
     rather than handing back an opaque stored text blob."""
     from flask import Response, abort
     from werkzeug.utils import secure_filename
-    hist = ZatcaCertificateHistory.query.get_or_404(id)
+    settings = zatca_settings_query().first()
+    if not settings:
+        abort(404)
+    hist = ZatcaCertificateHistory.query.filter_by(id=id, zatca_settings_id=settings.id).first()
+    if not hist:
+        abort(404)
     pem_bytes = zengine.certificate_to_pem_bytes(hist.csid_binary) if hist.csid_binary else None
     if not pem_bytes:
         abort(404)
@@ -202,7 +229,7 @@ def zatca_request_compliance_csid():
     """Calls ZATCA's Compliance CSID endpoint using a human-supplied OTP
     from the Fatoora portal. Written to spec; its actual success cannot be
     verified without a real OTP -- see the implementation plan."""
-    settings = ZatcaSettings.query.first()
+    settings = zatca_settings_query().first()
     if not settings or not settings.csr_pem:
         return jsonify({'ok': False, 'error': _t(
             'Generate a CSR first.', 'يرجى إنشاء طلب توقيع الشهادة (CSR) أولاً.')}), 400
@@ -358,5 +385,5 @@ def zatca_request_production_csid():
 @login_required
 @permission_required_json('zatca', 'zatca_settings', 'view')
 def zatca_settings_data():
-    settings = ZatcaSettings.query.first()
+    settings = zatca_settings_query().first()
     return jsonify(settings.to_dict() if settings else {'onboarding_stage': 'not_started'})

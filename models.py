@@ -230,6 +230,16 @@ class OwnerDocument(db.Model):
 class ZatcaSettings(db.Model):
     __tablename__ = 'zatca_settings'
     id                          = db.Column(db.Integer, primary_key=True)
+    # Scopes this row to one SaaS customer. Paid tenants already get their
+    # own dedicated database (see tenant_provisioning.py), so this is
+    # redundant-but-harmless there -- it matters for trial customers, who
+    # all share SellerMs's single platform database: without this column,
+    # ZatcaSettings.query.first() would hand every trial customer the same
+    # row (VAT number, CSR, private key, certificates), so whichever one
+    # onboarded first would silently determine what every other trial
+    # customer saw/edited. NULL for the platform's own default install
+    # (no SaaS Customer at all, or the platform Super Admin's own account).
+    customer_id                 = db.Column(db.Integer)
     owner_id                    = db.Column(db.Integer, db.ForeignKey('owners.id'))
     environment                 = db.Column(db.String(20), default='sandbox')  # sandbox | simulation | production
     onboarding_stage            = db.Column(db.String(30), default='not_started')
@@ -5621,6 +5631,11 @@ def ensure_schema():
         #    month_to which stay the master period on every row ──
         ('salary_consolidation', 'emp_from_date', 'DATE', 'month_to'),
         ('salary_consolidation', 'emp_to_date',   'DATE', 'emp_from_date'),
+        # ── ZATCA: scope each settings row to one SaaS customer, so trial
+        #    customers sharing the platform database never see or edit
+        #    another trial customer's VAT number/CSR/certificates. See the
+        #    ZatcaSettings.customer_id column comment for the full reason. ──
+        ('zatca_settings', 'customer_id', 'INTEGER'),
         # ── ZATCA Phase 2: per-invoice cryptographic chain state, generated
         #    only once a Sales Invoice is Posted and "Create ZATCA Invoice"
         #    is run -- see database/zatca/engine.py and

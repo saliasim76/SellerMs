@@ -1984,8 +1984,9 @@ def _sinv_zatca_qr_b64(doc):
     call this once doc.zatca_status != 'not_generated'; callers should fall
     back to _sinv_qr_b64() otherwise."""
     from database.routes.purchase import _zatca_qr_payload, _qr_image_b64
+    from database.routes.zatca import zatca_settings_query
     from database.zatca import engine as zengine
-    settings = ZatcaSettings.query.first()
+    settings = zatca_settings_query().first()
     ts_date = doc.document_date or doc.posting_date or date.today()
     timestamp_iso = datetime.combine(ts_date, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%SZ')
     extra_tags = zengine.phase2_qr_extra_tags(
@@ -2633,6 +2634,7 @@ def sinv_zatca_generate(id):
     otherwise the invoice is generated and signed locally only, clearly
     flagged as such in the response."""
     from database.zatca import engine as zengine
+    from database.routes.zatca import zatca_settings_query
     doc = SalesInvoice.query.get_or_404(id)
 
     if doc.posting_status != 'Posted':
@@ -2644,7 +2646,7 @@ def sinv_zatca_generate(id):
             'This invoice has already been submitted to ZATCA.',
             'تم إرسال هذه الفاتورة إلى زاتكا مسبقاً.')}), 400
 
-    settings = ZatcaSettings.query.with_for_update().first()
+    settings = zatca_settings_query().with_for_update().first()
     # active_csid() prefers a Production CSID over a Compliance one -- must
     # be used here rather than checking compliance_csid_binary directly, or
     # an account that has moved on to a real Production certificate (with
