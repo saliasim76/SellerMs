@@ -113,6 +113,16 @@ def create_app(config_name='default'):
             return db.session.get(User, int(real_id))
         return db.session.get(User, int(user_id))
 
+    def _sidebar_org_name():
+        from database.routes.shared import current_saas_customer
+        try:
+            customer = current_saas_customer()
+        except Exception:
+            customer = None
+        if customer:
+            return customer.company_name or customer.customer_name or 'Proledge'
+        return 'Proledge'
+
     @app.context_processor
     def inject_globals():
         from database.routes.rbac import can
@@ -175,6 +185,11 @@ def create_app(config_name='default'):
             # within that session, but reappears the next time this
             # user logs in since it's recomputed fresh each time.
             subscription_warning=session.pop('subscription_warning', None),
+            # Sidebar branding line under the SellerMS logo: the SaaS
+            # customer's own company name when logged into a tenant
+            # (paid or trial), or "Proledge" when logged into the
+            # platform itself (Super Admin, no tenant/customer context).
+            sidebar_org_name=_sidebar_org_name(),
         )
 
     # Register blueprints

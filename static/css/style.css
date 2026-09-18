@@ -85,6 +85,16 @@ body {
 }
 .sidebar-toggle:hover { color: white; }
 
+.sidebar-org-name {
+    text-align: center;
+    color: #f87171;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.sidebar.collapsed .sidebar-org-name { display: none; }
+
 .sidebar-user {
     display: flex;
     align-items: center;
