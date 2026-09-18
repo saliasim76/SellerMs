@@ -5032,6 +5032,12 @@ class SaasModule(db.Model):
         backref='module', cascade='all, delete-orphan', lazy=True,
     )
 
+    # RBAC Module.code values this SaaS product unlocks -- see
+    # SaasModuleRbacLink's own docstring below for why this bridge exists.
+    rbac_links = db.relationship(
+        'SaasModuleRbacLink', cascade='all, delete-orphan', lazy=True,
+    )
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -5046,6 +5052,7 @@ class SaasModule(db.Model):
             'status': self.status or 'active',
             'display_order': self.display_order or 0,
             'requires': [d.requires_module_id for d in self.requires],
+            'rbac_modules': [link.rbac_module_code for link in self.rbac_links],
         }
 
 
@@ -5060,6 +5067,33 @@ class SaasModuleDependency(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('module_id', 'requires_module_id', name='uq_saas_module_dependency'),
+    )
+
+
+class SaasModuleRbacLink(db.Model):
+    """Which RBAC page-permission module(s) (models.py's Module.code, the
+    tenant-local catalog rbac.py's MODULE_FORM_CATALOG seeds) a billable
+    SaasModule unlocks. These are two genuinely different catalogs -- a
+    SaasModule is "the product a customer pays for" (e.g. "Accounting"),
+    an RBAC Module is "a page-permission group" (e.g. 'coa', 'financial',
+    'journal') -- and their codes do not line up 1:1 (only 'purchase'
+    happens to match by coincidence), so this table is the explicit,
+    Super-Admin-editable bridge between them. See
+    rbac.py's customer_active_rbac_modules() for how this is enforced.
+
+    An RBAC module code with NO row here at all (in either direction --
+    not linked from any SaasModule) is treated as ungated: always
+    accessible regardless of subscription. This is deliberate for
+    platform-level modules like 'dashboard' and 'administration' that
+    every tenant needs regardless of which paid products they bought."""
+    __bind_key__ = 'saas'
+    __tablename__ = 'proledge_saas_module_rbac_link'
+    id               = db.Column(db.Integer, primary_key=True)
+    saas_module_id   = db.Column(db.Integer, db.ForeignKey('saas_modules.id', ondelete='CASCADE'), nullable=False)
+    rbac_module_code = db.Column(db.String(50), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('saas_module_id', 'rbac_module_code', name='uq_saas_rbac_link'),
     )
 
 
@@ -5383,6 +5417,52 @@ def seed_saas_modules():
         ).first():
             db.session.add(SaasModuleDependency(module_id=payroll.id, requires_module_id=hr.id))
             db.session.commit()
+    return inserted
+
+
+# Default SaasModule -> RBAC Module.code links (see SaasModuleRbacLink's
+# own docstring for why these two catalogs need an explicit bridge at
+# all). This is a best-effort starting map based on what each SaaS
+# product plausibly unlocks, NOT a business decision only Super Admin
+# can make -- it is fully editable afterward from the SaaS Module
+# Catalog screen, same as pricing or trial availability. Two intentional
+# omissions:
+#   - 'payroll' has no RBAC module of its own to link -- its forms live
+#     inside the 'employee' RBAC module alongside HR's own forms (see
+#     rbac.py's MODULE_FORM_CATALOG), and Payroll already requires HR
+#     as a SaasModuleDependency above, so a Payroll subscriber already
+#     has 'employee' unlocked via HR. Payroll's own page-level gating is
+#     enforced separately, at the form level, by its own
+#     @permission_required decorators (database/routes/payroll.py).
+#   - 'fixed_assets', 'crm', 'projects', 'reports' have no matching RBAC
+#     module in the catalog yet, so they stay unlinked until one exists.
+SAAS_MODULE_RBAC_DEFAULTS = {
+    'accounting': ['coa', 'financial', 'journal', 'cash_bank'],
+    'sales':      ['sale'],
+    'purchase':   ['purchase'],
+    'inventory':  ['store'],
+    'hr':         ['employee'],
+}
+
+
+def seed_saas_module_rbac_links():
+    """Idempotent: only inserts a link that doesn't already exist, so a
+    Super Admin's later edits (adding/removing a link on the SaaS Module
+    Catalog screen) are never overwritten by a later restart."""
+    inserted = 0
+    for module_code, rbac_codes in SAAS_MODULE_RBAC_DEFAULTS.items():
+        saas_module = SaasModule.query.filter_by(module_code=module_code).first()
+        if not saas_module:
+            continue
+        for rbac_code in rbac_codes:
+            if SaasModuleRbacLink.query.filter_by(
+                saas_module_id=saas_module.id, rbac_module_code=rbac_code
+            ).first():
+                continue
+            db.session.add(SaasModuleRbacLink(saas_module_id=saas_module.id, rbac_module_code=rbac_code))
+            inserted += 1
+    if inserted:
+        db.session.commit()
     return inserted
 
 

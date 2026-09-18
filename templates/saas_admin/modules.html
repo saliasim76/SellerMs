@@ -40,6 +40,7 @@
           <th>{% if ar %}سنوي{% else %}Yearly{% endif %}</th>
           <th>{% if ar %}تجربة{% else %}Trial{% endif %}</th>
           <th>{% if ar %}يتطلب{% else %}Requires{% endif %}</th>
+          <th>{% if ar %}يفتح{% else %}Unlocks{% endif %}</th>
           <th style="width:90px">{% if ar %}الحالة{% else %}Status{% endif %}</th>
           <th style="width:100px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
         </tr>
@@ -62,6 +63,9 @@
             {%- set req_names = [] -%}
             {%- for d in m.requires -%}{%- if d.requires_module %}{{ req_names.append(d.requires_module.module_name_en) or '' }}{% endif -%}{%- endfor -%}
             {{ req_names|join(', ') if req_names else '—' }}
+          </td>
+          <td style="font-size:12px;color:#6b7280;">
+            {{ links_by_module.get(m.id, [])|join(', ') if links_by_module.get(m.id) else '—' }}
           </td>
           <td>
             <form method="POST" action="{{ url_for('saas_admin.toggle_saas_module_status', id=m.id) }}" class="d-inline">
@@ -90,7 +94,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="11" class="empty-row"><i class="fas fa-cubes fa-2x mb-2 d-block"></i>{% if ar %}لا توجد وحدات بعد{% else %}No modules yet{% endif %}</td></tr>
+        <tr><td colspan="12" class="empty-row"><i class="fas fa-cubes fa-2x mb-2 d-block"></i>{% if ar %}لا توجد وحدات بعد{% else %}No modules yet{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -163,7 +167,7 @@
             </div>
           </div>
 
-          <div class="mb-2">
+          <div class="mb-3">
             <label class="form-label fw-semibold">{% if ar %}يتطلب هذه الوحدات{% else %}Requires these modules{% endif %}</label>
             <div id="sm_requires" class="d-flex flex-wrap gap-3 p-2" style="border:1px solid #e2e8f0;border-radius:8px;">
               {% for m in modules %}
@@ -173,6 +177,22 @@
               </div>
               {% endfor %}
             </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold">{% if ar %}يفتح صلاحيات هذه الوحدات{% else %}Unlocks these permission modules{% endif %}</label>
+            <div id="sm_rbac" class="d-flex flex-wrap gap-3 p-2" style="border:1px solid #e2e8f0;border-radius:8px;">
+              {% for code, name_en in rbac_module_choices %}
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input sm-rbac-cb" name="rbac_modules[]" value="{{ code }}" id="sm_rbac_{{ code }}">
+                <label class="form-check-label" for="sm_rbac_{{ code }}" style="font-size:13px;">{{ name_en }}</label>
+              </div>
+              {% endfor %}
+            </div>
+            <p style="font-size:11px;color:#9ca3af;margin-top:4px;">
+              {% if ar %}أحد هذه الوحدات غير مرتبط بأي منتج SaaS يبقى متاحًا دائمًا لكل عميل (مثل لوحة التحكم والإدارة).
+              {% else %}A permission module not linked from any SaaS product here stays always-available to every customer (e.g. Dashboard, Administration).{% endif %}
+            </p>
           </div>
         </form>
       </div>
@@ -197,11 +217,16 @@ function _resetRequires() {
   document.querySelectorAll('.sm-req-cb').forEach(cb => cb.checked = false);
 }
 
+function _resetRbacModules() {
+  document.querySelectorAll('.sm-rbac-cb').forEach(cb => cb.checked = false);
+}
+
 function openAdd() {
   document.getElementById('smModalTitle').textContent = IS_AR ? 'إضافة وحدة' : 'Add Module';
   document.getElementById('smForm').action = '{{ url_for("saas_admin.add_saas_module") }}';
   document.getElementById('smForm').reset();
   _resetRequires();
+  _resetRbacModules();
 }
 
 function openEdit(id, m) {
@@ -220,6 +245,11 @@ function openEdit(id, m) {
   _resetRequires();
   (m.requires || []).forEach(rid => {
     const cb = document.getElementById('sm_req_' + rid);
+    if (cb) cb.checked = true;
+  });
+  _resetRbacModules();
+  (m.rbac_modules || []).forEach(code => {
+    const cb = document.getElementById('sm_rbac_' + code);
     if (cb) cb.checked = true;
   });
   new bootstrap.Modal(document.getElementById('smModal')).show();

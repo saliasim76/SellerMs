@@ -20,6 +20,32 @@ def _complete_login(user, remember):
     user.failed_login_count = 0
     db.session.commit()
     log_login_success(user)
+    _set_subscription_warning(user)
+
+
+def _set_subscription_warning(user):
+    """Stashes a subscription-expiry popup in the session for the
+    dashboard to show once, right after this login -- reappears on every
+    subsequent login (not on every page view within one session) since
+    it's recomputed fresh here each time, not a one-time flag the
+    dashboard clears forever. Only applies to a real SaaS customer
+    context; does nothing for the platform's own Super Admin or a
+    standalone non-SaaS install (current_saas_customer() is None for
+    both)."""
+    if getattr(user, 'effectively_super_admin', False):
+        return
+    from database.routes.shared import current_saas_customer
+    from database.routes.rbac import customer_module_expiry_info, SUBSCRIPTION_GRACE_DAYS
+    customer = current_saas_customer()
+    if not customer:
+        return
+    info = customer_module_expiry_info(customer)
+    if info['grace'] or info['all_expired']:
+        session['subscription_warning'] = {
+            'grace': info['grace'],
+            'all_expired': info['all_expired'],
+            'grace_days': SUBSCRIPTION_GRACE_DAYS,
+        }
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])

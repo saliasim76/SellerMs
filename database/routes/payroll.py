@@ -45,6 +45,7 @@ from models import (
 )
 from database.routes.employees import _emp_profession_str
 from database.routes.shared import _next_grl_no, _get_auto_code, xlsx_safe
+from database.routes.rbac import permission_required, permission_required_json
 
 payroll_bp = Blueprint('payroll', __name__)
 
@@ -250,6 +251,7 @@ def _is_admin_or_superadmin(user):
 # ══════════════════════════════════════════════════════════════════
 @payroll_bp.route('/')
 @login_required
+@permission_required('employee', 'payroll', 'view')
 def payroll_list():
     """Single unified page: Stage 1 header/generate form + the payroll grid."""
     return render_template('payroll/list.html',
@@ -259,6 +261,7 @@ def payroll_list():
 # ── Filter dropdown sources ───────────────────────────────────────
 @payroll_bp.route('/filters')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_filters():
     """Distinct kafeel / buyer / buyer_department / location / salary_category
     -- for the Stage 1 header dropdowns. Department and Location are matched
@@ -292,6 +295,7 @@ def payroll_filters():
 
 @payroll_bp.route('/buyer/<int:buyer_id>/context')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_buyer_context(buyer_id):
     """Salary Order cascades from the selected Buyer (spec: 'salary order
     refresh from buyer'), for display/storage on the generated rows only --
@@ -313,6 +317,7 @@ def payroll_buyer_context(buyer_id):
 # ── Grid data ─────────────────────────────────────────────────────
 @payroll_bp.route('/data')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_data():
     q = SalaryConsolidation.query
     pid = (request.args.get('payroll_id') or '').strip()
@@ -344,6 +349,7 @@ def payroll_data():
 
 @payroll_bp.route('/next-id')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_next_id():
     return jsonify({'payroll_id': next_payroll_id()})
 
@@ -360,12 +366,14 @@ def payroll_next_id():
 # ══════════════════════════════════════════════════════════════════
 @payroll_bp.route('/summary')
 @login_required
+@permission_required('employee', 'payroll', 'view')
 def payroll_summary():
     return render_template('payroll/summary.html')
 
 
 @payroll_bp.route('/summary/data')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_summary_data():
     def single_or_multi(col):
         return case(
@@ -597,6 +605,7 @@ def _build_row(e, payroll_id, d1, d2, month_name, salary_category):
 
 @payroll_bp.route('/check', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_check():
     """Return an existing payroll_id if one already matches the criteria."""
     f = request.form
@@ -704,6 +713,7 @@ def _matching_employee_ids(kafeel, buyer_id, buyer_department, location,
 
 @payroll_bp.route('/generate', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'add')
 def payroll_generate():
     f = request.form
     d1 = _pd(f.get('month_from'))
@@ -868,12 +878,14 @@ def _flow(row):
 
 @payroll_bp.route('/<int:row_id>/json')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_json(row_id):
     return jsonify(SalaryConsolidation.query.get_or_404(row_id).to_dict())
 
 
 @payroll_bp.route('/<int:row_id>/edit', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'edit')
 def payroll_edit(row_id):
     row = SalaryConsolidation.query.get_or_404(row_id)
     if _flow(row) == 'Post':
@@ -958,6 +970,7 @@ def payroll_edit(row_id):
 
 @payroll_bp.route('/<int:row_id>/refresh', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'edit')
 def payroll_refresh_row(row_id):
     """Re-sync every auto-populate field for one row from Employee Master
     (spec: 'we have a refresh button can auto synchronize with employee
@@ -990,6 +1003,7 @@ def payroll_refresh_row(row_id):
 
 @payroll_bp.route('/<payroll_id>/refresh-all', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'edit')
 def payroll_refresh_all(payroll_id):
     """Refresh every Initial-stage row in a payroll batch from Employee Master."""
     rows = (SalaryConsolidation.query
@@ -1023,6 +1037,7 @@ def payroll_refresh_all(payroll_id):
 
 @payroll_bp.route('/<int:row_id>/delete', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'delete')
 def payroll_delete(row_id):
     row = SalaryConsolidation.query.get_or_404(row_id)
     if _flow(row) != 'Initial':
@@ -1042,6 +1057,7 @@ def payroll_delete(row_id):
 
 @payroll_bp.route('/<payroll_id>/delete-all', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'delete')
 def payroll_delete_batch(payroll_id):
     """Delete an ENTIRE payroll batch -- every row sharing this payroll_id --
     in one action. Only while the whole batch is still Initial (every row in
@@ -1078,6 +1094,7 @@ def payroll_delete_batch(payroll_id):
 # ── Add missing employee (constrained to payroll criteria) ────────
 @payroll_bp.route('/<payroll_id>/available-employees')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_available_employees(payroll_id):
     """Employees matching the payroll criteria not already in this payroll."""
     ref = (SalaryConsolidation.query
@@ -1101,6 +1118,7 @@ def payroll_available_employees(payroll_id):
 
 @payroll_bp.route('/<payroll_id>/add-employee', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'add')
 def payroll_add_employee(payroll_id):
     ref = (SalaryConsolidation.query
            .filter_by(payroll_id=payroll_id).first())
@@ -1282,6 +1300,7 @@ def _unpost_payroll_gl(payroll_id):
 
 @payroll_bp.route('/<payroll_id>/grl')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_grl(payroll_id):
     """The GRL + Journal Entry attached to one payroll batch, if it has
     been Posted -- backs the GRL section on the payroll page, the same
@@ -1295,6 +1314,7 @@ def payroll_grl(payroll_id):
 
 @payroll_bp.route('/<payroll_id>/grl-preview')
 @login_required
+@permission_required_json('employee', 'payroll', 'view')
 def payroll_grl_preview(payroll_id):
     """Live preview of the two GRL records this payroll batch would post
     (Debit Salary Expense / Credit Salaries Payable, both the batch's
@@ -1329,6 +1349,7 @@ def payroll_grl_preview(payroll_id):
 
 @payroll_bp.route('/<payroll_id>/set-flow', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'edit')
 def payroll_set_flow(payroll_id):
     """Direct set to any of the 3 fixed payroll-status values, via the
     'Edit Payroll Status' dropdown (Initial / Ready / Post).
@@ -1461,6 +1482,7 @@ class RowError(Exception):
 
 @payroll_bp.route('/export')
 @login_required
+@permission_required('employee', 'payroll', 'export')
 def payroll_export():
     """Export one payroll batch (?payroll_id=PR-3) or, with no payroll_id,
     every payroll row in the system."""
@@ -1539,6 +1561,7 @@ def _apply_import_row(row, vals):
 
 @payroll_bp.route('/import', methods=['POST'])
 @login_required
+@permission_required_json('employee', 'payroll', 'edit')
 def payroll_import():
     """Bulk-apply the editable payroll fields from an uploaded Excel file
     (normally the same file payroll_export() produced, edited in Excel).
@@ -1658,6 +1681,7 @@ REPORT_DEFS = [
 
 @payroll_bp.route('/reports')
 @login_required
+@permission_required('employee', 'payroll', 'report')
 def payroll_reports():
     return render_template('payroll/reports.html',
                            reports=REPORT_DEFS,
@@ -1666,6 +1690,7 @@ def payroll_reports():
 
 @payroll_bp.route('/reports/<report>/data')
 @login_required
+@permission_required_json('employee', 'payroll', 'report')
 def payroll_report_data(report):
     """Return {columns, rows, title} for the requested report."""
     pid = (request.args.get('payroll_id') or '').strip()

@@ -168,6 +168,13 @@ def create_app(config_name='default'):
             # except a Super Admin user (see is_basic_mode() in
             # database/routes/shared.py).
             is_basic_mode=is_basic_mode(),
+            # Subscription-expiry renewal popup -- set once by
+            # auth.py's _complete_login() on every login, consumed
+            # (popped) here on the very next page render so it shows
+            # exactly once per login rather than on every page view
+            # within that session, but reappears the next time this
+            # user logs in since it's recomputed fresh each time.
+            subscription_warning=session.pop('subscription_warning', None),
         )
 
     # Register blueprints
@@ -480,12 +487,18 @@ def init_db(app):
         # database (idempotent -- safe on every startup). Requires the
         # saas_master schema to already exist on the MySQL server.
         try:
-            from models import ensure_saas_schema, merge_saas_master_into_sellerms, seed_saas_modules
+            from models import (
+                ensure_saas_schema, merge_saas_master_into_sellerms, seed_saas_modules,
+                seed_saas_module_rbac_links,
+            )
             ensure_saas_schema()
             merge_saas_master_into_sellerms()
             n = seed_saas_modules()
             if n:
                 print(f'SaaS module catalog seeded: {n} modules inserted.')
+            n2 = seed_saas_module_rbac_links()
+            if n2:
+                print(f'SaaS module -> RBAC module links seeded: {n2} links inserted.')
         except Exception as exc:
             print(f'SaaS module catalog seed skipped: {exc}')
 

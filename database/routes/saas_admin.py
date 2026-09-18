@@ -11,10 +11,31 @@ elsewhere -- this configures platform pricing, not tenant business data.
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 
-from models import db, SaasModule, SaasModuleDependency, SubscriptionModule
+from models import db, SaasModule, SaasModuleDependency, SubscriptionModule, SaasModuleRbacLink
 from database.routes.shared import super_admin_required, _t
+from database.routes.rbac import MODULE_FORM_CATALOG
 
 saas_admin_bp = Blueprint('saas_admin', __name__)
+
+# (code, English label) for every RBAC page-permission module, in catalog
+# order -- offered on the SaaS Module Catalog screen so Super Admin can
+# pick which of these a billable module unlocks. See SaasModuleRbacLink's
+# own docstring for why this list is a separate catalog from the one
+# above (SaasModule = what a customer pays for; these = page-permission
+# groups) rather than the same codes.
+RBAC_MODULE_CHOICES = [(code, name_en) for code, name_en, _name_ar, _forms in MODULE_FORM_CATALOG]
+
+
+def _set_rbac_links(module, rbac_codes):
+    """Replace this SaasModule's full RBAC-module link set with
+    `rbac_codes` (a list of RBAC Module.code strings it now unlocks),
+    ignoring anything not in the real catalog."""
+    valid_codes = {code for code, _name in RBAC_MODULE_CHOICES}
+    SaasModuleRbacLink.query.filter_by(saas_module_id=module.id).delete()
+    for code in rbac_codes:
+        if code not in valid_codes:
+            continue
+        db.session.add(SaasModuleRbacLink(saas_module_id=module.id, rbac_module_code=code))
 
 
 def _module_form_fields(f):
@@ -52,7 +73,11 @@ def _set_dependencies(module, requires_ids):
 @super_admin_required
 def list_saas_modules():
     modules = SaasModule.query.order_by(SaasModule.display_order, SaasModule.module_name_en).all()
-    return render_template('saas_admin/modules.html', modules=modules)
+    links_by_module = {}
+    for link in SaasModuleRbacLink.query.all():
+        links_by_module.setdefault(link.saas_module_id, []).append(link.rbac_module_code)
+    return render_template('saas_admin/modules.html', modules=modules,
+                           rbac_module_choices=RBAC_MODULE_CHOICES, links_by_module=links_by_module)
 
 
 @saas_admin_bp.route('/saas-admin/modules/add', methods=['POST'])
@@ -72,6 +97,7 @@ def add_saas_module():
     db.session.add(module)
     db.session.flush()
     _set_dependencies(module, f.getlist('requires[]'))
+    _set_rbac_links(module, f.getlist('rbac_modules[]'))
     db.session.commit()
     flash(_t(f'Module "{fields["module_name_en"]}" added.',
               f'تمت إضافة الوحدة "{fields["module_name_en"]}".'), 'success')
@@ -96,6 +122,7 @@ def edit_saas_module(id):
     for k, v in fields.items():
         setattr(module, k, v)
     _set_dependencies(module, f.getlist('requires[]'))
+    _set_rbac_links(module, f.getlist('rbac_modules[]'))
     db.session.commit()
     flash(_t('Module updated.', 'تم تحديث الوحدة.'), 'success')
     return redirect(url_for('saas_admin.list_saas_modules'))

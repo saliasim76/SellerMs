@@ -470,6 +470,7 @@
                                 <span>{{ t('work_allocation') }}</span>
                             </a>
                         </li>
+                        {% if can('employee', 'payroll', 'view') %}
                         <li class="nav-item">
                             <a href="{{ url_for('payroll.payroll_list') }}" class="nav-link {% if request.endpoint == 'payroll.payroll_list' %}active{% endif %}">
                                 <i class="fas fa-money-check-alt"></i>
@@ -482,12 +483,15 @@
                                 <span>{{ t('payroll_summary') }}</span>
                             </a>
                         </li>
+                        {% endif %}
+                        {% if can('employee', 'payroll', 'report') %}
                         <li class="nav-item">
                             <a href="{{ url_for('payroll.payroll_reports') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('payroll.payroll_report') %}active{% endif %}">
                                 <i class="fas fa-chart-bar"></i>
                                 <span>{{ t('payroll_reports') }}</span>
                             </a>
                         </li>
+                        {% endif %}
                     </ul>
                 </div>
             </li>
@@ -1268,6 +1272,60 @@ window.ioSaveCell = function(key, e){
   });
 })();
 </script>
+
+{% set _sw_ar = current_locale == 'ar' %}
+{% if subscription_warning %}
+<!-- Subscription-expiry renewal popup -- see app.py's inject_globals()
+     and auth.py's _set_subscription_warning() for how this is set. -->
+<div class="modal fade" id="subscriptionWarningModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content proledg-modal">
+      <div class="modal-header proledg-modal-header" style="background:{{ '#dc3545' if subscription_warning.all_expired else '#f59e0b' }};">
+        <h5 class="modal-title text-white">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          {% if _sw_ar %}تنبيه الاشتراك{% else %}Subscription Alert{% endif %}
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {% if subscription_warning.all_expired %}
+        <p class="fw-semibold mb-2">
+          {% if _sw_ar %}انتهت جميع وحدات اشتراكك. يقتصر الوصول الآن على الدعم الفني فقط حتى يتم التجديد.
+          {% else %}All of your subscribed modules have expired. Access is now limited to Support until you renew.{% endif %}
+        </p>
+        {% else %}
+        <p class="fw-semibold mb-2">
+          {% if _sw_ar %}الوحدات التالية ستتوقف عن العمل قريبًا ما لم يتم تجديدها (خلال {{ subscription_warning.grace_days }} يومًا من انتهاء الصلاحية):
+          {% else %}The following modules will stop working soon unless renewed (within {{ subscription_warning.grace_days }} days of expiry):{% endif %}
+        </p>
+        <ul class="mb-2">
+          {% for m in subscription_warning.grace %}
+          <li>{{ m.module_name }} — {% if _sw_ar %}{{ m.days_left }} يوم متبقٍ{% else %}{{ m.days_left }} day(s) left{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <p class="text-muted small mb-0">
+          {% if _sw_ar %}يرجى التواصل مع الدعم الفني لتجديد اشتراكك.{% else %}Please contact Support to renew your subscription.{% endif %}
+        </p>
+      </div>
+      <div class="modal-footer proledg-modal-footer">
+        <button type="button" class="pl-footer-btn pl-btn-cancel" data-bs-dismiss="modal">
+          {% if _sw_ar %}لاحقًا{% else %}Dismiss{% endif %}
+        </button>
+        <a href="{{ url_for('support.customer_support') }}" class="pl-footer-btn pl-btn-save">
+          <i class="fas fa-headset me-1"></i>{% if _sw_ar %}تواصل مع الدعم{% else %}Contact Support{% endif %}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    new bootstrap.Modal(document.getElementById('subscriptionWarningModal')).show();
+  });
+</script>
+{% endif %}
+
 {% block extra_js %}{% endblock %}
 </body>
 </html>

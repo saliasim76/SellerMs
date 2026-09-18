@@ -68,6 +68,33 @@ def current_tenant_customer():
     return Customer.query.filter_by(database_name=tenant_db).first()
 
 
+def current_saas_customer():
+    """The saas Customer record for whoever is currently signed in,
+    regardless of whether they're a paid tenant (own dedicated database,
+    resolved via session['tenant_db'] same as current_tenant_customer())
+    or a trial customer (shares the main database, so there's no
+    tenant_db session value to key off -- resolved by matching
+    current_user's email against Customer.email instead, same lookup
+    is_trial_user() uses). None for the platform's own Super Admin, and
+    for a standalone (non-SaaS) install with no Customer row at all --
+    both cases mean "not subscription-gated", not "gated with nothing
+    unlocked"."""
+    customer = current_tenant_customer()
+    if customer:
+        return customer
+    try:
+        if not current_user or not current_user.is_authenticated:
+            return None
+        if getattr(current_user, 'is_super_admin', False):
+            return None
+    except RuntimeError:
+        return None
+    if session.get('tenant_db'):
+        return None  # already handled above; avoids a second lookup
+    from models import Customer
+    return Customer.query.filter_by(email=current_user.email).first()
+
+
 def is_basic_mode():
     """True while the current tenant's SaaS plan is 'basic' -- Chart of
     Accounts is fully locked and every Post & Save action is blocked for

@@ -339,13 +339,124 @@ def _get_permission(module_code, form_code, action_code):
             .first())
 
 
+SUBSCRIPTION_GRACE_DAYS = 15
+
+
+def customer_active_rbac_modules(customer):
+    """The set of RBAC Module.code values this SaaS customer's current
+    subscription unlocks, via SaasModuleRbacLink (see that model's own
+    docstring for why this bridge table exists at all). An RBAC module
+    with no link from ANY SaasModule is intentionally not represented
+    here -- user_has_permission() below treats that as ungated rather
+    than as "not in this set", so platform-level modules like
+    'dashboard'/'administration' stay reachable for every tenant
+    without needing an explicit link. Returns an empty set (not None)
+    for a customer with no active modules at all.
+
+    A module stays in this set for SUBSCRIPTION_GRACE_DAYS days after its
+    own end_date, not just up to it -- a customer whose module just
+    expired keeps working (with the renewal warning from
+    customer_module_expiry_info() below) for that grace window, and only
+    actually loses access once it's fully elapsed."""
+    from datetime import datetime, timedelta
+    from models import SubscriptionModule, SaasModuleRbacLink, Subscription
+
+    subscription = (Subscription.query
+                    .filter_by(customer_id=customer.id)
+                    .order_by(Subscription.id.desc())
+                    .first())
+    if not subscription:
+        return set()
+
+    grace_cutoff = datetime.utcnow() - timedelta(days=SUBSCRIPTION_GRACE_DAYS)
+    active_module_ids = {
+        sm.module_id for sm in subscription.subscription_modules
+        if sm.status == 'active' and (sm.end_date is None or sm.end_date >= grace_cutoff)
+    }
+    if not active_module_ids:
+        return set()
+
+    links = SaasModuleRbacLink.query.filter(
+        SaasModuleRbacLink.saas_module_id.in_(active_module_ids)
+    ).all()
+    return {link.rbac_module_code for link in links}
+
+
+def customer_module_expiry_info(customer):
+    """Per-module expiry detail for `customer`'s current subscription,
+    for the login-time renewal popup: which active SubscriptionModule
+    rows are already past their own end_date but still within the
+    SUBSCRIPTION_GRACE_DAYS-day grace window (see
+    customer_active_rbac_modules() above -- these still work, but are due
+    a renewal), and whether literally everything in the subscription has
+    now run out its grace window entirely.
+
+    Returns {'grace': [{'module_name': str, 'days_left': int}, ...],
+    'all_expired': bool}. 'all_expired' is True only when the customer's
+    subscription is non-empty (they really did subscribe to modules) but
+    every one of them is now past grace -- never True for a customer who
+    was simply never assigned any module, so this can't misfire into a
+    renewal nag for someone who has nothing to renew."""
+    from datetime import datetime, timedelta
+    from models import Subscription, SaasModule
+
+    subscription = (Subscription.query
+                    .filter_by(customer_id=customer.id)
+                    .order_by(Subscription.id.desc())
+                    .first())
+    if not subscription or not subscription.subscription_modules:
+        return {'grace': [], 'all_expired': False}
+
+    now = datetime.utcnow()
+    grace = []
+    any_still_active = False
+    for sm in subscription.subscription_modules:
+        if sm.status != 'active':
+            continue
+        if sm.end_date is None or sm.end_date >= now:
+            any_still_active = True
+            continue
+        days_since_expiry = (now - sm.end_date).days
+        if days_since_expiry <= SUBSCRIPTION_GRACE_DAYS:
+            any_still_active = True
+            saas_module = SaasModule.query.get(sm.module_id)
+            grace.append({
+                'module_name': saas_module.module_name_en if saas_module else '?',
+                'days_left': SUBSCRIPTION_GRACE_DAYS - days_since_expiry,
+            })
+    return {'grace': grace, 'all_expired': not any_still_active}
+
+
+def _rbac_module_is_gated(module_code):
+    """True if at least one SaasModule links to this RBAC module code at
+    all -- i.e. some paid product claims to unlock it, so subscription
+    gating should apply. False means no SaasModule has ever been linked
+    to it (platform-level modules like 'dashboard'/'administration'),
+    so it stays open to every tenant regardless of subscription."""
+    from models import SaasModuleRbacLink
+    return SaasModuleRbacLink.query.filter_by(rbac_module_code=module_code).first() is not None
+
+
 def user_has_permission(user, module_code, form_code, action_code):
     """The single source of truth for "can this user do X". Checked fresh
     on every call -- no caching, so permission edits apply immediately."""
     if not user or not getattr(user, 'is_authenticated', False):
         return False
-    if getattr(user, 'is_super_admin', False):
+    if getattr(user, 'effectively_super_admin', False):
         return True
+
+    # Module-subscription gate (spec: "Customer Module Validation") --
+    # checked before role/permission lookups, so a customer whose
+    # subscription doesn't include this module is denied regardless of
+    # any role grant or per-user override. Only applies to a real SaaS
+    # customer context (current_saas_customer() is None for a
+    # standalone, non-SaaS install, which stays fully ungated) and only
+    # to RBAC modules some SaasModule actually claims to unlock.
+    if _rbac_module_is_gated(module_code):
+        from database.routes.shared import current_saas_customer
+        customer = current_saas_customer()
+        if customer and module_code not in customer_active_rbac_modules(customer):
+            return False
 
     perm = _get_permission(module_code, form_code, action_code)
     if not perm:
