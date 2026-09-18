@@ -668,14 +668,15 @@
             </li>
             {% endif %}
 
-            {# ══ SUPERADMIN (SaaS Customers, SaaS Module Catalog, Auto Code Selection, Backup/Restore) ══
-               Visible to any effectively_super_admin (the real platform account, or a tenant's own
-               local SuperAdmin -- see models.py), but the platform-wide links inside (Customers/
-               Module Catalog/Support Tickets show every OTHER customer's data; Backup & Restore is
-               hardcoded to the platform's own shared database regardless of which tenant session is
-               active, so it would silently operate on the wrong database from inside a tenant) stay
-               gated to current_user.is_super_admin (the flag alone) -- only Auto Code Selection is
-               genuinely per-tenant and safe to show either way. #}
+            {# ══ SUPERADMIN (SaaS Customers, SaaS Module Catalog, Auto Code Selection, ZATCA
+               Settings, Backup/Restore) ══ Visible to any effectively_super_admin (the real
+               platform account, or a tenant's own local SuperAdmin -- see models.py). Customers/
+               Module Catalog/Support Tickets show every OTHER customer's data, so those stay
+               gated to current_user.is_super_admin (the flag alone). Auto Code Selection, ZATCA
+               Settings, and Backup & Restore are all genuinely per-tenant -- Backup & Restore acts
+               on whichever database session['tenant_db'] currently points at (see
+               db_backup.py's _target_db_name()), never the platform's, so it's safe to show
+               either way too. #}
             {% if current_user.is_authenticated and current_user.effectively_super_admin %}
             {% set superadmin_active = request.endpoint and (request.endpoint.startswith('saas_customers.') or request.endpoint.startswith('saas_admin.') or request.endpoint.startswith('auto_code.') or request.endpoint.startswith('zatca.') or request.endpoint.startswith('support.support_tickets_queue') or request.endpoint.startswith('db_backup.')) %}
             <li class="nav-item">
@@ -719,13 +720,13 @@
                                 <span>{{ t('support_tickets') }}</span>
                             </a>
                         </li>
+                        {% endif %}
                         <li class="nav-item">
                             <a href="{{ url_for('db_backup.db_backup_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('db_backup.') %}active{% endif %}">
                                 <i class="fas fa-database"></i>
                                 <span>{{ t('backup_restore') }}</span>
                             </a>
                         </li>
-                        {% endif %}
                     </ul>
                 </div>
             </li>

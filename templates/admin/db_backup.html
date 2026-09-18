@@ -33,7 +33,12 @@
 
 <div style="padding:8px 4px 16px;">
   <h2 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:4px;">{% if ar %}نسخ احتياطي واستعادة قاعدة البيانات{% else %}Database Backup & Restore{% endif %}</h2>
-  <p style="font-size:13px;color:#64748b;margin:0;">{% if ar %}تنزيل نسخة كاملة من قاعدة البيانات في ملف واحد، أو استعادة قاعدة البيانات من ملف سابق.{% else %}Download a complete copy of the database as a single file, or restore the database from a previous backup.{% endif %}</p>
+  <p style="font-size:13px;color:#64748b;margin:0 0 10px;">{% if ar %}تنزيل نسخة كاملة من قاعدة البيانات في ملف واحد، أو استعادة قاعدة البيانات من ملف سابق.{% else %}Download a complete copy of the database as a single file, or restore the database from a previous backup.{% endif %}</p>
+  <div style="display:inline-flex;align-items:center;gap:8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 14px;font-size:12.5px;color:#1d4ed8;font-weight:600;">
+    <i class="fas fa-database"></i>
+    {% if ar %}قاعدة البيانات النشطة الآن:{% else %}Currently active database:{% endif %}
+    <code style="background:#dbeafe;padding:2px 8px;border-radius:5px;">{{ target_db_name }}</code>
+  </div>
 </div>
 
 {# ── Backup ── #}
@@ -200,7 +205,7 @@ function confirmRestore(){
   if (_restoreModal) _restoreModal.show();
 }
 
-async function doRestore(){
+async function doRestore(confirmMismatch){
   const fileInp = document.getElementById('restoreFile');
   const file = fileInp.files[0];
   if (!file) return;
@@ -213,12 +218,25 @@ async function doRestore(){
 
   const fd = new FormData();
   fd.append('backup_file', file);
+  if (confirmMismatch) fd.append('confirm_mismatch', 'true');
   try {
     const res = await fetch('/admin/db-backup/restore', {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd});
     const d = await res.json();
     if (d.ok) {
       _setStatus('restoreStatus', 'ok', IS_AR ? 'تمت الاستعادة بنجاح. جارٍ إعادة تحميل الصفحة...' : 'Restore completed successfully. Reloading the page...');
       setTimeout(function(){ location.reload(); }, 1500);
+      return;
+    } else if (d.db_mismatch) {
+      btn.disabled = false;
+      document.getElementById('restoreBtnText').textContent = IS_AR ? 'استعادة قاعدة البيانات' : 'Restore Database';
+      const proceed = confirm((IS_AR
+        ? 'هذه النسخة الاحتياطية مأخوذة من قاعدة بيانات مختلفة (' + d.backup_db + ') عن القاعدة النشطة حالياً (' + d.target_db + '). هل تريد المتابعة على أي حال؟'
+        : 'This backup was taken from a different database ("' + d.backup_db + '") than the one currently active ("' + d.target_db + '"). Continue anyway?'));
+      if (proceed) {
+        doRestore(true);
+      } else {
+        _setStatus('restoreStatus', 'err', IS_AR ? 'تم إلغاء الاستعادة.' : 'Restore cancelled.');
+      }
       return;
     } else {
       _setStatus('restoreStatus', 'err', d.error || (IS_AR ? 'فشلت الاستعادة' : 'Restore failed'));

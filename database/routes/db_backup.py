@@ -34,22 +34,37 @@ def _t(en, ar):
 
 
 def super_admin_required(f):
-    """Whole-database backup/restore is destructive and platform-wide in
-    effect (restore drops and recreates every table), so it is gated to
-    the platform Super Admin specifically -- not the broader is_admin()
-    check every tenant's own Admin account also satisfies."""
+    """Whole-database backup/restore is destructive (restore drops and
+    recreates every table), so it is gated to a Super Admin specifically --
+    not the broader is_admin() check every tenant's own Admin account also
+    satisfies. effectively_super_admin (not the is_super_admin flag alone)
+    so a tenant's own local SuperAdmin can use this too -- safe because
+    _target_db_name() below always resolves to THAT tenant's own database
+    when inside a tenant session, never the platform's."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not getattr(current_user, 'is_super_admin', False):
+        if not getattr(current_user, 'effectively_super_admin', False):
             return jsonify({'ok': False, 'error': _t('Access denied. Super Admin privileges required.',
                                                        'الوصول مرفوض. يلزم صلاحيات المدير الأعلى.')}), 403
         return f(*args, **kwargs)
     return decorated
 
 
+def _target_db_name():
+    """The database this request's backup/restore should act on: the
+    active tenant's own database when a Super Admin is inside a tenant
+    session (session['tenant_db'], same value TenantAwareSession routes
+    every other query by), else the platform's own default database.
+    Every connection and every display/filename below goes through this
+    instead of the bare DB_NAME so a Super Admin backing up/restoring
+    while "inside" SaaS Customer X always acts on X's own database, never
+    silently falls back to the platform's shared one."""
+    return session.get('tenant_db') or DB_NAME
+
+
 def _raw_conn():
     return pymysql.connect(host=DB_HOST, port=int(DB_PORT), user=DB_USER,
-                            password=DB_PASSWORD, database=DB_NAME,
+                            password=DB_PASSWORD, database=_target_db_name(),
                             charset='utf8mb4', cursorclass=pymysql.cursors.Cursor)
 
 
@@ -77,7 +92,7 @@ def _raw_conn_multi():
     quoted string value. A naive Python-side str.split(';') would corrupt
     exactly that case."""
     return pymysql.connect(host=DB_HOST, port=int(DB_PORT), user=DB_USER,
-                            password=DB_PASSWORD, database=DB_NAME,
+                            password=DB_PASSWORD, database=_target_db_name(),
                             charset='utf8mb4', cursorclass=pymysql.cursors.Cursor,
                             client_flag=CLIENT.MULTI_STATEMENTS)
 
@@ -106,7 +121,7 @@ def _kill_other_connections(conn):
 
     cur = conn.cursor()
     my_id = conn.thread_id()
-    cur.execute("SELECT id FROM information_schema.processlist WHERE db=%s AND id<>%s", (DB_NAME, my_id))
+    cur.execute("SELECT id FROM information_schema.processlist WHERE db=%s AND id<>%s", (_target_db_name(), my_id))
     for (pid,) in cur.fetchall():
         try:
             cur.execute(f"KILL {int(pid)}")
@@ -162,7 +177,7 @@ def _dump_database_sql():
         tables = [r[0] for r in cur.fetchall()]
 
         lines = [
-            f"-- SellerMS full database backup ({DB_NAME})",
+            f"-- SellerMS full database backup ({_target_db_name()})",
             f"-- Generated: {datetime.datetime.utcnow().isoformat()}Z",
             "SET NAMES utf8mb4;",
             "SET FOREIGN_KEY_CHECKS=0;",
@@ -223,7 +238,7 @@ def _dump_database():
         cur.execute("SHOW TABLES")
         tables = [r[0] for r in cur.fetchall()]
         out = {
-            'app': 'SellerMS', 'db_name': DB_NAME,
+            'app': 'SellerMS', 'db_name': _target_db_name(),
             'created_at': datetime.datetime.utcnow().isoformat(),
             'tables': {},
         }
@@ -319,9 +334,9 @@ def _restore_database_sql(sql_text):
 @db_backup_bp.route('/admin/db-backup')
 @login_required
 def db_backup_page():
-    if not getattr(current_user, 'is_super_admin', False):
+    if not getattr(current_user, 'effectively_super_admin', False):
         abort(403)
-    return render_template('admin/db_backup.html')
+    return render_template('admin/db_backup.html', target_db_name=_target_db_name())
 
 
 # ── Backup: stream a single JSON file back to the browser ───────
@@ -334,7 +349,7 @@ def db_backup_download():
         data = _dump_database()
         buf = io.BytesIO(json.dumps(data, cls=_JSONEnc).encode('utf-8'))
         buf.seek(0)
-        fname = f"sellerms_backup_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+        fname = f"{_target_db_name()}_backup_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
         return send_file(buf, mimetype='application/json',
                           as_attachment=True, download_name=fname)
     except Exception as e:
@@ -351,7 +366,7 @@ def db_backup_download_sql():
         sql_text = _dump_database_sql()
         buf = io.BytesIO(sql_text.encode('utf-8'))
         buf.seek(0)
-        fname = f"sellerms_backup_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.sql"
+        fname = f"{_target_db_name()}_backup_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.sql"
         return send_file(buf, mimetype='application/sql',
                           as_attachment=True, download_name=fname)
     except Exception as e:
@@ -393,12 +408,41 @@ def db_backup_restore():
         return jsonify({'ok': False, 'error': _t('Invalid backup file format.',
                                                    'صيغة ملف النسخ الاحتياطي غير صحيحة.')}), 400
 
+    # Cross-tenant safety net: a backup downloaded while "inside" one SaaS
+    # customer's session is a completely normal file to have lying around,
+    # but restoring it while inside a DIFFERENT customer's session would
+    # silently overwrite that other customer's live database with this
+    # one's data. Block it unless explicitly confirmed. JSON backups record
+    # their source db_name directly; .sql backups only have it in the
+    # leading comment this app itself writes (see _dump_database_sql()),
+    # so a backup from any other source (mysqldump, phpMyAdmin) has no
+    # recorded name and is allowed through uncompared.
+    backup_db_name = None
+    if payload is not None:
+        backup_db_name = payload.get('db_name')
+    elif sql_text is not None:
+        m = re.search(r'^-- SellerMS full database backup \(([^)]+)\)', sql_text, re.MULTILINE)
+        if m:
+            backup_db_name = m.group(1)
+    target_db_name = _target_db_name()
+    if (backup_db_name and backup_db_name != target_db_name
+            and request.form.get('confirm_mismatch') != 'true'):
+        return jsonify({
+            'ok': False, 'db_mismatch': True,
+            'backup_db': backup_db_name, 'target_db': target_db_name,
+            'error': _t(
+                f'This backup was taken from database "{backup_db_name}", but you are '
+                f'about to restore into "{target_db_name}". Confirm if this is intentional.',
+                f'تم أخذ هذه النسخة الاحتياطية من قاعدة البيانات "{backup_db_name}"، '
+                f'لكنك على وشك الاستعادة إلى "{target_db_name}". أكّد إذا كان هذا مقصوداً.'),
+        }), 409
+
     # Safety net: back up the CURRENT database to disk before overwriting it.
     try:
         safety = _dump_database()
         safety_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'db_safety_backups')
         os.makedirs(safety_dir, exist_ok=True)
-        safety_name = f"pre_restore_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+        safety_name = f"pre_restore_{target_db_name}_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
         with open(os.path.join(safety_dir, safety_name), 'w', encoding='utf-8') as fh:
             json.dump(safety, fh, cls=_JSONEnc)
     except Exception as e:
