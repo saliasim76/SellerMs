@@ -1,0 +1,7 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/proledg/SellerMs/
+    - /usr/bin/rsync -a --exclude='.git/' --exclude='.cpanel.yml' --exclude='.gitignore' --exclude='.env' --exclude='uploads/' --exclude='static/uploads/' --exclude='__pycache__/' --exclude='*.pyc' --exclude='venv/' ./ $DEPLOYPATH
+    - /bin/mkdir -p $DEPLOYPATH/tmp
+    - /usr/bin/touch $DEPLOYPATH/tmp/restart.txt
