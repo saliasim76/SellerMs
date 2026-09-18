@@ -7,52 +7,35 @@
 {% endblock %}
 
 {% block content %}
+<style>
+  .dash-tabbar{display:flex;gap:4px;overflow-x:auto;border-bottom:2px solid #e2e8f0;margin-bottom:20px;}
+  .dash-tabbar .dash-tab-btn{border:none;background:none;padding:12px 18px;font-size:13.5px;font-weight:700;color:#64748b;white-space:nowrap;border-bottom:3px solid transparent;cursor:pointer;display:flex;align-items:center;gap:8px;}
+  .dash-tabbar .dash-tab-btn i{font-size:14px;}
+  .dash-tabbar .dash-tab-btn:hover{color:#2563eb;}
+  .dash-tabbar .dash-tab-btn.active{color:#2563eb;border-bottom-color:#2563eb;}
+  .kpi-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;height:100%;}
+  .kpi-card .kpi-icon{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:10px;}
+  .kpi-card .kpi-label{font-size:12px;color:#64748b;font-weight:600;margin-bottom:2px;}
+  .kpi-card .kpi-value{font-size:21px;font-weight:800;color:#1e293b;}
+  .kpi-blue .kpi-icon{background:#eff6ff;color:#2563eb;}
+  .kpi-green .kpi-icon{background:#f0fdf4;color:#16a34a;}
+  .kpi-orange .kpi-icon{background:#fff7ed;color:#ea580c;}
+  .kpi-red .kpi-icon{background:#fef2f2;color:#dc2626;}
+  .kpi-purple .kpi-icon{background:#faf5ff;color:#9333ea;}
+  .dash-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;height:100%;}
+  .dash-card h6{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:14px;}
+  .dash-mini-table{width:100%;font-size:12.5px;}
+  .dash-mini-table th{color:#64748b;font-weight:600;padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:{{ 'right' if ar else 'left' }};}
+  .dash-mini-table td{padding:7px 8px;border-bottom:1px solid #f1f5f9;}
+  .dash-mini-table td.num, .dash-mini-table th.num{text-align:right;}
+</style>
+
 <div class="page-header">
   <h1 class="page-title">
     <i class="fas fa-tachometer-alt me-2 text-primary"></i>
     {% if ar %}لوحة التحكم{% else %}Dashboard{% endif %}
   </h1>
-  <p class="text-muted">{% if ar %}نظرة عامة على النظام{% else %}System Overview{% endif %}</p>
-</div>
-
-<!-- Stats Cards -->
-<div class="row g-4 mb-4">
-  <div class="col-12 col-sm-6 col-xl-3">
-    <div class="stat-card stat-card-primary">
-      <div class="stat-icon"><i class="fas fa-users"></i></div>
-      <div class="stat-body">
-        <div class="stat-number">{{ stats.total }}</div>
-        <div class="stat-label">{% if ar %}إجمالي الملاك{% else %}Total Owners{% endif %}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-sm-6 col-xl-3">
-    <div class="stat-card stat-card-success">
-      <div class="stat-icon"><i class="fas fa-user-check"></i></div>
-      <div class="stat-body">
-        <div class="stat-number">{{ stats.active }}</div>
-        <div class="stat-label">{% if ar %}الملاك النشطون{% else %}Active Owners{% endif %}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-sm-6 col-xl-3">
-    <div class="stat-card stat-card-warning">
-      <div class="stat-icon"><i class="fas fa-user-times"></i></div>
-      <div class="stat-body">
-        <div class="stat-number">{{ stats.inactive }}</div>
-        <div class="stat-label">{% if ar %}الملاك غير النشطين{% else %}Inactive Owners{% endif %}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-sm-6 col-xl-3">
-    <div class="stat-card stat-card-info">
-      <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
-      <div class="stat-body">
-        <div class="stat-number">{{ stats.new_month }}</div>
-        <div class="stat-label">{% if ar %}جدد هذا الشهر{% else %}New This Month{% endif %}</div>
-      </div>
-    </div>
-  </div>
+  <p class="text-muted">{% if ar %}نظرة عامة مالية{% else %}Financial Overview{% endif %}</p>
 </div>
 
 {% if stats.expiring_docs > 0 %}
@@ -66,51 +49,102 @@
 </div>
 {% endif %}
 
-<div class="row g-4">
-  <!-- Recent Owners Table -->
-  <div class="col-12 col-xl-8">
-    <div class="card card-modern">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="fas fa-clock me-2 text-primary"></i>{% if ar %}أحدث الملاك{% else %}Recent Owners{% endif %}</h5>
-        <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-sm btn-outline-primary">
-          {% if ar %}عرض الكل{% else %}View All{% endif %}
-        </a>
+<div class="dash-tabbar" id="dashTabbar">
+  <button type="button" class="dash-tab-btn active" data-tab="owner"><i class="fas fa-building"></i>{% if ar %}المالك{% else %}Owner{% endif %}</button>
+  <button type="button" class="dash-tab-btn" data-tab="buyer"><i class="fas fa-user-tag"></i>{% if ar %}المشتري{% else %}Buyer{% endif %}</button>
+  <button type="button" class="dash-tab-btn" data-tab="purchase"><i class="fas fa-truck-loading"></i>{% if ar %}المشتريات{% else %}Purchase{% endif %}</button>
+  <button type="button" class="dash-tab-btn" data-tab="vat"><i class="fas fa-percentage"></i>{% if ar %}ملخص الضريبة{% else %}VAT Summary{% endif %}</button>
+  <button type="button" class="dash-tab-btn" data-tab="fs"><i class="fas fa-file-invoice"></i>{% if ar %}القوائم المالية{% else %}Financial Statement{% endif %}</button>
+</div>
+
+<!-- ══ OWNER ══ -->
+<div class="dash-tab-pane" id="dashPane-owner">
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-blue"><div class="kpi-icon"><i class="fas fa-coins"></i></div>
+        <div class="kpi-label">{% if ar %}السيولة النقدية{% else %}Liquid Cash{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(owner_tab.liquid_cash) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-green"><div class="kpi-icon"><i class="fas fa-arrow-down"></i></div>
+        <div class="kpi-label">{% if ar %}مستحق من العملاء{% else %}Receivable Outstanding{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(owner_tab.ar_outstanding) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-orange"><div class="kpi-icon"><i class="fas fa-arrow-up"></i></div>
+        <div class="kpi-label">{% if ar %}مستحق للموردين{% else %}Payable Outstanding{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(owner_tab.ap_outstanding) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card {{ 'kpi-green' if owner_tab.net_this_month >= 0 else 'kpi-red' }}"><div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
+        <div class="kpi-label">{% if ar %}صافي التدفق هذا الشهر{% else %}Net Cash Flow (This Month){% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(owner_tab.net_this_month) }}</div></div>
+    </div>
+  </div>
+  <div class="dash-card">
+    <h6><i class="fas fa-chart-bar me-2 text-primary"></i>{% if ar %}الوارد مقابل الصادر (آخر 6 أشهر){% else %}Incoming vs Outgoing Payments (Last 6 Months){% endif %}</h6>
+    <canvas id="ownerTrendChart" height="90"></canvas>
+  </div>
+</div>
+
+<!-- ══ BUYER ══ -->
+<div class="dash-tab-pane d-none" id="dashPane-buyer">
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-blue"><div class="kpi-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+        <div class="kpi-label">{% if ar %}إجمالي المبيعات{% else %}Total Sales{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(buyer_tab.totals.total_sales) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-purple"><div class="kpi-icon"><i class="fas fa-percentage"></i></div>
+        <div class="kpi-label">{% if ar %}ضريبة القيمة المضافة{% else %}VAT Collected{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(buyer_tab.totals.total_vat) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-orange"><div class="kpi-icon"><i class="fas fa-hourglass-half"></i></div>
+        <div class="kpi-label">{% if ar %}الرصيد المستحق{% else %}Outstanding Balance{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(buyer_tab.totals.total_outstanding) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-green"><div class="kpi-icon"><i class="fas fa-hand-holding-usd"></i></div>
+        <div class="kpi-label">{% if ar %}المبلغ المدفوع{% else %}Total Paid{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(buyer_tab.totals.total_paid) }}</div></div>
+    </div>
+  </div>
+  <div class="row g-3">
+    <div class="col-12 col-xl-5">
+      <div class="dash-card">
+        <h6><i class="fas fa-chart-bar me-2 text-primary"></i>{% if ar %}أعلى العملاء (حسب الرصيد){% else %}Top Buyers (by Balance){% endif %}</h6>
+        <canvas id="buyerTopChart" height="220"></canvas>
       </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover mb-0">
-            <thead>
-              <tr>
-                <th>{% if ar %}الكود{% else %}Code{% endif %}</th>
-                <th>{% if ar %}الاسم{% else %}Name{% endif %}</th>
-                <th>{% if ar %}جهة الاتصال{% else %}Contact{% endif %}</th>
-                <th>{% if ar %}الدولة{% else %}Country{% endif %}</th>
-                <th>{% if ar %}الحالة{% else %}Status{% endif %}</th>
-              </tr>
-            </thead>
+    </div>
+    <div class="col-12 col-xl-7">
+      <div class="dash-card">
+        <h6><i class="fas fa-table me-2 text-primary"></i>{% if ar %}تفاصيل العملاء{% else %}Buyer Breakdown{% endif %}</h6>
+        <div style="max-height:280px;overflow:auto;">
+          <table class="dash-mini-table">
+            <thead><tr>
+              <th>{% if ar %}العميل{% else %}Buyer{% endif %}</th>
+              <th class="num">{% if ar %}الفواتير{% else %}Invoices{% endif %}</th>
+              <th class="num">{% if ar %}قبل الضريبة{% else %}Excl. VAT{% endif %}</th>
+              <th class="num">{% if ar %}الضريبة{% else %}VAT{% endif %}</th>
+              <th class="num">{% if ar %}الإجمالي{% else %}Final Amount{% endif %}</th>
+              <th class="num">{% if ar %}المدفوع{% else %}Paid{% endif %}</th>
+              <th class="num">{% if ar %}الرصيد{% else %}Balance{% endif %}</th>
+            </tr></thead>
             <tbody>
-              {% for owner in recent_owners %}
+              {% for b in buyer_tab.buyers %}
               <tr>
-                <td><a href="{{ url_for('sellers.list_owners') }}" class="fw-semibold text-primary">{{ owner.owner_code }}</a></td>
-                <td>{% if ar and owner.name_ar %}{{ owner.name_ar }}{% else %}{{ owner.name }}{% endif %}</td>
-                <td>{{ owner.phone or '—' }}</td>
-                <td>{% if ar and owner.country_ar %}{{ owner.country_ar }}{% else %}{{ owner.country or '—' }}{% endif %}</td>
-                <td>
-                  <span class="badge status-{{ owner.status }}">
-                    {% if ar %}
-                      {% if owner.status == 'active' %}نشط
-                      {% elif owner.status == 'inactive' %}غير نشط
-                      {% elif owner.status == 'pending' %}معلق
-                      {% else %}{{ owner.status }}{% endif %}
-                    {% else %}{{ owner.status | title }}{% endif %}
-                  </span>
-                </td>
+                <td>{{ b.name }}</td>
+                <td class="num">{{ b.invoice_count }}</td>
+                <td class="num">{{ '{:,.2f}'.format(b.total_excl_vat) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(b.vat_amount) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(b.total_incl_vat) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(b.paid_amount) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(b.balance) }}</td>
               </tr>
               {% else %}
-              <tr><td colspan="5" class="text-center text-muted py-4">
-                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
-                {% if ar %}لا توجد بيانات{% else %}No owners yet{% endif %}
-              </td></tr>
+              <tr><td colspan="7" class="text-center text-muted py-3">{% if ar %}لا توجد بيانات{% else %}No posted sales invoices yet{% endif %}</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -118,52 +152,227 @@
       </div>
     </div>
   </div>
+</div>
 
-  <!-- Quick Actions -->
-  <div class="col-12 col-xl-4">
-    <div class="card card-modern mb-4">
-      <div class="card-header">
-        <h5 class="mb-0"><i class="fas fa-bolt me-2 text-warning"></i>{% if ar %}إجراءات سريعة{% else %}Quick Actions{% endif %}</h5>
-      </div>
-      <div class="card-body">
-        <div class="d-grid gap-2">
-          {% if current_user.is_admin() %}
-          <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-primary">
-            <i class="fas fa-user-plus me-2"></i>{% if ar %}إضافة مالك جديد{% else %}Add New Owner{% endif %}
-          </a>
-          {% endif %}
-          <a href="{{ url_for('sellers.list_owners') }}" class="btn btn-outline-primary">
-            <i class="fas fa-list me-2"></i>{% if ar %}عرض جميع الملاك{% else %}View All Owners{% endif %}
-          </a>
-          <a href="{{ url_for('sellers.export_owners') }}" class="btn btn-outline-success">
-            <i class="fas fa-file-csv me-2"></i>{% if ar %}تصدير CSV{% else %}Export CSV{% endif %}
-          </a>
-        </div>
+<!-- ══ PURCHASE ══ -->
+<div class="dash-tab-pane d-none" id="dashPane-purchase">
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-blue"><div class="kpi-icon"><i class="fas fa-shopping-cart"></i></div>
+        <div class="kpi-label">{% if ar %}إجمالي المشتريات{% else %}Total Purchases{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(purchase_tab.totals.total_purchases) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-purple"><div class="kpi-icon"><i class="fas fa-percentage"></i></div>
+        <div class="kpi-label">{% if ar %}ضريبة المدخلات{% else %}Input VAT{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(purchase_tab.totals.total_vat) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-orange"><div class="kpi-icon"><i class="fas fa-hourglass-half"></i></div>
+        <div class="kpi-label">{% if ar %}الرصيد المستحق{% else %}Outstanding Balance{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(purchase_tab.totals.total_outstanding) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-green"><div class="kpi-icon"><i class="fas fa-hand-holding-usd"></i></div>
+        <div class="kpi-label">{% if ar %}المبلغ المدفوع{% else %}Total Paid{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(purchase_tab.totals.total_paid) }}</div></div>
+    </div>
+  </div>
+  <div class="row g-3">
+    <div class="col-12 col-xl-5">
+      <div class="dash-card">
+        <h6><i class="fas fa-chart-bar me-2 text-primary"></i>{% if ar %}أعلى الموردين (حسب الرصيد){% else %}Top Suppliers (by Balance){% endif %}</h6>
+        <canvas id="purchaseTopChart" height="220"></canvas>
       </div>
     </div>
-
-    <!-- Summary -->
-    <div class="card card-modern">
-      <div class="card-header">
-        <h5 class="mb-0"><i class="fas fa-chart-pie me-2 text-info"></i>{% if ar %}ملخص{% else %}Summary{% endif %}</h5>
-      </div>
-      <div class="card-body">
-        <div class="summary-item">
-          <span>{% if ar %}نشط{% else %}Active{% endif %}</span>
-          <div class="progress flex-grow-1 mx-3" style="height:8px">
-            <div class="progress-bar bg-success" style="width:{% if stats.total > 0 %}{{ (stats.active/stats.total*100)|int }}{% else %}0{% endif %}%"></div>
-          </div>
-          <span class="fw-bold">{{ stats.active }}</span>
-        </div>
-        <div class="summary-item mt-2">
-          <span>{% if ar %}غير نشط{% else %}Inactive{% endif %}</span>
-          <div class="progress flex-grow-1 mx-3" style="height:8px">
-            <div class="progress-bar bg-warning" style="width:{% if stats.total > 0 %}{{ (stats.inactive/stats.total*100)|int }}{% else %}0{% endif %}%"></div>
-          </div>
-          <span class="fw-bold">{{ stats.inactive }}</span>
+    <div class="col-12 col-xl-7">
+      <div class="dash-card">
+        <h6><i class="fas fa-table me-2 text-primary"></i>{% if ar %}تفاصيل الموردين{% else %}Supplier Breakdown{% endif %}</h6>
+        <div style="max-height:280px;overflow:auto;">
+          <table class="dash-mini-table">
+            <thead><tr>
+              <th>{% if ar %}المورد{% else %}Supplier{% endif %}</th>
+              <th class="num">{% if ar %}الفواتير{% else %}Invoices{% endif %}</th>
+              <th class="num">{% if ar %}قبل الضريبة{% else %}Excl. VAT{% endif %}</th>
+              <th class="num">{% if ar %}الضريبة{% else %}VAT{% endif %}</th>
+              <th class="num">{% if ar %}الإجمالي{% else %}Final Amount{% endif %}</th>
+              <th class="num">{% if ar %}المدفوع{% else %}Paid{% endif %}</th>
+              <th class="num">{% if ar %}الرصيد{% else %}Balance{% endif %}</th>
+            </tr></thead>
+            <tbody>
+              {% for s in purchase_tab.suppliers %}
+              <tr>
+                <td>{{ s.name }}</td>
+                <td class="num">{{ s.invoice_count }}</td>
+                <td class="num">{{ '{:,.2f}'.format(s.total_excl_vat) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(s.vat_amount) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(s.total_incl_vat) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(s.paid_amount) }}</td>
+                <td class="num">{{ '{:,.2f}'.format(s.balance) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-muted py-3">{% if ar %}لا توجد بيانات{% else %}No posted purchase invoices yet{% endif %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<!-- ══ VAT SUMMARY ══ -->
+<div class="dash-tab-pane d-none" id="dashPane-vat">
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-sm-6 col-xl-4">
+      <div class="kpi-card kpi-green"><div class="kpi-icon"><i class="fas fa-arrow-up"></i></div>
+        <div class="kpi-label">{% if ar %}ضريبة المخرجات (المبيعات){% else %}Output VAT (Sales){% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(vat_tab.total_output_vat) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-4">
+      <div class="kpi-card kpi-orange"><div class="kpi-icon"><i class="fas fa-arrow-down"></i></div>
+        <div class="kpi-label">{% if ar %}ضريبة المدخلات (المشتريات){% else %}Input VAT (Purchases){% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(vat_tab.total_input_vat) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-4">
+      <div class="kpi-card {{ 'kpi-red' if vat_tab.net_vat >= 0 else 'kpi-blue' }}"><div class="kpi-icon"><i class="fas fa-balance-scale"></i></div>
+        <div class="kpi-label">{% if ar %}صافي الضريبة المستحقة{% else %}Net VAT Payable{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(vat_tab.net_vat) }}</div></div>
+    </div>
+  </div>
+  <div class="dash-card">
+    <h6><i class="fas fa-chart-line me-2 text-primary"></i>{% if ar %}ضريبة المخرجات مقابل المدخلات (آخر 12 شهرًا){% else %}Output vs Input VAT (Last 12 Months){% endif %}</h6>
+    <canvas id="vatTrendChart" height="90"></canvas>
+  </div>
+</div>
+
+<!-- ══ FINANCIAL STATEMENT ══ -->
+<div class="dash-tab-pane d-none" id="dashPane-fs">
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-blue"><div class="kpi-icon"><i class="fas fa-arrow-trend-up"></i></div>
+        <div class="kpi-label">{% if ar %}الإيرادات{% else %}Revenue{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(fs_tab.revenue) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-orange"><div class="kpi-icon"><i class="fas fa-receipt"></i></div>
+        <div class="kpi-label">{% if ar %}تكلفة الإيرادات{% else %}Cost of Revenue{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(fs_tab.cost_of_revenue) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-purple"><div class="kpi-icon"><i class="fas fa-chart-pie"></i></div>
+        <div class="kpi-label">{% if ar %}مجمل الربح{% else %}Gross Profit{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(fs_tab.gross_profit) }}</div></div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="kpi-card {{ 'kpi-green' if fs_tab.net_profit >= 0 else 'kpi-red' }}"><div class="kpi-icon"><i class="fas fa-sack-dollar"></i></div>
+        <div class="kpi-label">{% if ar %}صافي الربح{% else %}Net Profit{% endif %}</div>
+        <div class="kpi-value">{{ '{:,.0f}'.format(fs_tab.net_profit) }}</div></div>
+    </div>
+  </div>
+  <div class="row g-3">
+    <div class="col-12 col-xl-6">
+      <div class="dash-card">
+        <h6><i class="fas fa-chart-bar me-2 text-primary"></i>{% if ar %}الإيرادات مقابل التكاليف{% else %}Revenue vs Costs{% endif %}</h6>
+        <canvas id="fsPnlChart" height="200"></canvas>
+      </div>
+    </div>
+    <div class="col-12 col-xl-6">
+      <div class="dash-card">
+        <h6><i class="fas fa-balance-scale me-2 text-primary"></i>{% if ar %}الأصول والخصوم وحقوق الملكية{% else %}Assets / Liabilities / Equity{% endif %}</h6>
+        <canvas id="fsBalanceChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // ── Tab switching ──
+  document.querySelectorAll('#dashTabbar .dash-tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#dashTabbar .dash-tab-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      var target = btn.getAttribute('data-tab');
+      document.querySelectorAll('.dash-tab-pane').forEach(function(p){ p.classList.add('d-none'); });
+      document.getElementById('dashPane-' + target).classList.remove('d-none');
+    });
+  });
+
+  var CB = '#2563eb', CG = '#16a34a', CO = '#ea580c', CR = '#dc2626', CP = '#9333ea';
+
+  // ── Owner: Incoming vs Outgoing trend ──
+  new Chart(document.getElementById('ownerTrendChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ owner_tab.trend | map(attribute='label') | list | tojson }},
+      datasets: [
+        {label: '{{ "الوارد" if ar else "Incoming" }}', data: {{ owner_tab.trend | map(attribute='incoming') | list | tojson }}, backgroundColor: CG},
+        {label: '{{ "الصادر" if ar else "Outgoing" }}', data: {{ owner_tab.trend | map(attribute='outgoing') | list | tojson }}, backgroundColor: CO},
+      ]
+    },
+    options: {responsive:true, plugins:{legend:{position:'bottom'}}}
+  });
+
+  // ── Buyer: Top by balance ──
+  new Chart(document.getElementById('buyerTopChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ buyer_tab.top | map(attribute='name') | list | tojson }},
+      datasets: [{label: '{{ "الرصيد" if ar else "Balance" }}', data: {{ buyer_tab.top | map(attribute='balance') | list | tojson }}, backgroundColor: CB}]
+    },
+    options: {indexAxis:'y', responsive:true, plugins:{legend:{display:false}}}
+  });
+
+  // ── Purchase: Top by balance ──
+  new Chart(document.getElementById('purchaseTopChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ purchase_tab.top | map(attribute='name') | list | tojson }},
+      datasets: [{label: '{{ "الرصيد" if ar else "Balance" }}', data: {{ purchase_tab.top | map(attribute='balance') | list | tojson }}, backgroundColor: CO}]
+    },
+    options: {indexAxis:'y', responsive:true, plugins:{legend:{display:false}}}
+  });
+
+  // ── VAT: Output vs Input trend ──
+  new Chart(document.getElementById('vatTrendChart'), {
+    type: 'line',
+    data: {
+      labels: {{ vat_tab.trend | map(attribute='label') | list | tojson }},
+      datasets: [
+        {label: '{{ "المخرجات" if ar else "Output VAT" }}', data: {{ vat_tab.trend | map(attribute='output_vat') | list | tojson }}, borderColor: CG, backgroundColor: CG, tension: 0.3},
+        {label: '{{ "المدخلات" if ar else "Input VAT" }}', data: {{ vat_tab.trend | map(attribute='input_vat') | list | tojson }}, borderColor: CO, backgroundColor: CO, tension: 0.3},
+      ]
+    },
+    options: {responsive:true, plugins:{legend:{position:'bottom'}}}
+  });
+
+  // ── Financial Statement: Revenue vs Costs ──
+  new Chart(document.getElementById('fsPnlChart'), {
+    type: 'bar',
+    data: {
+      labels: ['{{ "الإيرادات" if ar else "Revenue" }}', '{{ "تكلفة الإيرادات" if ar else "Cost of Revenue" }}', '{{ "التشغيل" if ar else "Operating Cost" }}', '{{ "التمويل" if ar else "Finance Cost" }}', '{{ "صافي الربح" if ar else "Net Profit" }}'],
+      datasets: [{
+        data: [{{ fs_tab.revenue }}, {{ fs_tab.cost_of_revenue }}, {{ fs_tab.operating_cost }}, {{ fs_tab.finance_cost }}, {{ fs_tab.net_profit }}],
+        backgroundColor: [CB, CO, CO, CO, (fs_tab.net_profit >= 0) and CG or CR]
+      }]
+    },
+    options: {responsive:true, plugins:{legend:{display:false}}}
+  });
+
+  // ── Financial Statement: Assets/Liabilities/Equity ──
+  new Chart(document.getElementById('fsBalanceChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['{{ "الأصول" if ar else "Assets" }}', '{{ "الخصوم" if ar else "Liabilities" }}', '{{ "حقوق الملكية" if ar else "Equity" }}'],
+      datasets: [{data: [{{ fs_tab.assets }}, {{ fs_tab.liabilities }}, {{ fs_tab.equity }}], backgroundColor: [CB, CR, CP]}]
+    },
+    options: {responsive:true, plugins:{legend:{position:'bottom'}}}
+  });
+});
+</script>
 {% endblock %}
