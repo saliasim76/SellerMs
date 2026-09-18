@@ -180,7 +180,7 @@
             </li>
 
             {# ══ OWNER ═══════════════════════════════════════ #}
-            {% set owner_active = request.endpoint in ['sellers.list_owners','sellers.view_owner','sellers.list_owner_documents_page'] or (request.endpoint == 'lookups.items_list') or (request.endpoint and request.endpoint.startswith('uom.')) or (request.endpoint and request.endpoint.startswith('zatca.')) %}
+            {% set owner_active = request.endpoint in ['sellers.list_owners','sellers.view_owner','sellers.list_owner_documents_page'] or (request.endpoint == 'lookups.items_list') or (request.endpoint and request.endpoint.startswith('uom.')) %}
             <li class="nav-item">
                 <a class="nav-link nav-parent {% if owner_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuOwner" role="button" aria-expanded="{{ 'true' if owner_active else 'false' }}" aria-controls="menuOwner">
                     <i class="fas fa-users"></i>
@@ -200,12 +200,6 @@
                                class="nav-link {% if request.endpoint == 'sellers.list_owner_documents_page' %}active{% endif %}">
                                 <i class="fas fa-paperclip"></i>
                                 <span>{{ t('owner_documents') }}</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ url_for('zatca.zatca_settings_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('zatca.') %}active{% endif %}">
-                                <i class="fas fa-shield-halved"></i>
-                                <span>{{ t('zatca_settings') }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -683,7 +677,7 @@
                gated to current_user.is_super_admin (the flag alone) -- only Auto Code Selection is
                genuinely per-tenant and safe to show either way. #}
             {% if current_user.is_authenticated and current_user.effectively_super_admin %}
-            {% set superadmin_active = request.endpoint and (request.endpoint.startswith('saas_customers.') or request.endpoint.startswith('saas_admin.') or request.endpoint.startswith('auto_code.') or request.endpoint.startswith('support.support_tickets_queue') or request.endpoint.startswith('db_backup.')) %}
+            {% set superadmin_active = request.endpoint and (request.endpoint.startswith('saas_customers.') or request.endpoint.startswith('saas_admin.') or request.endpoint.startswith('auto_code.') or request.endpoint.startswith('zatca.') or request.endpoint.startswith('support.support_tickets_queue') or request.endpoint.startswith('db_backup.')) %}
             <li class="nav-item">
                 <a class="nav-link nav-parent {% if superadmin_active %}has-active{% endif %}" data-bs-toggle="collapse" href="#menuSuperAdmin" role="button" aria-expanded="{{ 'true' if superadmin_active else 'false' }}" aria-controls="menuSuperAdmin">
                     <i class="fas fa-user-cog"></i>
@@ -710,6 +704,12 @@
                             <a href="{{ url_for('auto_code.auto_code_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('auto_code.') %}active{% endif %}">
                                 <i class="fas fa-magic"></i>
                                 <span>{{ t('auto_code_selection') }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('zatca.zatca_settings_page') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('zatca.') %}active{% endif %}">
+                                <i class="fas fa-shield-halved"></i>
+                                <span>{{ t('zatca_settings') }}</span>
                             </a>
                         </li>
                         {% if current_user.is_super_admin %}
