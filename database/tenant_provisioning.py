@@ -25,6 +25,7 @@ import urllib.parse
 
 from flask import Flask
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 
 from config import Config, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, OLD_SAAS_MASTER_DB_NAME, TENANT_DB_PREFIX
 
@@ -72,6 +73,11 @@ def build_tenant_uri(db_name):
     )
 
 
+def _mysql_errno(exc):
+    args = getattr(getattr(exc, 'orig', None), 'args', ())
+    return args[0] if args and isinstance(args[0], int) else None
+
+
 def create_tenant_database(db_name):
     if not _DB_NAME_RE.match(db_name):
         raise ValueError(f"Refusing to create database with unexpected name: {db_name!r}")
@@ -80,6 +86,37 @@ def create_tenant_database(db_name):
         with engine.connect() as conn:
             conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4"))
             conn.commit()
+    except OperationalError as exc:
+        # 1044/1142/1227: this MySQL user isn't allowed to run CREATE DATABASE.
+        # cPanel-style shared hosts only let databases be created from their own
+        # control panel, so a database made there by hand (and already granted to
+        # this user, hence visible below) is used as-is instead of failing.
+        if _mysql_errno(exc) not in (1044, 1142, 1227):
+            raise
+        if database_name_exists(db_name):
+            return
+        short = db_name[len(TENANT_DB_PREFIX):] if TENANT_DB_PREFIX and db_name.startswith(TENANT_DB_PREFIX) else db_name
+        raise ValueError(
+            f'this host does not let the application create databases. In your hosting '
+            f'control panel (cPanel > MySQL Databases) create a database named "{db_name}" '
+            f'(type only "{short}" there if the panel adds the prefix itself), add the '
+            f'application\'s database user to it with ALL PRIVILEGES, then submit this form again'
+        ) from exc
+    finally:
+        engine.dispose()
+
+
+def database_is_empty(db_name):
+    """True if `db_name` can be opened with the application's own MySQL user
+    and contains no tables at all. Raises if it can't be opened (no such
+    database, or the user has no access to it)."""
+    engine = create_engine(build_tenant_uri(db_name))
+    try:
+        with engine.connect() as conn:
+            count = conn.execute(text(
+                'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()'
+            )).scalar()
+            return count == 0
     finally:
         engine.dispose()
 
@@ -118,7 +155,19 @@ def validate_custom_db_name(db_name):
     if db_name.lower() in _RESERVED_DB_NAMES:
         raise ValueError(f'"{db_name}" is a reserved name and cannot be used')
     if database_name_exists(db_name):
-        raise ValueError(f'database "{db_name}" already exists')
+        # A database created by hand (see create_tenant_database) is fine to use
+        # while it is completely empty. One that already holds tables may belong
+        # to a removed customer (delete_saas_customer() leaves theirs in place),
+        # and a new customer must never be attached to that data.
+        try:
+            empty = database_is_empty(db_name)
+        except Exception:
+            empty = False
+        if not empty:
+            raise ValueError(
+                f'database "{db_name}" already exists and is not empty '
+                f'(it may hold another customer\'s data)'
+            )
     return db_name
 
 
