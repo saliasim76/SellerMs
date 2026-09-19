@@ -20,7 +20,8 @@ from config import DB_NAME
 from models import db, Customer, Subscription, SubscriptionModule, SaasModule, SaasUserDirectory, User
 from database.routes.shared import super_admin_required, _t
 from database.routes.rbac import DEFAULT_ADMIN_USERNAME
-from database.tenant_provisioning import provision_tenant, sync_tenant_schema, reset_tenant_password, validate_custom_db_name
+from database.tenant_provisioning import (provision_tenant, sync_tenant_schema, reset_tenant_password,
+                                           validate_custom_db_name, validate_manual_db_name)
 from database.routes.saas_internal import provision_trial_user_direct
 
 saas_customers_bp = Blueprint('saas_customers', __name__)
@@ -91,15 +92,27 @@ def add_saas_customer():
     end_date = (datetime.utcnow() + timedelta(days=14)) if is_trial else _parse_date(f.get('end_date'))
     access_mode = f.get('access_mode') if f.get('access_mode') in ('basic', 'expert') else 'expert'
     custom_db_name = (f.get('database_name') or '').strip()
+    # "I created this database myself" -- for hosts (e.g. cPanel) that don't let
+    # the application run CREATE DATABASE: the empty database already exists,
+    # so it is only checked and then filled, never created.
+    manual_db = f.get('manual_db') == 'on' and not is_trial
 
     if not company_name or not customer_name or not email:
         flash(_t('Company name, contact name and email are required.',
                   'اسم الشركة واسم جهة الاتصال والبريد الإلكتروني مطلوبة.'), 'danger')
         return redirect(url_for('saas_customers.list_saas_customers'))
 
+    if manual_db and not custom_db_name:
+        flash(_t('Enter the name of the database you created.',
+                  'أدخل اسم قاعدة البيانات التي قمت بإنشائها.'), 'danger')
+        return redirect(url_for('saas_customers.list_saas_customers'))
+
     if not is_trial and custom_db_name:
         try:
-            custom_db_name = validate_custom_db_name(custom_db_name)
+            if manual_db:
+                custom_db_name = validate_manual_db_name(custom_db_name)
+            else:
+                custom_db_name = validate_custom_db_name(custom_db_name)
         except ValueError as exc:
             flash(_t(f'Invalid database name: {exc}.', f'اسم قاعدة بيانات غير صالح: {exc}.'), 'danger')
             return redirect(url_for('saas_customers.list_saas_customers'))
@@ -173,7 +186,8 @@ def add_saas_customer():
         return redirect(url_for('saas_customers.list_saas_customers'))
 
     try:
-        result = provision_tenant(customer, customer_name, email, mobile, db_name=custom_db_name or None)
+        result = provision_tenant(customer, customer_name, email, mobile,
+                                  db_name=custom_db_name or None, create_db=not manual_db)
     except Exception as exc:
         db.session.delete(customer)  # cascades to subscription + modules
         db.session.commit()

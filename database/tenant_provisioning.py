@@ -139,13 +139,9 @@ def database_name_exists(db_name):
         engine.dispose()
 
 
-def validate_custom_db_name(db_name):
-    """Raises ValueError with a user-facing message if `db_name` (an
-    admin-supplied tenant database name from the Add Customer form) is
-    unsafe, reserved, or already taken. Must be called -- and its RETURN
-    VALUE used, not the original argument -- before create_tenant_database()
-    is ever reached, since TENANT_DB_PREFIX (config.py) may have changed
-    what the actual database name needs to be."""
+def _check_db_name(db_name):
+    """Prefix + format + reserved-name checks shared by both validators
+    below; returns the final database name."""
     db_name = apply_tenant_db_prefix(db_name)
     if not _DB_NAME_RE.match(db_name):
         raise ValueError(
@@ -154,6 +150,42 @@ def validate_custom_db_name(db_name):
         )
     if db_name.lower() in _RESERVED_DB_NAMES:
         raise ValueError(f'"{db_name}" is a reserved name and cannot be used')
+    return db_name
+
+
+def validate_manual_db_name(db_name):
+    """For the "I created this database myself" option on the Add Customer
+    form (hosts such as cPanel only let databases be made from their own
+    panel). The application never tries to CREATE it: it must already exist,
+    be openable by the application's own MySQL user, and be completely
+    empty. Returns the final database name, or raises ValueError with a
+    user-facing message."""
+    db_name = _check_db_name(db_name)
+    try:
+        empty = database_is_empty(db_name)
+    except OperationalError as exc:
+        raise ValueError(
+            f'the application\'s database user cannot open a database named "{db_name}". '
+            f'Create it in your hosting panel (cPanel > MySQL Databases), add the database '
+            f'user to it with ALL PRIVILEGES, and type its name exactly as the panel shows '
+            f'it (capital letters matter)'
+        ) from exc
+    if not empty:
+        raise ValueError(
+            f'database "{db_name}" already contains tables (it may hold another '
+            f'customer\'s data) -- use a new, empty database'
+        )
+    return db_name
+
+
+def validate_custom_db_name(db_name):
+    """Raises ValueError with a user-facing message if `db_name` (an
+    admin-supplied tenant database name from the Add Customer form) is
+    unsafe, reserved, or already taken. Must be called -- and its RETURN
+    VALUE used, not the original argument -- before create_tenant_database()
+    is ever reached, since TENANT_DB_PREFIX (config.py) may have changed
+    what the actual database name needs to be."""
+    db_name = _check_db_name(db_name)
     if database_name_exists(db_name):
         # A database created by hand (see create_tenant_database) is fine to use
         # while it is completely empty. One that already holds tables may belong
@@ -171,7 +203,7 @@ def validate_custom_db_name(db_name):
     return db_name
 
 
-def provision_tenant(customer, admin_full_name, admin_email, admin_mobile, db_name=None):
+def provision_tenant(customer, admin_full_name, admin_email, admin_mobile, db_name=None, create_db=True):
     """Create a brand-new tenant database and seed it with the full ERP
     schema + default reference data -- Chart of Accounts (Levels 1-5) and
     Purchase/Sales Tax Codes included, so a new customer can start posting
@@ -198,7 +230,10 @@ def provision_tenant(customer, admin_full_name, admin_email, admin_mobile, db_na
     )
 
     db_name = db_name or generate_tenant_db_name(customer.id)
-    create_tenant_database(db_name)
+    if create_db:
+        create_tenant_database(db_name)
+    # else: the operator created the (empty) database by hand and it was
+    # already checked by validate_manual_db_name() at the route layer.
 
     tenant_app = Flask(f'tenant_{db_name}')
     tenant_app.config.from_object(Config)

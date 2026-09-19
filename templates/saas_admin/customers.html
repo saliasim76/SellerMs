@@ -176,10 +176,21 @@
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold">{% if ar %}اسم قاعدة البيانات (اختياري){% else %}Database Name (optional){% endif %}</label>
-              <input type="text" name="database_name" id="sc_db_name" class="form-control" dir="ltr" placeholder="{% if ar %}اتركه فارغًا للإنشاء التلقائي{% else %}Leave blank to auto-generate{% endif %}">
+              <input type="text" name="database_name" id="sc_db_name" class="form-control" dir="ltr" autocomplete="off" placeholder="{% if ar %}اتركه فارغًا للإنشاء التلقائي{% else %}Leave blank to auto-generate{% endif %}">
               <div style="font-size:11px;color:#9ca3af;">
                 {% if ar %}هذا هو اسم "المؤسسة" الذي سيدخله العميل عند تسجيل الدخول. أحرف وأرقام وشرطات سفلية فقط، ويجب أن يكون فريدًا.
                 {% else %}This becomes the "Organization" value the customer enters at login. Letters, numbers, underscores only; must be unique.{% endif %}
+              </div>
+              <div class="form-check mt-2" id="sc_manual_db_wrap">
+                <input class="form-check-input" type="checkbox" name="manual_db" id="sc_manual_db"
+                       onchange="document.getElementById('sc_db_name').required = this.checked;">
+                <label class="form-check-label" for="sc_manual_db" style="font-size:12.5px;font-weight:600;">
+                  {% if ar %}أنشأتُ قاعدة البيانات يدويًا (لا تحاول إنشاءها){% else %}I created this database myself (don't try to create it){% endif %}
+                </label>
+                <div style="font-size:11px;color:#9ca3af;">
+                  {% if ar %}استخدمه إذا كانت الاستضافة لا تسمح للتطبيق بإنشاء قواعد بيانات (مثل cPanel). أنشئ قاعدة بيانات فارغة في لوحة الاستضافة، وأضف مستخدم قاعدة البيانات إليها بكل الصلاحيات، ثم اكتب اسمها هنا كما تظهر تمامًا (حالة الأحرف مهمة). سيُجهَّز العميل داخلها تلقائيًا.
+                  {% else %}Use this if your host doesn't let the application create databases (e.g. cPanel). Create an empty database in your hosting panel, add the application's database user to it with ALL PRIVILEGES, then type its name here exactly as the panel shows it (capital letters matter). The customer's tables and accounts are still set up inside it automatically.{% endif %}
+                </div>
               </div>
             </div>
           </div>
@@ -286,6 +297,8 @@ function openAdd() {
   document.getElementById('sc_access_mode').value = 'expert';
   document.getElementById('sc_trial_field').style.display = '';
   document.getElementById('sc_db_name').readOnly = false;
+  document.getElementById('sc_db_name').required = false;
+  document.getElementById('sc_manual_db_wrap').style.display = '';
   toggleTrialMode(false);
   _resetModules();
 }
@@ -303,6 +316,8 @@ function openEdit(id, c) {
   document.getElementById('sc_trial_field').style.display = 'none';
   document.getElementById('sc_db_name').value = c.database_name || '';
   document.getElementById('sc_db_name').readOnly = true;
+  document.getElementById('sc_db_name').required = false;
+  document.getElementById('sc_manual_db_wrap').style.display = 'none';
   toggleTrialMode(false);
   _resetModules();
   (c.modules || []).forEach(m => {
