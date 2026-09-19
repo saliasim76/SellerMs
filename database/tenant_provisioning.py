@@ -154,6 +154,22 @@ def _check_db_name(db_name):
     return db_name
 
 
+def _visible_databases(limit=20):
+    """Names of the non-system databases the application's own MySQL user can
+    see (MySQL only lists a database to a user that has some privilege on it).
+    [] if the lookup itself fails."""
+    engine = create_engine(_server_uri())
+    try:
+        with engine.connect() as conn:
+            names = [row[0] for row in conn.execute(text('SHOW DATABASES'))]
+    except Exception:
+        return []
+    finally:
+        engine.dispose()
+    system = {'information_schema', 'mysql', 'performance_schema', 'sys'}
+    return sorted(n for n in names if n.lower() not in system)[:limit]
+
+
 def validate_manual_db_name(db_name):
     """For the "I created this database myself" option on the Add Customer
     form (hosts such as cPanel only let databases be made from their own
@@ -165,11 +181,15 @@ def validate_manual_db_name(db_name):
     try:
         empty = database_is_empty(db_name)
     except OperationalError as exc:
+        visible = _visible_databases()
+        seen = (f' The databases that user can currently see are: {", ".join(visible)}.'
+                if visible else ' That user cannot see any database besides the system ones.')
         raise ValueError(
-            f'the application\'s database user cannot open a database named "{db_name}". '
-            f'Create it in your hosting panel (cPanel > MySQL Databases), add the database '
-            f'user to it with ALL PRIVILEGES, and type its name exactly as the panel shows '
-            f'it (capital letters matter)'
+            f'the application\'s database user "{DB_USER}" cannot open a database named '
+            f'"{db_name}".{seen} Create the database in your hosting panel (cPanel > MySQL '
+            f'Databases) and add that same user, "{DB_USER}", to it with ALL PRIVILEGES -- '
+            f'another user will not do, because the application always connects as "{DB_USER}". '
+            f'Then type the database\'s name exactly as the panel shows it, in lowercase'
         ) from exc
     if not empty:
         raise ValueError(
