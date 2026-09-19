@@ -99,11 +99,16 @@ try:
     application = create_app('production')
     init_db(application)
 except Exception as _exc:
+    _hint = _database_hint(_exc)
     try:
         with open(os.path.join(BASE_DIR, 'startup_error.log'), 'a', encoding='utf-8') as _log:
             _log.write(f"\n--- {datetime.datetime.utcnow().isoformat()}Z ---\n")
-            _log.write(_database_hint(_exc))
+            _log.write(_hint)
             _log.write('\n\n' + traceback.format_exc())
     except OSError:
         pass
+    if _hint:
+        # Passenger copies stderr into the host's error log (cPanel > Metrics >
+        # Errors), which is where most people look first.
+        print(_hint, file=sys.stderr, flush=True)
     raise
