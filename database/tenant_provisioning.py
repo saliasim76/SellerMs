@@ -21,6 +21,7 @@ below; its generic "User" account is deleted right after for SaaS
 tenants -- see provision_tenant()).
 """
 import re
+import time
 import urllib.parse
 
 from flask import Flask
@@ -64,11 +65,92 @@ def _server_uri():
     )
 
 
-def build_tenant_uri(db_name):
+def _uri_for(db_name, params):
+    host, port, user, password = params
     return (
-        f"mysql+pymysql://{urllib.parse.quote_plus(DB_USER)}:{urllib.parse.quote_plus(DB_PASSWORD)}"
-        f"@{DB_HOST}:{DB_PORT}/{db_name}?charset=utf8mb4"
+        f"mysql+pymysql://{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(password)}"
+        f"@{host}:{port}/{db_name}?charset=utf8mb4"
     )
+
+
+def check_db_name(db_name):
+    """Trim, lower-case and validate a database name (format, reserved names).
+    Returns the final name; raises ValueError with a user-facing reason."""
+    return _check_db_name(db_name)
+
+
+def decrypt_db_password(token):
+    return _decrypt_db_password(token)
+
+
+def _default_conn_params():
+    return (DB_HOST, str(DB_PORT), DB_USER, DB_PASSWORD)
+
+
+def _secret_key():
+    try:
+        from flask import current_app
+        return current_app.config['SECRET_KEY']
+    except RuntimeError:
+        return Config.SECRET_KEY
+
+
+def encrypt_db_password(plaintext):
+    """Encrypt a customer's database password for storage (same Fernet scheme,
+    derived from SECRET_KEY, that the ZATCA private keys use). None passes through."""
+    from database.zatca.engine import encrypt_secret
+    return encrypt_secret(plaintext, _secret_key())
+
+
+def _decrypt_db_password(token):
+    from database.zatca.engine import decrypt_secret
+    return decrypt_secret(token, _secret_key())
+
+
+# Connection settings saved on a customer are looked up by database name and
+# cached briefly, so routing a request does not query the platform database
+# every time; changes made in another worker process are picked up within the TTL.
+_CONN_TTL_SECONDS = 30
+_conn_cache = {}
+
+
+def tenant_connection_params(db_name):
+    """(host, port, user, password) used to open `db_name`: the settings saved
+    on the customer that owns it when it has its own, otherwise the
+    application's defaults. A customer with a user of its own gets that user's
+    stored password (blank if none); host/port/user each fall back on their own."""
+    now = time.time()
+    hit = _conn_cache.get(db_name)
+    if hit and hit[0] > now:
+        return hit[1]
+    try:
+        from models import db
+        with db.engines['saas'].connect() as conn:
+            row = conn.execute(text(
+                'SELECT db_host, db_port, db_user, db_password_enc '
+                'FROM proledge_saas_customers WHERE database_name = :n'), {'n': db_name}).first()
+    except Exception:
+        return _default_conn_params()   # no app context / table not there yet -- not cached
+    params = _default_conn_params()
+    if row and (row[0] or row[1] or row[2] or row[3]):
+        host = row[0] or DB_HOST
+        port = str(row[1] or DB_PORT)
+        if row[2]:
+            user, password = row[2], (_decrypt_db_password(row[3]) if row[3] else '')
+        else:
+            user, password = DB_USER, DB_PASSWORD
+        params = (host, port, user, password)
+    _conn_cache[db_name] = (now + _CONN_TTL_SECONDS, params)
+    return params
+
+
+def forget_tenant_connection(db_name):
+    """Drop the cached settings for `db_name` (call after they are edited)."""
+    _conn_cache.pop(db_name, None)
+
+
+def build_tenant_uri(db_name):
+    return _uri_for(db_name, tenant_connection_params(db_name))
 
 
 def _mysql_errno(exc):
@@ -97,7 +179,7 @@ def create_tenant_database(db_name):
             f'this host does not let the application create databases. Create an empty '
             f'database in your hosting panel (cPanel > MySQL Databases), add the '
             f'application\'s database user to it with ALL PRIVILEGES, then submit this form '
-            f'again with "I created this database myself" ticked and the database\'s full '
+            f'again with Database Creation Method set to Manual and the database\'s full '
             f'name exactly as the panel shows it (cPanel adds your account prefix itself)'
         ) from exc
     finally:
@@ -170,33 +252,70 @@ def _visible_databases(limit=20):
     return sorted(n for n in names if n.lower() not in system)[:limit]
 
 
-def validate_manual_db_name(db_name):
-    """For the "I created this database myself" option on the Add Customer
-    form (hosts such as cPanel only let databases be made from their own
-    panel). The application never tries to CREATE it: it must already exist,
-    be openable by the application's own MySQL user, and be completely
-    empty. Returns the final database name, or raises ValueError with a
-    user-facing message."""
-    db_name = _check_db_name(db_name)
+def _explain_connection_error(exc, db_name, user, list_visible):
+    code = _mysql_errno(exc)
+    if code == 1045:
+        return f'Access denied for the MySQL user "{user}" -- the username or password is wrong.'
+    if code in (1044, 1049):
+        msg = (f'The MySQL user "{user}" cannot open a database named "{db_name}": it does not exist '
+               f'yet, the name is misspelt, or that user has not been given access to it.')
+        if list_visible:
+            visible = _visible_databases()
+            msg += (f' The databases that user can currently see are: {", ".join(visible)}.'
+                    if visible else ' That user cannot see any database besides the system ones.')
+        return msg
+    if code in (2003, 2005, 2006, 2013):
+        return f'Cannot reach the MySQL server ({str(getattr(exc, "orig", exc))[:120]}).'
+    return f'Connection failed: {str(getattr(exc, "orig", exc))[:200]}'
+
+
+def test_database_connection(db_name, host=None, port=None, user=None, password=None):
+    """Try to open `db_name` with the given settings (blank host/port/user =
+    the application's own defaults) and report what is in it. Never raises.
+
+    Returns {'ok', 'status' ('connected' | 'failed'), 'message', 'database_name',
+    'tables', 'empty', 'initialized'}; `initialized` means this application's own
+    tables are already there. Nothing is created or changed in the database."""
+    result = {'ok': False, 'status': 'failed', 'message': '', 'database_name': db_name,
+              'tables': 0, 'empty': False, 'initialized': False}
     try:
-        empty = database_is_empty(db_name)
+        db_name = _check_db_name(db_name)
+    except ValueError as exc:
+        result['message'] = f'Invalid database name: {exc}.'
+        return result
+    result['database_name'] = db_name
+    host = (host or '').strip() or DB_HOST
+    port = str(port or '').strip() or str(DB_PORT)
+    user = (user or '').strip()
+    own_user = bool(user)
+    if not own_user:
+        user, password = DB_USER, DB_PASSWORD
+    engine = create_engine(_uri_for(db_name, (host, port, user, password or '')),
+                           connect_args={'connect_timeout': 8})
+    try:
+        with engine.connect() as conn:
+            tables = {row[0] for row in conn.execute(text(
+                'SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()'))}
     except OperationalError as exc:
-        visible = _visible_databases()
-        seen = (f' The databases that user can currently see are: {", ".join(visible)}.'
-                if visible else ' That user cannot see any database besides the system ones.')
-        raise ValueError(
-            f'the application\'s database user "{DB_USER}" cannot open a database named '
-            f'"{db_name}".{seen} Create the database in your hosting panel (cPanel > MySQL '
-            f'Databases) and add that same user, "{DB_USER}", to it with ALL PRIVILEGES -- '
-            f'another user will not do, because the application always connects as "{DB_USER}". '
-            f'Then type the database\'s name exactly as the panel shows it, in lowercase'
-        ) from exc
-    if not empty:
-        raise ValueError(
-            f'database "{db_name}" already contains tables (it may hold another '
-            f'customer\'s data) -- use a new, empty database'
-        )
-    return db_name
+        result['message'] = _explain_connection_error(exc, db_name, user, not own_user and host == DB_HOST)
+        return result
+    except Exception as exc:
+        result['message'] = f'Connection failed: {str(exc)[:200]}'
+        return result
+    finally:
+        engine.dispose()
+
+    result.update(ok=True, status='connected', tables=len(tables), empty=not tables)
+    if not tables:
+        result['message'] = ('Connected. The database is empty -- click "Initialize database" to build '
+                             "the tables and the customer's Admin login.")
+    elif 'users' in tables:
+        result['initialized'] = True
+        result['message'] = f"Connected. This application's tables are already there ({len(tables)} tables)."
+    else:
+        result['message'] = (f"Connected, but the database already contains {len(tables)} tables that are "
+                             f"not this application's -- it cannot be initialized.")
+    return result
 
 
 def validate_custom_db_name(db_name):
@@ -253,8 +372,8 @@ def provision_tenant(customer, admin_full_name, admin_email, admin_mobile, db_na
     db_name = db_name or generate_tenant_db_name(customer.id)
     if create_db:
         create_tenant_database(db_name)
-    # else: the operator created the (empty) database by hand and it was
-    # already checked by validate_manual_db_name() at the route layer.
+    # else (manual): the operator created the (empty) database by hand; the
+    # caller has already verified it is reachable and empty.
 
     tenant_app = Flask(f'tenant_{db_name}')
     tenant_app.config.from_object(Config)

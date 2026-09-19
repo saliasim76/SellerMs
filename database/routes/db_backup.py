@@ -62,9 +62,21 @@ def _target_db_name():
     return session.get('tenant_db') or DB_NAME
 
 
+def _conn_settings():
+    """(host, port, user, password) for the database this request acts on: the
+    settings saved on the customer when inside a tenant session, else the
+    platform's own."""
+    tenant = session.get('tenant_db')
+    if tenant:
+        from database.tenant_provisioning import tenant_connection_params
+        return tenant_connection_params(tenant)
+    return DB_HOST, DB_PORT, DB_USER, DB_PASSWORD
+
+
 def _raw_conn():
-    return pymysql.connect(host=DB_HOST, port=int(DB_PORT), user=DB_USER,
-                            password=DB_PASSWORD, database=_target_db_name(),
+    host, port, user, password = _conn_settings()
+    return pymysql.connect(host=host, port=int(port), user=user,
+                            password=password, database=_target_db_name(),
                             charset='utf8mb4', cursorclass=pymysql.cursors.Cursor)
 
 
@@ -91,8 +103,9 @@ def _raw_conn_multi():
     boundaries, which correctly handles a semicolon that appears inside a
     quoted string value. A naive Python-side str.split(';') would corrupt
     exactly that case."""
-    return pymysql.connect(host=DB_HOST, port=int(DB_PORT), user=DB_USER,
-                            password=DB_PASSWORD, database=_target_db_name(),
+    host, port, user, password = _conn_settings()
+    return pymysql.connect(host=host, port=int(port), user=user,
+                            password=password, database=_target_db_name(),
                             charset='utf8mb4', cursorclass=pymysql.cursors.Cursor,
                             client_flag=CLIENT.MULTI_STATEMENTS)
 

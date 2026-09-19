@@ -3,6 +3,7 @@ from datetime import datetime
 import pyotp
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy.exc import OperationalError
 from models import db, User, SaasUserDirectory, Customer
 from forms import LoginForm, TwoFactorForm
 from database.routes.audit import log_login_success, log_login_failed, log_logout
@@ -66,9 +67,20 @@ def login():
             # tenant's database_name, shown to the customer at
             # provisioning time) picks the database directly instead.
             customer = Customer.query.filter_by(database_name=organization).first()
+            if customer and not customer.db_initialized:
+                flash(_t('This organization\'s database is not ready yet. Please contact your administrator.',
+                          'قاعدة بيانات هذه المؤسسة ليست جاهزة بعد. يرجى التواصل مع المسؤول.'), 'warning')
+                return render_template('auth/login.html', form=form)
             if customer:
                 session['tenant_db'] = customer.database_name
-                user = User.query.filter_by(username=username).first()
+                try:
+                    user = User.query.filter_by(username=username).first()
+                except OperationalError:
+                    session.pop('tenant_db', None)
+                    db.session.rollback()
+                    flash(_t('Cannot connect to this organization\'s database right now. Please contact your administrator.',
+                              'تعذر الاتصال بقاعدة بيانات هذه المؤسسة حاليًا. يرجى التواصل مع المسؤول.'), 'danger')
+                    return render_template('auth/login.html', form=form)
         else:
             user = User.query.filter_by(username=username).first()
             if not user:

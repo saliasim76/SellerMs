@@ -5131,6 +5131,30 @@ class Customer(db.Model):
     #           database/routes/shared.py).
     # expert -- no restriction; normal RBAC applies as today.
     access_mode   = db.Column(db.String(20), nullable=False, default='expert')
+    # How this customer's database came to be assigned. Creating the customer
+    # and creating the physical database are two separate operations:
+    #   automatic -- the application creates the database, builds its tables
+    #                and saves the name (the original behaviour).
+    #   manual    -- the Super Admin creates the database outside the
+    #                application; only its name (and optional connection
+    #                settings) are saved, and nothing is created.
+    db_method     = db.Column(db.String(20), nullable=False, default='automatic')
+    # Result of the last connection test: not_verified | connected | failed.
+    db_status     = db.Column(db.String(20), nullable=False, default='not_verified')
+    db_status_message = db.Column(db.String(500))   # the last test's outcome / error text
+    db_checked_at = db.Column(db.DateTime)
+    # False until the database holds this application's tables and the
+    # customer's Admin login (built automatically, or by "Initialize
+    # database", or found already present by a connection test) -- a customer
+    # cannot log in before that.
+    db_initialized = db.Column(db.Boolean, nullable=False, default=True)
+    # Optional per-customer connection settings. Blank = use the
+    # application's own defaults (DB_HOST/DB_PORT/DB_USER/DB_PASSWORD). The
+    # password is stored encrypted, never in plain text.
+    db_host       = db.Column(db.String(255))
+    db_port       = db.Column(db.String(10))
+    db_user       = db.Column(db.String(100))
+    db_password_enc = db.Column(db.Text)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
     subscriptions = db.relationship('Subscription', backref='customer', cascade='all, delete-orphan', lazy=True)
@@ -5146,6 +5170,15 @@ class Customer(db.Model):
             'account_status': self.account_status or 'active',
             'database_name': self.database_name or '',
             'access_mode': self.access_mode or 'expert',
+            'db_method': self.db_method or 'automatic',
+            'db_status': self.db_status or 'not_verified',
+            'db_status_message': self.db_status_message or '',
+            'db_checked_at': self.db_checked_at.strftime('%Y-%m-%d %H:%M') if self.db_checked_at else '',
+            'db_initialized': bool(self.db_initialized) if self.db_initialized is not None else True,
+            'db_host': self.db_host or '',
+            'db_port': self.db_port or '',
+            'db_user': self.db_user or '',
+            'has_db_password': bool(self.db_password_enc),
             'billing_cycle': sub.billing_cycle if sub else 'monthly',
             'end_date': sub.end_date.strftime('%Y-%m-%d') if sub and sub.end_date else '',
             'modules': [
@@ -5327,15 +5360,23 @@ def ensure_saas_schema():
                 "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
                 "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='proledge_saas_customers'"
             )).fetchall()}
-            if 'access_mode' not in cols:
-                try:
-                    conn.execute(text(
-                        "ALTER TABLE proledge_saas_customers "
-                        "ADD access_mode VARCHAR(20) NOT NULL DEFAULT 'expert'"))
-                    conn.commit()
-                    print('ensure_saas_schema: added proledge_saas_customers.access_mode')
-                except Exception as e:
-                    print(f'ensure_saas_schema: could not add access_mode: {e}')
+            for column, ddl in (('access_mode', "VARCHAR(20) NOT NULL DEFAULT 'expert'"),
+                                ('db_method', "VARCHAR(20) NOT NULL DEFAULT 'automatic'"),
+                                ('db_status', "VARCHAR(20) NOT NULL DEFAULT 'not_verified'"),
+                                ('db_status_message', 'VARCHAR(500)'),
+                                ('db_checked_at', 'DATETIME'),
+                                ('db_initialized', 'TINYINT(1) NOT NULL DEFAULT 1'),
+                                ('db_host', 'VARCHAR(255)'),
+                                ('db_port', 'VARCHAR(10)'),
+                                ('db_user', 'VARCHAR(100)'),
+                                ('db_password_enc', 'TEXT')):
+                if column not in cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE proledge_saas_customers ADD {column} {ddl}"))
+                        conn.commit()
+                        print(f'ensure_saas_schema: added proledge_saas_customers.{column}')
+                    except Exception as e:
+                        print(f'ensure_saas_schema: could not add {column}: {e}')
 
 
 def merge_saas_master_into_sellerms():

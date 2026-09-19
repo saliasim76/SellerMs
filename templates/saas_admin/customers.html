@@ -40,7 +40,7 @@
           <th>{% if ar %}الانتهاء{% else %}Expiry{% endif %}</th>
           <th>{% if ar %}الوحدات{% else %}Modules{% endif %}</th>
           <th style="width:90px">{% if ar %}الحالة{% else %}Status{% endif %}</th>
-          <th style="width:165px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
+          <th style="width:200px" class="text-center">{% if ar %}إجراءات{% else %}Actions{% endif %}</th>
         </tr>
       </thead>
       <tbody>
@@ -51,7 +51,24 @@
           <td class="fw-semibold">{{ c.company_name or '—' }}</td>
           <td>{{ c.customer_name }}</td>
           <td>{{ c.email }}</td>
-          <td><span class="code-badge">{{ c.database_name or ('مشتركة' if ar else 'Shared') }}</span></td>
+          <td>
+            <span class="code-badge">{{ c.database_name or ('مشتركة' if ar else 'Shared') }}</span>
+            {% if c.database_name %}
+            <div style="margin-top:3px;font-size:11px;line-height:1.9;">
+              <span style="display:inline-block;padding:1px 8px;border-radius:9px;background:#eef2ff;color:#4338ca;font-weight:600;">{% if c.db_method == 'manual' %}{% if ar %}يدوي{% else %}Manual{% endif %}{% else %}{% if ar %}تلقائي{% else %}Automatic{% endif %}{% endif %}</span>
+              {% if c.db_status == 'connected' %}
+              <span title="{{ c.db_status_message or '' }}" style="display:inline-block;padding:1px 8px;border-radius:9px;background:#dcfce7;color:#15803d;font-weight:700;">{% if ar %}متصل{% else %}Connected{% endif %}</span>
+              {% elif c.db_status == 'failed' %}
+              <span title="{{ c.db_status_message or '' }}" style="display:inline-block;padding:1px 8px;border-radius:9px;background:#fee2e2;color:#b91c1c;font-weight:700;">{% if ar %}فشل الاتصال{% else %}Connection Failed{% endif %}</span>
+              {% else %}
+              <span title="{{ c.db_status_message or '' }}" style="display:inline-block;padding:1px 8px;border-radius:9px;background:#f1f5f9;color:#475569;font-weight:700;">{% if ar %}غير موثّق{% else %}Not Verified{% endif %}</span>
+              {% endif %}
+              {% if not c.db_initialized %}
+              <span title="{% if ar %}لم تُبنَ الجداول وحساب المسؤول بعد{% else %}Tables and the Admin login are not built yet{% endif %}" style="display:inline-block;padding:1px 8px;border-radius:9px;background:#fef3c7;color:#b45309;font-weight:700;">{% if ar %}غير مُعدّة{% else %}Not initialized{% endif %}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+          </td>
           <td>{{ d.end_date or '—' }}</td>
           <td style="font-size:12px;color:#6b7280;">{{ d.modules|length }}</td>
           <td>
@@ -74,9 +91,18 @@
               <i class="fas fa-key"></i>
             </button>
             {% if c.database_name %}
+            <button class="action-btn" style="color:#0369a1;" onclick='testConnection({{ c.id }})' title="{% if ar %}اختبار الاتصال{% else %}Test connection{% endif %}">
+              <i class="fas fa-plug"></i>
+            </button>
+            {% if not c.db_initialized %}
+            <button class="action-btn" style="color:#16a34a;" onclick='confirmInitializeDatabase({{ c.id }}, {{ (c.company_name or c.customer_name)|tojson }}, {{ c.database_name|tojson }})' title="{% if ar %}إعداد قاعدة البيانات{% else %}Initialize database{% endif %}">
+              <i class="fas fa-database"></i>
+            </button>
+            {% else %}
             <button class="action-btn" onclick='confirmSyncOne({{ c.id }}, {{ (c.company_name or c.customer_name)|tojson }})' title="{% if ar %}مزامنة المخطط{% else %}Sync schema{% endif %}">
               <i class="fas fa-sync-alt"></i>
             </button>
+            {% endif %}
             {% endif %}
             <button class="action-btn action-btn-delete" onclick='confirmDeleteCustomer({{ c.id }}, {{ (c.company_name or c.customer_name)|tojson }})' title="{% if ar %}حذف{% else %}Delete{% endif %}">
               <i class="fas fa-trash-alt"></i>
@@ -174,25 +200,64 @@
               <label class="form-label fw-semibold">{% if ar %}تاريخ الانتهاء{% else %}Subscription Expiry{% endif %}</label>
               <input type="date" name="end_date" id="sc_end_date" class="form-control">
             </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">{% if ar %}اسم قاعدة البيانات (اختياري){% else %}Database Name (optional){% endif %}</label>
-              <input type="text" name="database_name" id="sc_db_name" class="form-control" dir="ltr"
-                     autocomplete="off" autocapitalize="none" spellcheck="false" data-no-propercase
-                     oninput="this.value = this.value.toLowerCase().replace(/\s+/g, '');"
-                     placeholder="{% if ar %}اتركه فارغًا للإنشاء التلقائي{% else %}Leave blank to auto-generate{% endif %}">
-              <div style="font-size:11px;color:#9ca3af;">
-                {% if ar %}يُستخدم الاسم كما كُتب تمامًا وبأحرف صغيرة (دون إضافة أي بادئة). هذا هو اسم "المؤسسة" الذي سيدخله العميل عند تسجيل الدخول. أحرف وأرقام وشرطات سفلية فقط، ويجب أن يكون فريدًا. في cPanel اكتب الاسم الكامل بما فيه بادئة الحساب (مثل proledg_noman).
-                {% else %}Used exactly as typed, in lowercase (no prefix is added). This becomes the "Organization" value the customer enters at login. Letters, numbers, underscores only; must be unique. On cPanel, type the full name including your account prefix (e.g. proledg_noman).{% endif %}
-              </div>
-              <div class="form-check mt-2" id="sc_manual_db_wrap">
-                <input class="form-check-input" type="checkbox" name="manual_db" id="sc_manual_db"
-                       onchange="document.getElementById('sc_db_name').required = this.checked;">
-                <label class="form-check-label" for="sc_manual_db" style="font-size:12.5px;font-weight:600;">
-                  {% if ar %}أنشأتُ قاعدة البيانات يدويًا (لا تحاول إنشاءها){% else %}I created this database myself (don't try to create it){% endif %}
-                </label>
-                <div style="font-size:11px;color:#9ca3af;">
-                  {% if ar %}استخدمه إذا كانت الاستضافة لا تسمح للتطبيق بإنشاء قواعد بيانات (مثل cPanel). أنشئ قاعدة بيانات فارغة في لوحة الاستضافة، وأضف مستخدم قاعدة البيانات إليها بكل الصلاحيات، ثم اكتب اسمها هنا كما تظهر تمامًا (حالة الأحرف مهمة). سيُجهَّز العميل داخلها تلقائيًا.
-                  {% else %}Use this if your host doesn't let the application create databases (e.g. cPanel). Create an empty database in your hosting panel, add the application's database user to it with ALL PRIVILEGES, then type its name here exactly as the panel shows it (capital letters matter). The customer's tables and accounts are still set up inside it automatically.{% endif %}
+            <div class="col-12" id="sc_db_setup">
+              <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;">
+                <div class="fw-semibold mb-2"><i class="fas fa-database me-1 text-primary"></i>{% if ar %}إعداد قاعدة البيانات{% else %}Database Setup{% endif %}</div>
+                <input type="hidden" id="sc_customer_id" value="">
+                <div class="row g-3">
+                  <div class="col-md-5">
+                    <label class="form-label fw-semibold">{% if ar %}طريقة إنشاء قاعدة البيانات{% else %}Database Creation Method{% endif %}</label>
+                    <select name="db_method" id="sc_db_method" class="form-select" onchange="onDbMethodChange()">
+                      <option value="automatic">{% if ar %}تلقائي -- يُنشئ التطبيق قاعدة البيانات{% else %}Automatic -- the application creates the database{% endif %}</option>
+                      <option value="manual">{% if ar %}يدوي -- أنشئ قاعدة البيانات بنفسي{% else %}Manual -- I create the database myself{% endif %}</option>
+                    </select>
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label fw-semibold">{% if ar %}اسم قاعدة البيانات{% else %}Database Name{% endif %}</label>
+                    <input type="text" name="database_name" id="sc_db_name" class="form-control" dir="ltr"
+                           autocomplete="off" autocapitalize="none" spellcheck="false" data-no-propercase readonly
+                           oninput="this.value = this.value.toLowerCase().replace(/\s+/g, '');"
+                           placeholder="{% if ar %}يُنشأ تلقائيًا{% else %}Generated automatically{% endif %}">
+                    <div class="form-check mt-1" id="sc_auto_name_row">
+                      <input class="form-check-input" type="checkbox" id="sc_db_name_custom" onchange="onCustomNameToggle()">
+                      <label class="form-check-label" for="sc_db_name_custom" style="font-size:12px;">{% if ar %}أختار الاسم بنفسي (ينشئه التطبيق بهذا الاسم){% else %}I choose the name myself (the application creates it with that name){% endif %}</label>
+                    </div>
+                    <div style="font-size:11px;color:#9ca3af;">
+                      {% if ar %}يُستخدم الاسم كما كُتب وبأحرف صغيرة (دون بادئة). هو نفسه "المؤسسة" التي يكتبها العميل عند تسجيل الدخول. أحرف وأرقام وشرطات سفلية فقط، ويجب أن يكون فريدًا. في cPanel اكتب الاسم الكامل بما فيه بادئة الحساب (مثل proledg_noman).
+                      {% else %}Used as typed, in lowercase (no prefix added). It is also the "Organization" the customer types at login. Letters, numbers, underscores only; must be unique. On cPanel, type the full name including your account prefix (e.g. proledg_noman).{% endif %}
+                    </div>
+                  </div>
+                </div>
+
+                <div id="sc_manual_block" style="display:none;" class="mt-2">
+                  <div style="font-size:11.5px;color:#64748b;">
+                    {% if ar %}الطريقة اليدوية لا تُنشئ أي قاعدة بيانات فعلية: يُحفظ العميل واسم قاعدة البيانات فقط، ولا يلزم أن تكون القاعدة موجودة الآن.
+                    {% else %}The Manual method never creates a physical database: only the customer and the database name (and settings) are saved. The database does not have to exist yet.{% endif %}
+                  </div>
+                  <details class="mt-2">
+                    <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">{% if ar %}إعدادات الاتصال (اختيارية){% else %}Connection settings (optional){% endif %}</summary>
+                    <div class="row g-2 mt-1">
+                      <div class="col-md-5"><input type="text" name="db_host" id="sc_db_host" class="form-control form-control-sm" dir="ltr" autocomplete="off" placeholder="{% if ar %}المضيف (افتراضي){% else %}Host (default){% endif %}"></div>
+                      <div class="col-md-3"><input type="text" name="db_port" id="sc_db_port" class="form-control form-control-sm" dir="ltr" autocomplete="off" placeholder="{% if ar %}المنفذ (افتراضي){% else %}Port (default){% endif %}"></div>
+                      <div class="col-md-4"><input type="text" name="db_user" id="sc_db_user" class="form-control form-control-sm" dir="ltr" autocomplete="off" data-no-propercase placeholder="{% if ar %}المستخدم (افتراضي){% else %}Username (default){% endif %}"></div>
+                      <div class="col-md-12"><input type="password" name="db_password" id="sc_db_password" class="form-control form-control-sm" dir="ltr" autocomplete="new-password" placeholder="{% if ar %}كلمة المرور{% else %}Password{% endif %}"></div>
+                      <div class="col-12" style="font-size:11px;color:#9ca3af;">
+                        {% if ar %}اتركها فارغة لاستخدام اتصال MySQL الخاص بالتطبيق. تُحفظ كلمة المرور مشفّرة.
+                        {% else %}Leave blank to use the application's own MySQL connection. The password is stored encrypted.{% endif %}
+                      </div>
+                    </div>
+                  </details>
+                  <div class="d-flex align-items-center gap-2 mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="sc_test_btn" onclick="testDbConnection()">
+                      <i class="fas fa-plug me-1"></i>{% if ar %}اختبار اتصال قاعدة البيانات{% else %}Test Database Connection{% endif %}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-2" style="font-size:12.5px;">
+                  <span class="fw-semibold">{% if ar %}حالة قاعدة البيانات:{% else %}Database Status:{% endif %}</span>
+                  <span id="sc_db_status_badge"></span>
+                  <span id="sc_db_status_msg" style="color:#64748b;font-size:11.5px;"></span>
                 </div>
               </div>
             </div>
@@ -280,7 +345,9 @@ function submitScForm(btn) {
     ? (IS_AR ? 'جارٍ الحفظ...' : 'Saving...')
     : isTrial
       ? (IS_AR ? 'جارٍ إنشاء العميل التجريبي...' : 'Creating trial customer...')
-      : (IS_AR ? 'جارٍ إنشاء قاعدة البيانات...' : 'Provisioning database...');
+      : document.getElementById('sc_db_method').value === 'manual'
+        ? (IS_AR ? 'جارٍ الحفظ...' : 'Saving...')
+        : (IS_AR ? 'جارٍ إنشاء قاعدة البيانات...' : 'Provisioning database...');
   document.getElementById('scForm').submit();
 }
 
@@ -293,15 +360,87 @@ function _resetModules() {
   document.querySelectorAll('.sc-mod-expiry').forEach(inp => inp.value = '');
 }
 
+const CSRF_TOKEN = '{{ csrf_token() }}';
+const DB_STATUS_UI = {
+  not_verified: {en: 'Not Verified', ar: 'غير موثّق', css: 'background:#f1f5f9;color:#475569;'},
+  connected: {en: 'Connected', ar: 'متصل', css: 'background:#dcfce7;color:#15803d;'},
+  failed: {en: 'Connection Failed', ar: 'فشل الاتصال', css: 'background:#fee2e2;color:#b91c1c;'},
+};
+
+function setDbStatus(status, message) {
+  const ui = DB_STATUS_UI[status] || DB_STATUS_UI.not_verified;
+  const badge = document.getElementById('sc_db_status_badge');
+  badge.textContent = IS_AR ? ui.ar : ui.en;
+  badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;' + ui.css;
+  document.getElementById('sc_db_status_msg').textContent = message ? ' ' + message : '';
+}
+
+function onDbMethodChange() {
+  const manual = document.getElementById('sc_db_method').value === 'manual';
+  const nameEl = document.getElementById('sc_db_name');
+  document.getElementById('sc_manual_block').style.display = manual ? '' : 'none';
+  document.getElementById('sc_auto_name_row').style.display = manual ? 'none' : '';
+  if (manual) {
+    nameEl.readOnly = false;
+    nameEl.required = true;
+    nameEl.placeholder = IS_AR ? 'اسم قاعدة البيانات' : 'e.g. xyz_existing_db';
+  } else {
+    const custom = document.getElementById('sc_db_name_custom').checked;
+    nameEl.required = false;
+    nameEl.readOnly = !custom;
+    if (!custom) nameEl.value = '';
+    nameEl.placeholder = IS_AR ? 'يُنشأ تلقائيًا' : 'Generated automatically';
+  }
+  setDbStatus('not_verified', '');
+}
+
+function onCustomNameToggle() {
+  const nameEl = document.getElementById('sc_db_name');
+  const custom = document.getElementById('sc_db_name_custom').checked;
+  nameEl.readOnly = !custom;
+  if (custom) nameEl.focus(); else nameEl.value = '';
+}
+
+async function testDbConnection() {
+  const btn = document.getElementById('sc_test_btn');
+  if (!document.getElementById('sc_db_name').value.trim()) {
+    setDbStatus('failed', IS_AR ? 'أدخل اسم قاعدة البيانات أولاً.' : 'Enter the database name first.');
+    return;
+  }
+  btn.disabled = true;
+  setDbStatus('not_verified', IS_AR ? 'جارٍ الاختبار...' : 'Testing...');
+  const fd = new FormData();
+  fd.append('customer_id', document.getElementById('sc_customer_id').value);
+  fd.append('database_name', document.getElementById('sc_db_name').value);
+  fd.append('db_host', document.getElementById('sc_db_host').value);
+  fd.append('db_port', document.getElementById('sc_db_port').value);
+  fd.append('db_user', document.getElementById('sc_db_user').value);
+  fd.append('db_password', document.getElementById('sc_db_password').value);
+  try {
+    const res = await fetch('{{ url_for("saas_customers.test_database_from_form") }}',
+                            {method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}, body: fd});
+    const d = await res.json();
+    const isAdd = document.getElementById('scForm').action.endsWith('/add');
+    setDbStatus(d.status, d.message + (isAdd ? (IS_AR ? ' (معاينة فقط -- يبدأ العميل المحفوظ بحالة "غير موثّق").' : ' (Preview only -- the saved customer starts as Not Verified.)') : ''));
+  } catch (e) {
+    setDbStatus('failed', (IS_AR ? 'تعذر إجراء الاختبار: ' : 'Could not run the test: ') + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function openAdd() {
   document.getElementById('scModalTitle').textContent = IS_AR ? 'إضافة عميل' : 'Add Customer';
   document.getElementById('scForm').action = '{{ url_for("saas_customers.add_saas_customer") }}';
   document.getElementById('scForm').reset();
   document.getElementById('sc_access_mode').value = 'expert';
   document.getElementById('sc_trial_field').style.display = '';
-  document.getElementById('sc_db_name').readOnly = false;
-  document.getElementById('sc_db_name').required = false;
-  document.getElementById('sc_manual_db_wrap').style.display = '';
+  document.getElementById('sc_customer_id').value = '';
+  document.getElementById('sc_db_setup').style.display = '';
+  document.getElementById('sc_db_method').disabled = false;
+  document.getElementById('sc_db_method').value = 'automatic';
+  document.getElementById('sc_db_name_custom').checked = false;
+  onDbMethodChange();
   toggleTrialMode(false);
   _resetModules();
 }
@@ -317,10 +456,28 @@ function openEdit(id, c) {
   document.getElementById('sc_end_date').value = c.end_date || '';
   document.getElementById('sc_access_mode').value = c.access_mode || 'expert';
   document.getElementById('sc_trial_field').style.display = 'none';
+  // Database Setup: the creation method is fixed once the customer exists (so
+  // editing can never create a second database). Only a Manual customer's
+  // database name and connection settings can be corrected here.
+  const isManual = c.db_method === 'manual';
+  document.getElementById('sc_customer_id').value = id;
+  document.getElementById('sc_db_setup').style.display = c.database_name ? '' : 'none';
+  document.getElementById('sc_db_method').value = c.db_method || 'automatic';
+  document.getElementById('sc_db_method').disabled = true;
   document.getElementById('sc_db_name').value = c.database_name || '';
-  document.getElementById('sc_db_name').readOnly = true;
-  document.getElementById('sc_db_name').required = false;
-  document.getElementById('sc_manual_db_wrap').style.display = 'none';
+  document.getElementById('sc_db_name').readOnly = !isManual;
+  document.getElementById('sc_db_name').required = isManual;
+  document.getElementById('sc_auto_name_row').style.display = 'none';
+  document.getElementById('sc_manual_block').style.display = isManual ? '' : 'none';
+  document.getElementById('sc_db_host').value = c.db_host || '';
+  document.getElementById('sc_db_port').value = c.db_port || '';
+  document.getElementById('sc_db_user').value = c.db_user || '';
+  document.getElementById('sc_db_password').value = '';
+  document.getElementById('sc_db_password').placeholder = c.has_db_password
+    ? (IS_AR ? 'محفوظة -- اتركها فارغة للإبقاء عليها' : 'Saved -- leave blank to keep it')
+    : (IS_AR ? 'كلمة المرور' : 'Password');
+  setDbStatus(c.db_status || 'not_verified',
+    (c.db_status_message || '') + (c.db_checked_at ? ` (${c.db_checked_at})` : ''));
   toggleTrialMode(false);
   _resetModules();
   (c.modules || []).forEach(m => {
@@ -374,6 +531,22 @@ function confirmSyncOne(id, name) {
   if (!confirm(msg)) return;
   const form = document.getElementById('scSyncForm');
   form.action = `/saas-admin/customers/${id}/sync-schema`;
+  form.submit();
+}
+
+function testConnection(id) {
+  const form = document.getElementById('scSyncForm');
+  form.action = `/saas-admin/customers/${id}/test-database`;
+  form.submit();
+}
+
+function confirmInitializeDatabase(id, name, dbName) {
+  const msg = IS_AR
+    ? `بناء الجداول وحساب المسؤول لـ "${name}" داخل قاعدة البيانات "${dbName}"؟ يجب أن تكون قاعدة البيانات موجودة وفارغة.`
+    : `Build the tables and the Admin login for "${name}" inside the database "${dbName}"? The database must already exist and be empty.`;
+  if (!confirm(msg)) return;
+  const form = document.getElementById('scSyncForm');
+  form.action = `/saas-admin/customers/${id}/initialize-database`;
   form.submit();
 }
 
