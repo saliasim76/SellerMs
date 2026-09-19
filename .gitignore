@@ -25,6 +25,12 @@ uploads/*
 static/uploads/*
 !static/uploads/.gitkeep
 
+# Created on the host by cPanel's Setup Python App (public/) and by
+# .cpanel.yml's restart.txt touch (tmp/) -- never source, and untracked files
+# there would make the checkout look "dirty" and block cPanel's deploy button.
+public/
+tmp/
+
 # Editor/OS cruft
 .vscode/
 .idea/

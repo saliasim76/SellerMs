@@ -1,11 +1,11 @@
 ---
-# Single-folder setup: the Git checkout at /home/proledg/repositories/SellerMs
-# IS the live app (Setup Python App's Application root points here directly),
-# so "Deploy HEAD Commit" doesn't need to copy files anywhere -- git pull
-# already put them in place. This only has to force Passenger to reload,
-# since it keeps serving the old code in memory otherwise.
+# Single-folder setup: the Git checkout at /home/proledg/SellerMs IS the live
+# app (Setup Python App's Application root is "SellerMs"), so "Deploy HEAD
+# Commit" doesn't need to copy files anywhere -- git pull already put them in
+# place. This only has to force Passenger to reload, since it keeps serving
+# the old code in memory otherwise.
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/proledg/repositories/SellerMs/
+    - export DEPLOYPATH=/home/proledg/SellerMs/
     - /bin/mkdir -p $DEPLOYPATH/tmp
     - /usr/bin/touch $DEPLOYPATH/tmp/restart.txt
