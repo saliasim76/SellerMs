@@ -43,11 +43,9 @@ _RESERVED_DB_NAMES = {'mysql', 'information_schema', 'performance_schema', 'sys'
 
 def apply_tenant_db_prefix(name):
     """Prepend TENANT_DB_PREFIX (config.py) if one is configured and not
-    already present -- see that var's own comment for why (cPanel-style
-    shared hosting auto-scopes every database, and the DB_USER itself, to
-    one prefix; a raw "Noman" is unreachable there even once created,
-    since the DB_USER was never granted access to anything outside its
-    own prefix)."""
+    already present. Used ONLY for the automatically generated name (Add
+    Customer's Database Name left blank) -- a name the operator types is
+    always used exactly as typed, never prefixed (see _check_db_name)."""
     if not TENANT_DB_PREFIX or name.startswith(TENANT_DB_PREFIX):
         return name
     return f'{TENANT_DB_PREFIX}{name}'
@@ -95,12 +93,12 @@ def create_tenant_database(db_name):
             raise
         if database_name_exists(db_name):
             return
-        short = db_name[len(TENANT_DB_PREFIX):] if TENANT_DB_PREFIX and db_name.startswith(TENANT_DB_PREFIX) else db_name
         raise ValueError(
-            f'this host does not let the application create databases. In your hosting '
-            f'control panel (cPanel > MySQL Databases) create a database named "{db_name}" '
-            f'(type only "{short}" there if the panel adds the prefix itself), add the '
-            f'application\'s database user to it with ALL PRIVILEGES, then submit this form again'
+            f'this host does not let the application create databases. Create an empty '
+            f'database in your hosting panel (cPanel > MySQL Databases), add the '
+            f'application\'s database user to it with ALL PRIVILEGES, then submit this form '
+            f'again with "I created this database myself" ticked and the database\'s full '
+            f'name exactly as the panel shows it (cPanel adds your account prefix itself)'
         ) from exc
     finally:
         engine.dispose()
@@ -139,12 +137,13 @@ def database_name_exists(db_name):
         engine.dispose()
 
 
-def _check_db_name(db_name, add_prefix=True):
-    """Prefix + format + reserved-name checks shared by both validators
-    below; returns the final database name. `add_prefix=False` keeps the
-    name exactly as typed (see validate_manual_db_name)."""
-    if add_prefix:
-        db_name = apply_tenant_db_prefix(db_name)
+def _check_db_name(db_name):
+    """Format + reserved-name checks shared by both validators below;
+    returns the final database name. The name is used exactly as typed,
+    except that it is trimmed and lower-cased: Linux MySQL treats
+    "Noman" and "noman" as two different databases, so one fixed
+    lower-case spelling avoids ever mixing them up. No prefix is added."""
+    db_name = (db_name or '').strip().lower()
     if not _DB_NAME_RE.match(db_name):
         raise ValueError(
             'must start with a letter and contain only letters, numbers, '
@@ -161,11 +160,8 @@ def validate_manual_db_name(db_name):
     panel). The application never tries to CREATE it: it must already exist,
     be openable by the application's own MySQL user, and be completely
     empty. Returns the final database name, or raises ValueError with a
-    user-facing message. The name is used EXACTLY as typed -- TENANT_DB_PREFIX
-    is deliberately not applied, since the operator is naming a database that
-    already exists, and a wrong/stale prefix setting must not be able to turn
-    the real name into a different one."""
-    db_name = _check_db_name(db_name, add_prefix=False)
+    user-facing message."""
+    db_name = _check_db_name(db_name)
     try:
         empty = database_is_empty(db_name)
     except OperationalError as exc:

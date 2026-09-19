@@ -176,10 +176,13 @@
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold">{% if ar %}اسم قاعدة البيانات (اختياري){% else %}Database Name (optional){% endif %}</label>
-              <input type="text" name="database_name" id="sc_db_name" class="form-control" dir="ltr" autocomplete="off" placeholder="{% if ar %}اتركه فارغًا للإنشاء التلقائي{% else %}Leave blank to auto-generate{% endif %}">
+              <input type="text" name="database_name" id="sc_db_name" class="form-control" dir="ltr"
+                     autocomplete="off" autocapitalize="none" spellcheck="false" data-no-propercase
+                     oninput="this.value = this.value.toLowerCase().replace(/\s+/g, '');"
+                     placeholder="{% if ar %}اتركه فارغًا للإنشاء التلقائي{% else %}Leave blank to auto-generate{% endif %}">
               <div style="font-size:11px;color:#9ca3af;">
-                {% if ar %}هذا هو اسم "المؤسسة" الذي سيدخله العميل عند تسجيل الدخول. أحرف وأرقام وشرطات سفلية فقط، ويجب أن يكون فريدًا.
-                {% else %}This becomes the "Organization" value the customer enters at login. Letters, numbers, underscores only; must be unique.{% endif %}
+                {% if ar %}يُستخدم الاسم كما كُتب تمامًا وبأحرف صغيرة (دون إضافة أي بادئة). هذا هو اسم "المؤسسة" الذي سيدخله العميل عند تسجيل الدخول. أحرف وأرقام وشرطات سفلية فقط، ويجب أن يكون فريدًا. في cPanel اكتب الاسم الكامل بما فيه بادئة الحساب (مثل proledg_noman).
+                {% else %}Used exactly as typed, in lowercase (no prefix is added). This becomes the "Organization" value the customer enters at login. Letters, numbers, underscores only; must be unique. On cPanel, type the full name including your account prefix (e.g. proledg_noman).{% endif %}
               </div>
               <div class="form-check mt-2" id="sc_manual_db_wrap">
                 <input class="form-check-input" type="checkbox" name="manual_db" id="sc_manual_db"
