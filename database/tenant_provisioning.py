@@ -139,10 +139,12 @@ def database_name_exists(db_name):
         engine.dispose()
 
 
-def _check_db_name(db_name):
+def _check_db_name(db_name, add_prefix=True):
     """Prefix + format + reserved-name checks shared by both validators
-    below; returns the final database name."""
-    db_name = apply_tenant_db_prefix(db_name)
+    below; returns the final database name. `add_prefix=False` keeps the
+    name exactly as typed (see validate_manual_db_name)."""
+    if add_prefix:
+        db_name = apply_tenant_db_prefix(db_name)
     if not _DB_NAME_RE.match(db_name):
         raise ValueError(
             'must start with a letter and contain only letters, numbers, '
@@ -159,8 +161,11 @@ def validate_manual_db_name(db_name):
     panel). The application never tries to CREATE it: it must already exist,
     be openable by the application's own MySQL user, and be completely
     empty. Returns the final database name, or raises ValueError with a
-    user-facing message."""
-    db_name = _check_db_name(db_name)
+    user-facing message. The name is used EXACTLY as typed -- TENANT_DB_PREFIX
+    is deliberately not applied, since the operator is naming a database that
+    already exists, and a wrong/stale prefix setting must not be able to turn
+    the real name into a different one."""
+    db_name = _check_db_name(db_name, add_prefix=False)
     try:
         empty = database_is_empty(db_name)
     except OperationalError as exc:
