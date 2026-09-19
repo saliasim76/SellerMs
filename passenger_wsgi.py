@@ -33,10 +33,13 @@ def _database_hint(exc):
     """A plain-language DATABASE CHECK for the startup log when the failure is a
     MySQL access problem (1044 no permission / 1045 bad login / 1049 no such
     database / 2003 cannot reach the server). It says which user tried which
-    database and, when the server accepts that user, which databases and
-    privileges that user actually has -- exactly what a wrong DB_NAME spelling
-    or a missing "add user to database" step looks like. Never prints the
-    password, and never raises (the real traceback is written regardless)."""
+    database and, when the server accepts that user, whether the MAIN database
+    is visible to it and which privileges it has on that database (or one
+    spelled similarly) -- exactly what a wrong DB_NAME spelling or a missing
+    "add user to database" step looks like. It never lists the user's other
+    databases (customer databases are not opened at startup at all), never
+    prints the password, and never raises (the real traceback is written
+    regardless)."""
     try:
         code = None
         cause = exc
@@ -63,23 +66,43 @@ def _database_hint(exc):
             lines.append('  -> the MySQL user name, password or host is wrong, or that user does not exist.')
             return '\n'.join(lines)
         try:
+            import re
+
+            def _norm(name):
+                return re.sub(r'[^a-z0-9]', '', name.lower())
+
             cur = conn.cursor()
             cur.execute('SHOW DATABASES')
-            seen = sorted(r[0] for r in cur.fetchall() if r[0].lower() != 'information_schema')
-            lines.append(f'  The server accepts "{DB_USER}". Databases it can see: {", ".join(seen) or "(none)"}')
+            seen = [r[0] for r in cur.fetchall()]
+            lines.append(f'  The server accepts "{DB_USER}".')
             if DB_NAME in seen:
-                lines.append(f'  "{DB_NAME}" IS in that list, so the name is right and the user can see it -- '
+                lines.append(f'  Main database "{DB_NAME}": visible to this user -- the name is right; '
                              f'check the privileges below.')
             else:
-                lines.append(f'  "{DB_NAME}" is NOT in that list: either no database exists with exactly this '
-                             f'spelling (capital letters matter), or "{DB_USER}" has not been added to it with '
-                             f'privileges (cPanel > MySQL Databases > Add User To Database > ALL PRIVILEGES).')
+                # Only names that look like the main database (spelling/capitals
+                # differ) -- never the user's whole database list.
+                wanted = _norm(DB_NAME)
+                similar = sorted(n for n in seen if n != DB_NAME and wanted and
+                                 (wanted in _norm(n) or _norm(n) in wanted))
+                lines.append(f'  Main database "{DB_NAME}": NOT visible to this user. Either no database exists '
+                             f'with exactly this spelling (capital letters matter), or "{DB_USER}" has not been '
+                             f'added to it with privileges (cPanel > MySQL Databases > Add User To Database > '
+                             f'ALL PRIVILEGES).')
+                lines.append('  Similarly named databases this user CAN see: ' +
+                             (', '.join(similar) if similar else 'none'))
             try:
                 cur.execute('SHOW GRANTS FOR CURRENT_USER()')
-                import re
+                shown = 0
+                wanted = _norm(DB_NAME)
                 for (grant,) in cur.fetchall():
-                    grant = re.sub(r"IDENTIFIED BY (PASSWORD )?'[^']*'", "IDENTIFIED BY <hidden>", grant)
-                    lines.append(f'  GRANT: {grant}')
+                    target = re.search(r"ON (`(?:[^`]|``)+`|\*)\.", grant)
+                    name = target.group(1).strip('`').replace('\\', '') if target else ''
+                    if name and (name == '*' or (wanted and (wanted in _norm(name) or _norm(name) in wanted))):
+                        grant = re.sub(r"IDENTIFIED BY (PASSWORD )?'[^']*'", "IDENTIFIED BY <hidden>", grant)
+                        lines.append(f'  GRANT: {grant}')
+                        shown += 1
+                if not shown:
+                    lines.append(f'  This user has NO privileges on "{DB_NAME}" or any similarly named database.')
             except Exception:
                 pass
         finally:
