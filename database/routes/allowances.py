@@ -62,7 +62,7 @@ def edit_allowance(id):
     a.name_ar = request.form.get('name_ar', a.name_ar or '').strip()
     try: a.amount = float(request.form.get('amount', a.amount))
     except: pass
-    _recalc(a.employee)
+    _recalc(a.employee_ref)
     db.session.commit()
     flash(_t('Allowance updated.','تم تحديث البدل.'),'success')
     return redirect(url_for('lookups.list_allowances'))
@@ -72,7 +72,7 @@ def edit_allowance(id):
 @admin_required
 def delete_allowance(id):
     a = EmployeeAllowance.query.get_or_404(id)
-    emp = a.employee
+    emp = a.employee_ref
     db.session.delete(a)
     _recalc(emp)
     db.session.commit()
@@ -87,8 +87,8 @@ def allowances_data():
     return jsonify([{
         'id': a.id,
         'employee_id': a.employee_id,
-        'employee_name': (a.employee.name_ar if lang=='ar' and a.employee.name_ar else a.employee.name),
-        'employee_code': a.employee.employee_code,
+        'employee_name': (a.employee_ref.name_ar if lang=='ar' and a.employee_ref.name_ar else a.employee_ref.name),
+        'employee_code': a.employee_ref.employee_code,
         'name': a.name_ar if lang=='ar' and a.name_ar else a.name,
         'name_en': a.name,
         'name_ar': a.name_ar or '',
