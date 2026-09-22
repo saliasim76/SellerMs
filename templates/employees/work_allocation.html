@@ -622,7 +622,7 @@ select.f-inp {
                 </div>
 
                 {# Company -> Department -> Location, the same cascade as the employee form #}
-                <div class="f-row">
+                <div class="f-row3">
                   <div class="f-item">
                     <div class="f-lbl">{% if ar %}الشركة{% else %}Company{% endif %} <span class="f-req">*</span></div>
                     <select name="buyer_id" id="wa_buyer" class="f-inp" required onchange="waCompanyChange()">
@@ -636,6 +636,11 @@ select.f-inp {
                     </select>
                     <input type="hidden" name="department" id="wa_department_en">
                     <input type="hidden" name="department_ar" id="wa_department_ar">
+                  </div>
+                  <div class="f-item">
+                    <div class="f-lbl">{% if ar %}أمر الراتب{% else %}Salary Order{% endif %}</div>
+                    <input type="text" id="wa_salary_order" class="f-inp" readonly style="background:#f8fafc;"
+                           title="{% if ar %}يُملأ تلقائياً من الشركة{% else %}Filled from the selected Company{% endif %}">
                   </div>
                 </div>
 
@@ -800,8 +805,21 @@ function fillBuyerDropdown(selectedId) {
   loadBuyers(buyers=>{
     const sel=document.getElementById('wa_buyer');
     sel.innerHTML=`<option value="">${IS_AR?'-- اختر المشتري --':'-- Select Buyer / HR --'}</option>`;
-    buyers.forEach(b=>sel.innerHTML+=`<option value="${b.id}"${b.id==selectedId?' selected':''}>${b.label||b.en}</option>`);
+    buyers.forEach(b=>sel.innerHTML+=`<option value="${b.id}" data-salary-order="${b.salary_order||1}"${b.id==selectedId?' selected':''}>${b.label||b.en}</option>`);
+    waFillSalaryOrder();
   });
+}
+
+/* Salary Order always mirrors the currently selected Company's own value
+   (BuyerMaster.salary_order) -- read-only here, exactly like Payroll's own
+   Salary Order field; the server re-derives it from buyer_id independently
+   on save, so this is display-only and can't be tampered with. */
+function waFillSalaryOrder() {
+  const b = document.getElementById('wa_buyer');
+  const out = document.getElementById('wa_salary_order');
+  if (!out) return;
+  const opt = b ? b.options[b.selectedIndex] : null;
+  out.value = (opt && opt.value) ? (opt.dataset.salaryOrder || '1') : '';
 }
 
 /* ══ Accordion sections ══ */
@@ -1025,6 +1043,7 @@ function confirmPickedEmps() {
 function waCompanyChange() {
   const b = document.getElementById('wa_buyer');
   waLoadDepartments(b ? b.value : '', null);
+  waFillSalaryOrder();
 }
 
 function waLoadDepartments(buyerId, _unused, preDeptEn, preDeptAr, preLoc, preLocAr) {
@@ -1093,6 +1112,7 @@ function resetWAForm() {
   const ph=document.getElementById('wa_prev_hint'); if(ph) ph.textContent='';
   const pe=document.getElementById('wa_prev_end'); if(pe){ pe.disabled=false; pe.style.borderColor=''; }
   document.getElementById('wa_buyer').value='';
+  const soEl=document.getElementById('wa_salary_order'); if(soEl) soEl.value='';
   const ds=document.getElementById('wa_department_id');
   if(ds){ ds.innerHTML='<option value="">-- '+(IS_AR?'اختر الشركة أولاً':'Select a company first')+' --</option>'; ds.disabled=true; }
   document.getElementById('wa_status').value='active';
@@ -1254,6 +1274,7 @@ function openViewWA(id) {
         <div class="vw-item"><div class="vw-label">${IS_AR?'تاريخ الانتهاء':'End Date'}</div><div class="vw-value">${v(window.GridKit.fmtDate(d.end_date))}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'المشتري':'Buyer/HR'}</div><div class="vw-value">${v(d.buyer_name)}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'الشركة':'Company'}</div><div class="vw-value">${vr(d.company,d.company_ar)}</div></div>
+        <div class="vw-item"><div class="vw-label">${IS_AR?'أمر الراتب':'Salary Order'}</div><div class="vw-value">${v(d.salary_order)}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'القسم':'Department'}</div><div class="vw-value">${vr(d.department,d.department_ar)}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'القطاع':'Section'}</div><div class="vw-value">${vr(d.section,d.section_ar)}</div></div>
         <div class="vw-item"><div class="vw-label">${IS_AR?'الوردية':'Shift'}</div><div class="vw-value">${shifts[d.shift_type]||v(d.shift_type)}</div></div>
@@ -1324,6 +1345,7 @@ const mainCols=[
   {headerName:IS_AR?'تاريخ الانضمام':'Joining Date',field:'joining_date',width:130,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'تاريخ الانتهاء':'End Date',field:'end_date',width:120,filter:'agTextColumnFilter',valueFormatter:p=>window.GridKit.fmtDate(p.value)},
   {headerName:IS_AR?'الشركة':'Company',field:'company',width:140,valueGetter:p=>IS_AR&&p.data.company_ar?p.data.company_ar:p.data.company,filter:'agTextColumnFilter'},
+  {headerName:IS_AR?'أمر الراتب':'Salary Order',field:'salary_order',width:110,filter:'agNumberColumnFilter'},
   {headerName:IS_AR?'القسم':'Department',field:'department',width:120,valueGetter:p=>IS_AR&&p.data.department_ar?p.data.department_ar:p.data.department,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'القطاع':'Section',field:'section',width:120,valueGetter:p=>IS_AR&&p.data.section_ar?p.data.section_ar:p.data.section,filter:'agTextColumnFilter'},
   {headerName:IS_AR?'الوردية':'Shift',field:'shift_type',width:90,filter:'agTextColumnFilter'},

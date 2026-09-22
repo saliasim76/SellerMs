@@ -81,6 +81,7 @@ def add_wa():
     from models import BuyerMaster
     _bid = f.get('buyer_id', type=int)
     _buyer = BuyerMaster.query.get(_bid) if _bid else None
+    _salary_order = (_buyer.salary_order or 1) if _buyer else 1
 
     new_joining = parse_date(f.get('joining_date'))
     mode = (f.get('wa_mode') or 'new').strip().lower()
@@ -129,6 +130,10 @@ def add_wa():
             buyer_name_ar=(f.get('company_ar','').strip() or ((_buyer.buyer_name_ar or '') if _buyer else '')),
             buyer_department=f.get('department','').strip(),
             buyer_department_ar=f.get('department_ar','').strip(),
+            # Cascades from the selected Buyer, same as Payroll's own Salary
+            # Order -- never taken from the form directly, so it can't be
+            # tampered with client-side or drift from the buyer's own value.
+            salary_order=_salary_order,
             location=f.get('section','').strip() or f.get('location','').strip(),
             location_ar=f.get('section_ar','').strip() or f.get('location_ar','').strip(),
             shift=shift,
@@ -170,6 +175,10 @@ def edit_wa(id):
     wa.end_date            = parse_date(f.get('end_date'))
     buyer_id = f.get('buyer_id', type=int)
     if buyer_id: wa.buyer_id = buyer_id
+    if wa.buyer_id:
+        from models import BuyerMaster
+        _buyer = BuyerMaster.query.get(wa.buyer_id)
+        wa.salary_order = (_buyer.salary_order or 1) if _buyer else 1
     # Batch edit extra employees with same details
     extra_ids = [int(x) for x in f.getlist('extra_employee_id[]') if x and str(x).isdigit()]
     for eid in extra_ids:
@@ -181,6 +190,7 @@ def edit_wa(id):
             buyer_name=wa.buyer_name, buyer_name_ar=wa.buyer_name_ar,
             buyer_department=wa.buyer_department,
             buyer_department_ar=wa.buyer_department_ar,
+            salary_order=wa.salary_order,
             location=wa.location, location_ar=wa.location_ar,
             shift=wa.shift,
             joining_date=wa.joining_date, end_date=wa.end_date,

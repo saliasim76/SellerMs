@@ -4772,6 +4772,11 @@ class EmployeeWorkAllocation(db.Model):
     buyer_department_id = db.Column(db.Integer, db.ForeignKey('buyer_departments.id'))
     buyer_department    = db.Column(db.String(150))
     buyer_department_ar = db.Column(db.Unicode(150))
+    # Cascades from the selected Buyer (BuyerMaster.salary_order) at the
+    # moment this allocation is saved -- the same "1 or 2" batching value
+    # payroll itself uses (see database/routes/payroll.py _buyer_salary_order),
+    # just captured here per-allocation instead of re-derived every time.
+    salary_order        = db.Column(db.Integer, default=1)
     location            = db.Column(db.String(150))
     location_ar         = db.Column(db.Unicode(150))
     shift             = db.Column(db.String(10))        # 'day' or 'night'
@@ -4799,6 +4804,7 @@ class EmployeeWorkAllocation(db.Model):
             'buyer_department_id': self.buyer_department_id,
             'buyer_department': self.buyer_department or '',
             'buyer_department_ar': self.buyer_department_ar or '',
+            'salary_order': self.salary_order or 1,
             'location': self.location or '',
             'location_ar': self.location_ar or '',
             'shift': self.shift or '',
@@ -5706,6 +5712,7 @@ def ensure_schema():
         ('sales_invoices', 'from_date', 'DATE'),
         ('sales_invoices', 'to_date',   'DATE'),
         ('sales_invoices', 'project_ref', 'VARCHAR(150)'),
+        ('employee_work_allocation', 'salary_order', 'INTEGER DEFAULT 1'),
     ]
 
     def table_exists(table):
