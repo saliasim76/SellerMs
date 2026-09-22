@@ -923,8 +923,6 @@ function buildColumnDefs() {
       }),
     },
     col('salary_order', AR ? 'أمر الراتب' : 'Salary Order', 110),
-    col('month_from', AR ? 'من تاريخ' : 'Month From', 105),
-    col('month_to', AR ? 'إلى تاريخ' : 'Month To', 105),
     {
       field: 'emp_from_date', headerName: AR ? 'تاريخ بداية الموظف' : 'Employee From Date', width: 140,
       editable: (p) => cellEditable('emp_from_date', p.data), cellClass: (p) => editableClass('emp_from_date', p.data),
