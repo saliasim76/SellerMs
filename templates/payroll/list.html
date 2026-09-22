@@ -924,7 +924,7 @@ function buildColumnDefs() {
     },
     col('salary_order', AR ? 'أمر الراتب' : 'Salary Order', 110),
     {
-      field: 'emp_from_date', headerName: AR ? 'تاريخ بداية الموظف' : 'Employee From Date', width: 140,
+      field: 'emp_from_date', headerName: AR ? 'من تاريخ' : 'From Date', width: 140,
       editable: (p) => cellEditable('emp_from_date', p.data), cellClass: (p) => editableClass('emp_from_date', p.data),
       cellEditor: 'agDateStringCellEditor',
       cellEditorParams: (p) => ({ minValidYear: 2000, maxValidYear: 2100 }),
@@ -939,7 +939,7 @@ function buildColumnDefs() {
         ? 'يُحسب تلقائيًا من تاريخ التحاق الموظف، ويمكن تعديله ضمن فترة الكشف'
         : 'Auto-set from the employee\'s joining date; editable within the payroll period',
     },
-    col('emp_to_date', AR ? 'تاريخ نهاية الموظف' : 'Employee To Date', 130,
+    col('emp_to_date', AR ? 'إلى تاريخ' : 'To Date', 130,
       { valueFormatter: (p) => window.GridKit.fmtDate(p.value) }),
     col('month', AR ? 'الشهر' : 'Month', 100),
     col('kafeel', AR ? 'الكفيل' : 'Kafeel', 130),
