@@ -194,7 +194,7 @@
   <div class="pr-toolbar">
     <input type="text" id="fltPayrollId" placeholder="{% if ar %}رقم الكشف{% else %}Payroll ID{% endif %}" value="{{ payroll_id }}">
     <button class="pr-btn pr-btn-blue" id="btnLoad"><i class="fas fa-search"></i> {% if ar %}تحميل{% else %}Load{% endif %}</button>
-    <button class="pr-btn pr-btn-amber" id="btnRefreshAll"><i class="fas fa-sync"></i> {% if ar %}تحديث من ملف الموظف{% else %}Refresh from Employee{% endif %}</button>
+    <button class="pr-btn pr-btn-amber" id="btnRefreshAll" title="{% if ar %}يحدّث فقط الصفوف في حالة أولي{% else %}Only updates rows that are still Initial{% endif %}"><i class="fas fa-sync"></i> {% if ar %}تحديث من ملف الموظف{% else %}Refresh from Employee{% endif %}</button>
     <button class="pr-btn pr-btn-purple" id="btnAddEmployee"><i class="fas fa-user-plus"></i> {% if ar %}إضافة موظف{% else %}Add Employee{% endif %}</button>
     <button class="pr-btn pr-btn-red" id="btnDeletePayroll" disabled title="{% if ar %}يحذف كامل الكشف بجميع صفوفه -- متاح فقط في حالة أولي{% else %}Deletes the whole payroll and every row in it -- Initial status only{% endif %}"><i class="fas fa-trash-alt"></i> {% if ar %}حذف الكشف{% else %}Delete Payroll{% endif %}</button>
     <a class="pr-btn pr-btn-gray" style="text-decoration:none;" href="{{ url_for('payroll.payroll_reports') }}"><i class="fas fa-chart-bar"></i> {% if ar %}التقارير{% else %}Reports{% endif %}</a>
@@ -1267,6 +1267,13 @@ window.__prHasPending = () => Object.keys(pendingEdits).length > 0;
 window.__prSaveAllPending = saveAllPending;
 
 function refreshRow(id) {
+  // Only allowed while this row's payroll is still Initial (the server
+  // enforces this too -- see payroll_refresh_row) -- confirm first since it
+  // overwrites this row's Employee/Work Allocation-sourced fields with
+  // whatever those records currently hold.
+  if (!confirm(AR
+    ? 'سيتم تحديث هذا الصف من بيانات الموظف/توزيع العمل الحالية (فقط إن كان الكشف في حالة أولي). سيتم الكتابة فوق القيم الحالية لهذه الحقول. هل تريد الاستمرار؟'
+    : 'This will update this row from the current Employee/Work Allocation records (only while the payroll is still Initial), overwriting those fields\' current values. Continue?')) return;
   fetch('/payroll/' + id + '/refresh', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin' })
     .then(r => r.json()).then(res => {
       if (!res.ok) { flash(res.error || (AR ? 'فشل التحديث' : 'Refresh failed'), false); return; }
@@ -1302,6 +1309,13 @@ function deletePayroll(pid, reload) {
 function doRefreshAll(reload) {
   const pid = document.getElementById('fltPayrollId').value.trim();
   if (!pid) { flash(AR ? 'أدخل رقم الكشف أولاً' : 'Enter a Payroll ID first', false); return; }
+  // Only rows still in Initial status are actually updated (the server
+  // silently skips any Ready/Post row -- see payroll_refresh_all); confirm
+  // first since this overwrites every Initial row's Employee/Work
+  // Allocation-sourced fields with whatever those records currently hold.
+  if (!confirm(AR
+    ? 'سيتم تحديث كل صف في حالة "أولي" ضمن كشف الرواتب ' + pid + ' من بيانات الموظف/توزيع العمل الحالية، مع الكتابة فوق القيم الحالية لهذه الحقول. الصفوف في حالة جاهز/مرحّل لن تتأثر. هل تريد الاستمرار؟'
+    : 'This will update every Initial-status row in payroll ' + pid + ' from the current Employee/Work Allocation records, overwriting those fields\' current values. Ready/Post rows are left untouched. Continue?')) return;
   fetch('/payroll/' + encodeURIComponent(pid) + '/refresh-all', {
     method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, credentials: 'same-origin',
   }).then(r => r.json()).then(res => {
