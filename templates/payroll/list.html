@@ -334,20 +334,41 @@ function rowClassFor(row) {
 }
 
 // ── Stage 1 header form (plain DOM) ────────────────────────────────
-let FILTER_OPTIONS = { kafeel: [], buyer_department: [], location: [], buyers: [], salary_category: [], salary_order: [] };
+// Every filter here follows the same rule: AND between whichever ones the
+// user actually picks, and a blank ("(any)") one is Select All -- it never
+// narrows the result. Department, Location and Salary Order all cascade
+// from the selected Buyer (loadBuyerContext) -- unscoped ("Any Buyer")
+// versions of Department/Location are loaded once up front below.
+let FILTER_OPTIONS = { buyer_department: [], location: [], buyers: [], salary_category: [] };
+
+function selectOptionsHtml(options) {
+  let opts = '<option value="">' + (AR ? '(الكل)' : '(any)') + '</option>';
+  (options || []).forEach(o => {
+    const val = typeof o === 'object' ? o.id : o;
+    const lbl = typeof o === 'object' ? o.name : o;
+    opts += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + lbl + '</option>';
+  });
+  return opts;
+}
 
 function fieldHtml(id, label, type, options, extraClass) {
   const cls = 'pr-field' + (extraClass ? ' ' + extraClass : '');
   if (type === 'select') {
-    let opts = '<option value="">' + (AR ? '(الكل)' : '(any)') + '</option>';
-    (options || []).forEach(o => {
-      const val = typeof o === 'object' ? o.id : o;
-      const lbl = typeof o === 'object' ? o.name : o;
-      opts += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + lbl + '</option>';
-    });
-    return '<div class="' + cls + '"><label>' + label + '</label><select id="' + id + '">' + opts + '</select></div>';
+    return '<div class="' + cls + '"><label>' + label + '</label><select id="' + id + '">' + selectOptionsHtml(options) + '</select></div>';
   }
   return '<div class="' + cls + '"><label>' + label + '</label><input type="' + type + '" id="' + id + '"' + (type === 'date' ? '' : '') + '></div>';
+}
+
+// Rebuilds a <select>'s options (used when Department/Location/Salary Order
+// switch between their unscoped and Buyer-scoped lists), keeping the
+// current selection if it still exists in the new list, else resetting to
+// "(any)".
+function setSelectOptions(selId, options) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = selectOptionsHtml(options);
+  if (prev && Array.from(sel.options).some(o => o.value === prev)) sel.value = prev;
 }
 
 function renderHeaderForm() {
@@ -364,21 +385,21 @@ function renderHeaderForm() {
     // here which list whatever distinct values currently exist in the data.
     fieldHtml('hSalaryType', AR ? 'نوع الراتب' : 'Salary Type', 'select',
       [{ id: 'month', name: AR ? 'شهري' : 'Per Month' }, { id: 'hour', name: AR ? 'بالساعة' : 'Per Hour' }]) +
-    fieldHtml('hKafeel', AR ? 'الكفيل' : 'Kafeel', 'select', FILTER_OPTIONS.kafeel) +
     fieldHtml('hBuyer', AR ? 'المشتري' : 'Buyer', 'select', FILTER_OPTIONS.buyers) +
     fieldHtml('hDept', AR ? 'القسم' : 'Department', 'select', FILTER_OPTIONS.buyer_department) +
     fieldHtml('hLocation', AR ? 'الموقع' : 'Location', 'select', FILTER_OPTIONS.location) +
-    fieldHtml('hSalaryOrder', AR ? 'أمر الراتب' : 'Salary Order', 'text');
+    // Salary Order is also a closed 2-value enum (matches BuyerMaster's own
+    // fixed 1/2 select) -- selecting a Buyer just pre-selects that buyer's
+    // own value (loadBuyerContext); the user can still override it.
+    fieldHtml('hSalaryOrder', AR ? 'أمر الراتب' : 'Salary Order', 'select', [{ id: '1', name: '1' }, { id: '2', name: '2' }]);
 
   document.getElementById('hMonth').readOnly = true;
-  document.getElementById('hSalaryOrder').readOnly = true;
-  document.getElementById('hSalaryOrder').placeholder = AR ? 'يُملأ تلقائيًا عند اختيار المشتري' : 'auto-filled from Buyer';
 
-  // Department and Location are independent dropdowns (sourced from
-  // EmployeeWorkAllocation, like Kafeel used to be) and are also the actual
-  // matching criteria used server-side. Salary Order only cascades from
-  // Buyer for display/storage -- it is NOT part of the payroll-identity/
-  // duplicate-check criteria (see payroll_generate's comment).
+  // Department, Location and Salary Order all cascade from the selected
+  // Buyer -- Stage 1 validates all three (plus Buyer itself) against the
+  // employee's own latest Work Allocation record, so narrowing these
+  // options to the buyer keeps the dropdowns from offering a combination
+  // that could never match anyone.
   document.getElementById('hBuyer').addEventListener('change', loadBuyerContext);
 
   // Payroll Status: the "(any)" option fieldHtml() adds for every select
@@ -411,7 +432,6 @@ function headerFormData() {
   fd.set('csrf_token', CSRF_TOKEN);
   fd.set('month_from', document.getElementById('hMonthFrom').value);
   fd.set('month_to', document.getElementById('hMonthTo').value);
-  fd.set('kafeel', document.getElementById('hKafeel').value);
   fd.set('buyer_id', document.getElementById('hBuyer').value);
   fd.set('buyer_department', document.getElementById('hDept').value);
   fd.set('location', document.getElementById('hLocation').value);
@@ -432,21 +452,26 @@ async function loadFilterOptions() {
 }
 
 async function loadBuyerContext() {
-  // Salary Order cascades from the selected Buyer for display/storage only
-  // -- Department and Location are independent dropdowns (sourced from
-  // EmployeeWorkAllocation) and are the real matching criteria, unaffected
-  // by this.
+  // Department, Location and Salary Order all cascade from the selected
+  // Buyer (spec: 'load according to the selected buyer') -- and, per Stage
+  // 1, all three (plus Buyer itself) are the real matching criteria,
+  // validated against the employee's own latest Work Allocation record.
   const buyerId = document.getElementById('hBuyer').value;
   const orderEl = document.getElementById('hSalaryOrder');
 
   if (!buyerId) {
-    orderEl.value = '';
+    // Any Buyer -- restore the full, unscoped option lists.
+    setSelectOptions('hDept', FILTER_OPTIONS.buyer_department);
+    setSelectOptions('hLocation', FILTER_OPTIONS.location);
+    if (orderEl) orderEl.value = '';
     return;
   }
   try {
     const r = await fetch('/payroll/buyer/' + buyerId + '/context', { credentials: 'same-origin' });
     const ctx = await r.json();
-    orderEl.value = (ctx.salary_order != null) ? ctx.salary_order : '';
+    setSelectOptions('hDept', ctx.departments || []);
+    setSelectOptions('hLocation', ctx.locations || []);
+    if (orderEl) orderEl.value = (ctx.salary_order != null) ? String(ctx.salary_order) : '';
   } catch (e) {
     console.error('Failed to load buyer context', e);
   }
@@ -500,6 +525,8 @@ async function doGenerate() {
     }
 
     if (res.duplicate) {
+      // Payroll already exists but could not be auto-updated (it has moved
+      // past Initial) -- offer to open it instead, unchanged.
       msgEl.textContent = '';
       const ok = confirm(res.error + '\n\n' + (AR ? 'فتح الكشف الحالي؟' : 'Open the existing payroll?'));
       if (ok) openPayroll(res.payroll_id);
@@ -511,7 +538,13 @@ async function doGenerate() {
       return;
     }
     msgEl.textContent = '';
-    flash((AR ? 'تم إنشاء الكشف: ' : 'Payroll created: ') + res.payroll_id + ' (' + res.created + (AR ? ' موظف' : ' employees') + ')', true);
+    if (res.existed) {
+      // Stage 2: a payroll already existed for this period + criteria --
+      // any missing eligible employees were merged into it, never duplicated.
+      flash(res.message || ((AR ? 'الكشف موجود: ' : 'Payroll exists: ') + res.payroll_id), true);
+    } else {
+      flash((AR ? 'تم إنشاء الكشف: ' : 'Payroll created: ') + res.payroll_id + ' (' + res.created + (AR ? ' موظف' : ' employees') + ')', true);
+    }
     openPayroll(res.payroll_id);
   } finally {
     generatingPayroll = false;

@@ -170,22 +170,45 @@ and one editable grid below with 47 fields in a fixed spec order
 `employee_name`, `day_hour`, `extra_ot`, `paid`, etc.).
 
 ### Stage 1 — Generate
-- Header form: Month From/To (max 31-day range), Kafeel, Buyer, Department,
-  Location, Salary Category, Salary Order (auto-filled per Buyer).
-- Employee matching: `kafeel` and `salary_category` are matched against the
-  **Employee** record; `buyer_id`, `buyer_department`, and `location` are
-  matched against the employee's **`EmployeeWorkAllocation`** rows.
-- Duplicate-payroll check: re-generating for an overlapping period prompts to
-  open the existing payroll instead of creating a new one.
+- Header form: Month From/To (max 31-day range), Salary Category, Salary
+  Type, Buyer, Department, Location, Salary Order. Department, Location and
+  Salary Order all cascade from the selected Buyer (`/payroll/buyer/<id>/
+  context`) when one is picked, and fall back to the unscoped ("Any Buyer")
+  lists from `/payroll/filters` otherwise.
+- Filter rule: AND between every filter the user actually picks; a blank
+  ("Any") one is Select All and never restricts the result.
+- Employee eligibility (`_matching_employee_ids`): `Employee.is_active` must
+  be true, and `salary_category`/`salary_type` are matched against the
+  **Employee** record; `buyer_id`, `buyer_department`, `location`, and
+  `salary_order` are all matched against the employee's own **latest**
+  `EmployeeWorkAllocation` row (never an older one, and never the header
+  selection directly).
+- Overlap rule: that same latest Work Allocation row must overlap the
+  selected period —
+  `joining_date <= month_to AND (end_date is empty OR end_date >= month_from)`.
+  Each eligible employee's own payable period is then clipped to
+  `emp_from = MAX(month_from, joining_date)` and
+  `emp_to = MIN(month_to, end_date)` (or just `month_to` when `end_date` is
+  empty) — see `_wa_period`. `emp_from_date` stays user-editable afterwards.
+- Duplicate-payroll handling (`_existing_payroll_query`): if a payroll
+  already exists for the same period and applicable (selected) criteria,
+  it is topped up instead of duplicated — whichever eligible employees
+  aren't already in it are added at that row's normal initial state, and
+  the response says how many were added vs. already present. If that
+  existing payroll has moved past `Initial`, nothing is changed and the UI
+  offers to open it instead.
 - All row data is populated from two snapshot functions:
   - `_employee_snapshot(employee_id)` — name, profession, nationality, iqama,
     salary_category, salary_type, day_hour, basic_salary, **allowance**,
     OT rate, iqama_expiry, status, bank_code, iban_no, po_rate — pulled
     straight from the `Employee` record.
-  - `_wa_buyer_snapshot(employee_id)` — buyer_id, buyer_name,
-    buyer_department, location — pulled from the employee's **latest**
-    `EmployeeWorkAllocation` row (kept separate from the Employee-only
-    snapshot on purpose).
+  - `_wa_snapshot_dict(wa)` — buyer_id, buyer_name, buyer_department,
+    location — pulled from the employee's **latest** `EmployeeWorkAllocation`
+    row (kept separate from the Employee-only snapshot on purpose). The
+    row's stored Salary Order is always resolved fresh from `BuyerMaster`
+    via that same `wa.buyer_id`, never from the header's Buyer filter and
+    never from `wa.salary_order` itself (that field is only the eligibility
+    snapshot Stage 1 filters on).
 
 ### Stage 2 — Edit
 - Single-click-to-edit grid: Sheet No, Absent, Total Hours, Extra OT, Bonus,
