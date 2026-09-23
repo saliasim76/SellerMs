@@ -111,10 +111,10 @@ def zatca_save_environment():
         settings.csr_common_name = (owner.name if owner else '') or ''
         settings.csr_organization_identity = (owner.vat_number if owner else '') or ''
         # Organizational Unit / Location / Industry each have a sensible
-        # default (Main Branch / the Owner's Short Address / General
+        # default (Main Office / the Owner's Short Address / General
         # Contracting) but stay fully user-editable -- an explicit value
         # submitted from the form always wins over the default.
-        settings.csr_organization_unit = request.form.get('csr_organization_unit', '').strip() or 'Main Branch'
+        settings.csr_organization_unit = request.form.get('csr_organization_unit', '').strip() or 'Main Office'
         settings.csr_organization_name = (owner.name if owner else '') or ''
         # Country: defaults from the Owner's own address Country (when
         # that's already a plausible 2-letter code) or 'SA' otherwise --

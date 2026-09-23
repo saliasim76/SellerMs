@@ -86,7 +86,7 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
         </div>
         <div class="zs-item">
           <label>{% if ar %}الوحدة التنظيمية{% else %}Organizational Unit{% endif %}</label>
-          <input type="text" id="zs_org_unit" value="{{ settings.csr_organization_unit or 'Main Branch' }}" {{ 'readonly' if settings.csr_pem else '' }}
+          <input type="text" id="zs_org_unit" value="{{ settings.csr_organization_unit or 'Main Office' }}" {{ 'readonly' if settings.csr_pem else '' }}
                  placeholder="{% if ar %}مثال: الفرع الرئيسي، فرع جدة{% else %}e.g. Head Office, Jeddah Branch{% endif %}">
           <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
             {% if ar %}اسم الفرع أو وحدة العمل التي تُصدر لها هذه الشهادة. استخدم قيمة مختلفة لكل فرع/جهاز يحتاج شهادته الخاصة.{% else %}The branch or business unit this certificate/device is being issued for. Use a distinct value per branch or device that needs its own CSID.{% endif %}
