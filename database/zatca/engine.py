@@ -1149,8 +1149,17 @@ def request_compliance_csid(environment, csr_pem, otp):
     # how its Subject/SAN fields changed: the wrapping was broken, so
     # ZATCA may never have been able to parse the CSR at all.
     csr_der = x509.load_pem_x509_csr(csr_pem.encode('utf-8')).public_bytes(serialization.Encoding.DER)
+    # ZATCA's own sample requests for this endpoint always send Accept and
+    # Content-Type explicitly alongside OTP/Accept-Version -- a bare "400
+    # Invalid Request" with no field-level detail at all (unlike ZATCA's
+    # usual specific error bodies, e.g. for a malformed CSR) looks like a
+    # gateway-level rejection before the request ever reaches ZATCA's own
+    # validation, which missing/implicit headers can cause even though
+    # `requests` already sets Content-Type on its own for `json=`.
     resp = requests.post(url, json={'csr': base64.b64encode(csr_der).decode('ascii')},
-                          headers={'OTP': otp, 'Accept-Version': 'V2'}, timeout=30)
+                          headers={'OTP': otp, 'Accept-Version': 'V2',
+                                   'Accept': 'application/json',
+                                   'Content-Type': 'application/json'}, timeout=30)
     if not resp.ok:
         # ZATCA's error responses carry a specific, actionable body (e.g.
         # which field/validation failed) -- raise_for_status() alone
