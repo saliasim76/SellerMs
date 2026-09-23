@@ -81,12 +81,12 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
           <input type="text" value="{{ owner.name if owner else '' }}" readonly>
         </div>
         <div class="zs-item">
-          <label>Common Name</label>
-          <input type="text" id="zs_common_name" value="{{ settings.csr_common_name or '' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+          <label>{% if ar %}الاسم الشائع (من بيانات المالك){% else %}Common Name (from Owner){% endif %}</label>
+          <input type="text" value="{{ owner.name if owner else '' }}" readonly>
         </div>
         <div class="zs-item">
           <label>{% if ar %}الوحدة التنظيمية{% else %}Organizational Unit{% endif %}</label>
-          <input type="text" id="zs_org_unit" value="{{ settings.csr_organization_unit or '' }}" {{ 'readonly' if settings.csr_pem else '' }}
+          <input type="text" id="zs_org_unit" value="{{ settings.csr_organization_unit or 'Main Branch' }}" {{ 'readonly' if settings.csr_pem else '' }}
                  placeholder="{% if ar %}مثال: الفرع الرئيسي، فرع جدة{% else %}e.g. Head Office, Jeddah Branch{% endif %}">
           <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
             {% if ar %}اسم الفرع أو وحدة العمل التي تُصدر لها هذه الشهادة. استخدم قيمة مختلفة لكل فرع/جهاز يحتاج شهادته الخاصة.{% else %}The branch or business unit this certificate/device is being issued for. Use a distinct value per branch or device that needs its own CSID.{% endif %}
@@ -94,11 +94,14 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
         </div>
         <div class="zs-item">
           <label>{% if ar %}الموقع{% else %}Location{% endif %}</label>
-          <input type="text" id="zs_location" value="{{ settings.csr_location or '' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+          <input type="text" id="zs_location" value="{{ settings.csr_location or (owner.short_address if owner else '') or '' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+          <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+            {% if ar %}يُعبَّأ تلقائياً من العنوان المختصر لبيانات المالك، ويمكن تغييره.{% else %}Defaults from the Owner's Short Address; can be changed.{% endif %}
+          </div>
         </div>
         <div class="zs-item">
           <label>{% if ar %}النشاط{% else %}Industry / Business Category{% endif %}</label>
-          <input type="text" id="zs_industry" value="{{ settings.csr_industry or '' }}" {{ 'readonly' if settings.csr_pem else '' }}>
+          <input type="text" id="zs_industry" value="{{ settings.csr_industry or 'General Contracting' }}" {{ 'readonly' if settings.csr_pem else '' }}>
         </div>
         <div class="zs-item">
           <label>Invoice Type Flags</label>
@@ -319,7 +322,6 @@ function saveEnvironment() {
   const fd = new FormData();
   fd.set('csrf_token', CSRF);
   fd.set('environment', document.getElementById('zs_environment').value);
-  fd.set('csr_common_name', document.getElementById('zs_common_name').value);
   fd.set('csr_organization_unit', document.getElementById('zs_org_unit').value);
   fd.set('csr_location', document.getElementById('zs_location').value);
   fd.set('csr_industry', document.getElementById('zs_industry').value);

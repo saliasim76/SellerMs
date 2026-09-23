@@ -92,14 +92,21 @@ def zatca_save_environment():
     # generated -- once generated, the CSR itself is the record of truth
     # and must never silently drift from what was submitted to ZATCA.
     if not settings.csr_pem:
-        settings.csr_common_name = request.form.get('csr_common_name', '').strip()
+        # Common Name always mirrors the Owner's Organization Name -- not a
+        # separate user-editable value, exactly like organization_identity/
+        # organization_name below (never taken from the submitted form).
+        settings.csr_common_name = (owner.name if owner else '') or ''
         settings.csr_organization_identity = (owner.vat_number if owner else '') or ''
-        settings.csr_organization_unit = request.form.get('csr_organization_unit', '').strip()
+        # Organizational Unit / Location / Industry each have a sensible
+        # default (Main Branch / the Owner's Short Address / General
+        # Contracting) but stay fully user-editable -- an explicit value
+        # submitted from the form always wins over the default.
+        settings.csr_organization_unit = request.form.get('csr_organization_unit', '').strip() or 'Main Branch'
         settings.csr_organization_name = (owner.name if owner else '') or ''
         settings.csr_country = request.form.get('csr_country', 'SA').strip() or 'SA'
         settings.csr_invoice_type = request.form.get('csr_invoice_type', '1100').strip() or '1100'
-        settings.csr_location = request.form.get('csr_location', '').strip()
-        settings.csr_industry = request.form.get('csr_industry', '').strip()
+        settings.csr_location = request.form.get('csr_location', '').strip() or (owner.short_address if owner else '') or ''
+        settings.csr_industry = request.form.get('csr_industry', '').strip() or 'General Contracting'
 
     settings.updated_at = datetime.utcnow()
     settings.updated_by = current_user.id
