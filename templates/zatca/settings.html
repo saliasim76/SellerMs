@@ -104,6 +104,14 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
           <input type="text" id="zs_industry" value="{{ settings.csr_industry or 'General Contracting' }}" {{ 'readonly' if settings.csr_pem else '' }}>
         </div>
         <div class="zs-item">
+          <label>{% if ar %}الدولة{% else %}Country{% endif %}</label>
+          <input type="text" id="zs_country" maxlength="2" style="text-transform:uppercase;"
+                 value="{{ settings.csr_country or country_default }}" {{ 'readonly' if settings.csr_pem else '' }}>
+          <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+            {% if ar %}رمز الدولة المكوّن من حرفين (ISO). يُعبَّأ تلقائياً من دولة عنوان المالك، ويمكن تغييره.{% else %}Two-letter ISO country code. Defaults from the Owner's address Country; can be changed.{% endif %}
+          </div>
+        </div>
+        <div class="zs-item">
           <label>Invoice Type Flags</label>
           <input type="text" id="zs_invoice_type" value="{{ settings.csr_invoice_type or '1100' }}" {{ 'readonly' if settings.csr_pem else '' }}>
         </div>
@@ -325,6 +333,7 @@ function saveEnvironment() {
   fd.set('csr_organization_unit', document.getElementById('zs_org_unit').value);
   fd.set('csr_location', document.getElementById('zs_location').value);
   fd.set('csr_industry', document.getElementById('zs_industry').value);
+  fd.set('csr_country', document.getElementById('zs_country').value);
   fd.set('csr_invoice_type', document.getElementById('zs_invoice_type').value);
   fetch('/zatca/settings/save-environment', {method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd})
     .then(r => r.json()).then(d => {

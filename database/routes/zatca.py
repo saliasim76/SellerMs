@@ -43,6 +43,18 @@ def zatca_settings_query():
     return ZatcaSettings.query.filter_by(customer_id=_customer_scope_id())
 
 
+def _country_code_default(owner):
+    """A 2-letter ISO country code to default the CSR's Country field to,
+    derived from the Owner's own address Country when that's already a
+    plausible code (e.g. an Owner record that stores 'SA' directly rather
+    than the full 'Saudi Arabia' name) -- otherwise 'SA', since ZATCA
+    e-invoicing only ever applies to a Saudi-registered taxpayer anyway."""
+    raw = ((owner.country if owner else '') or '').strip().upper()
+    if len(raw) == 2 and raw.isalpha():
+        return raw
+    return 'SA'
+
+
 def _get_or_build_settings():
     """The current customer's one ZatcaSettings row, created (but not yet
     persisted) on first view so the settings page always has something to
@@ -72,7 +84,8 @@ def zatca_settings_page():
     owner = Owner.query.first()
     live_enabled = bool(current_app.config.get('ZATCA_LIVE_CALLS_ENABLED'))
     return render_template('zatca/settings.html', settings=settings, history=history,
-                           owner=owner, live_enabled=live_enabled)
+                           owner=owner, live_enabled=live_enabled,
+                           country_default=_country_code_default(owner))
 
 
 @zatca_bp.route('/zatca/settings/save-environment', methods=['POST'])
@@ -103,7 +116,11 @@ def zatca_save_environment():
         # submitted from the form always wins over the default.
         settings.csr_organization_unit = request.form.get('csr_organization_unit', '').strip() or 'Main Branch'
         settings.csr_organization_name = (owner.name if owner else '') or ''
-        settings.csr_country = request.form.get('csr_country', 'SA').strip() or 'SA'
+        # Country: defaults from the Owner's own address Country (when
+        # that's already a plausible 2-letter code) or 'SA' otherwise --
+        # see _country_code_default() -- but stays fully user-editable.
+        country_in = request.form.get('csr_country', '').strip().upper()
+        settings.csr_country = (country_in or _country_code_default(owner))[:2]
         settings.csr_invoice_type = request.form.get('csr_invoice_type', '1100').strip() or '1100'
         settings.csr_location = request.form.get('csr_location', '').strip() or (owner.short_address if owner else '') or ''
         settings.csr_industry = request.form.get('csr_industry', '').strip() or 'General Contracting'
