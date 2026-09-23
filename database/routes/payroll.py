@@ -42,7 +42,7 @@ from sqlalchemy import func, case, literal, text
 
 from models import (
     db, SalaryConsolidation, Employee, EmployeeWorkAllocation,
-    EmployeeBank, BuyerMaster, BuyerDepartment, ActivityLog, next_payroll_id,
+    EmployeeBank, EmployeeAllowance, BuyerMaster, BuyerDepartment, ActivityLog, next_payroll_id,
     LevelFive, NoActiveFinancialYearError,
 )
 from database.routes.employees import _emp_profession_str
@@ -479,6 +479,36 @@ def _employee_snapshot(e):
         po_rate=_num(getattr(e, 'po_rate', 0)),
         po_ot_rate=_num(getattr(e, 'po_ot_rate', 0)),
         services_charges=_num(getattr(e, 'services_charges', 0)),
+        **_employee_allowance_breakdown(e.id),
+    )
+
+
+# Matched case-insensitively against EmployeeAllowance.name (falling back to
+# its AllowanceType's own name) -- an admin adds/renames allowance types
+# freely, but these three specific ones get their own payroll columns.
+_ALLOWANCE_BREAKDOWN_TYPES = ('food', 'house rent', 'transportation')
+
+
+def _employee_allowance_breakdown(emp_id):
+    """Food / House Rent / Transportation, read from this employee's own
+    EmployeeAllowance rows -- a breakdown of the SAME total the 'allowance'
+    field above already carries (Employee.total_allowances), so adding
+    these three never changes that total or any salary/OT/invoice formula
+    in _recalc(). An employee with no EmployeeAllowance row for one of
+    these three types gets 0 for it, never left blank."""
+    rows = (EmployeeAllowance.query
+            .filter_by(employee_id=emp_id)
+            .all())
+    found = {}
+    for a in rows:
+        label = a.name or (a.allowance_type.allowance_name_en if a.allowance_type else '')
+        key = (label or '').strip().lower()
+        if key in _ALLOWANCE_BREAKDOWN_TYPES and key not in found:
+            found[key] = _num(a.amount)
+    return dict(
+        food=found.get('food', 0.0),
+        house_rent=found.get('house rent', 0.0),
+        transportation=found.get('transportation', 0.0),
     )
 
 

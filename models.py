@@ -4630,6 +4630,14 @@ class SalaryConsolidation(db.Model):
     day_hour              = db.Column(db.Numeric(10, 2), default=0)      # working hours per day
     basic_salary          = db.Column(db.Numeric(12, 2), default=0)
     allowance             = db.Column(db.Numeric(12, 2), default=0)
+    # Breakdown of the SAME total already carried by `allowance` above
+    # (Employee.total_allowances) -- these three never change that total or
+    # any salary/OT/invoice formula in _recalc(); an employee with no
+    # EmployeeAllowance row of one of these three types gets 0, never blank
+    # (see _employee_allowance_breakdown() in database/routes/payroll.py).
+    food                  = db.Column(db.Numeric(12, 2), default=0)
+    house_rent            = db.Column(db.Numeric(12, 2), default=0)
+    transportation        = db.Column(db.Numeric(12, 2), default=0)
     days                  = db.Column(db.Integer, default=0)
     fridays               = db.Column(db.Integer, default=0)
     holidays              = db.Column(db.Integer, default=0)
@@ -4692,6 +4700,9 @@ class SalaryConsolidation(db.Model):
             'day_hour': _f(self.day_hour),
             'basic_salary': _f(self.basic_salary),
             'allowance': _f(self.allowance),
+            'food': _f(self.food),
+            'house_rent': _f(self.house_rent),
+            'transportation': _f(self.transportation),
             'days': self.days or 0,
             'fridays': self.fridays or 0,
             'holidays': self.holidays or 0,
@@ -5718,6 +5729,9 @@ def ensure_schema():
         ('sales_invoices', 'project_ref', 'VARCHAR(150)'),
         ('employee_work_allocation', 'salary_order', 'INTEGER DEFAULT 1'),
         ('owners', 'short_address', 'VARCHAR(20)'),
+        ('salary_consolidation', 'food', 'DECIMAL(12,2) DEFAULT 0'),
+        ('salary_consolidation', 'house_rent', 'DECIMAL(12,2) DEFAULT 0'),
+        ('salary_consolidation', 'transportation', 'DECIMAL(12,2) DEFAULT 0'),
     ]
 
     def table_exists(table):
