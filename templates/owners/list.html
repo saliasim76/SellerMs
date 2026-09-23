@@ -363,6 +363,7 @@ input[type=color].c-swatch{width:40px;height:38px;padding:2px;border:1.5px solid
               </div>
               <div class="fg-2">
                 <div><div class="mono-lbl">{{ dual('postal_code') }}</div><input type="text" name="postal_code" id="f_postal" class="sf-inp" dir="ltr"></div>
+                <div><div class="mono-lbl">{{ dual('short_address') }}</div><input type="text" name="short_address" id="f_short_address" class="sf-inp" dir="ltr" maxlength="20" placeholder="e.g. RRRD2929" data-no-propercase></div>
               </div>
             </div><!-- /body-address -->
           </div><!-- /sec-address -->
@@ -1080,7 +1081,7 @@ let currentOwnerId=null;
 function clearAllFields(){
   const ids=['f_name_p','f_name_s','f_vat','f_crn','f_phone','f_fax','f_email','f_website',
              'f_country_p','f_country_s','f_city_p','f_city_s','f_district_p','f_district_s',
-             'f_street_p','f_street_s','f_building','f_additional','f_postal',
+             'f_street_p','f_street_s','f_building','f_additional','f_postal','f_short_address',
              'f_smtp_host','f_smtp_username','f_smtp_password'];
   ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const sp=document.getElementById('f_smtp_port');if(sp)sp.value='587';
@@ -1145,6 +1146,7 @@ function openEditModal(id){
     document.getElementById('f_building').value   = d.building_number||'';
     document.getElementById('f_additional').value = d.additional_number||'';
     document.getElementById('f_postal').value     = d.postal_code||'';
+    document.getElementById('f_short_address').value = d.short_address||'';
     const sl=document.getElementById('f_second_language');if(sl)sl.value=d.second_language||'Arabic';
     const pt=document.getElementById('f_sinv_print_template');if(pt)pt.value=d.sinv_print_template||'formal';
     _banks=(d.banks||[]).map(b=>({...b,bank_name_ar:b.bank_name_ar||'',_dbId:b.id}));

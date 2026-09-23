@@ -136,6 +136,10 @@ class Owner(db.Model):
     district            = db.Column(db.String(100))
     city                = db.Column(db.String(100))
     postal_code         = db.Column(db.String(20))
+    # National Address "short address" code (e.g. "RRRD2929") -- a fixed
+    # alphanumeric code, not bilingual text, so it has no matching _ar
+    # column unlike street_name/district/city/country above.
+    short_address       = db.Column(db.String(20))
     country             = db.Column(db.String(100), default='Saudi Arabia')
     street_name_ar      = db.Column(db.Unicode(200))
     district_ar         = db.Column(db.Unicode(100))
@@ -5713,6 +5717,7 @@ def ensure_schema():
         ('sales_invoices', 'to_date',   'DATE'),
         ('sales_invoices', 'project_ref', 'VARCHAR(150)'),
         ('employee_work_allocation', 'salary_order', 'INTEGER DEFAULT 1'),
+        ('owners', 'short_address', 'VARCHAR(20)'),
     ]
 
     def table_exists(table):

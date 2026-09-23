@@ -136,6 +136,7 @@ CAPTIONS = {
     'building_no':          {'en': 'Building No.', 'ar': 'رقم المبنى', 'fr': 'N° de bâtiment', 'ur': 'عمارت نمبر', 'hi': 'भवन संख्या', 'bn': 'ভবন নম্বর'},
     'additional_no':        {'en': 'Additional No.', 'ar': 'رقم إضافي', 'fr': 'N° complémentaire', 'ur': 'اضافی نمبر', 'hi': 'अतिरिक्त संख्या', 'bn': 'অতিরিক্ত নম্বর'},
     'postal_code':          {'en': 'Postal Code', 'ar': 'الرمز البريدي', 'fr': 'Code postal', 'ur': 'پوسٹل کوڈ', 'hi': 'डाक कोड', 'bn': 'পোস্টাল কোড'},
+    'short_address':        {'en': 'Short Address', 'ar': 'العنوان المختصر', 'fr': 'Adresse courte', 'ur': 'مختصر پتہ', 'hi': 'संक्षिप्त पता', 'bn': 'সংক্ষিপ্ত ঠিকানা'},
     'primary':              {'en': 'Primary', 'ar': 'رئيسي', 'fr': 'Principal', 'ur': 'بنیادی', 'hi': 'प्राथमिक', 'bn': 'প্রাথমিক'},
     'select_placeholder':   {'en': '-- Select --', 'ar': '-- اختر --', 'fr': '-- Sélectionner --', 'ur': '-- منتخب کریں --', 'hi': '-- चुनें --', 'bn': '-- নির্বাচন করুন --'},
     'doc_name_example':     {'en': 'e.g. Trade License 2025', 'ar': 'مثال: رخصة 2025', 'fr': 'ex. Licence commerciale 2025', 'ur': 'مثلاً: تجارتی لائسنس 2025', 'hi': 'उदा. व्यापार लाइसेंस 2025', 'bn': 'যেমন: ট্রেড লাইসেন্স ২০২৫'},

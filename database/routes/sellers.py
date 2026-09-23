@@ -414,6 +414,7 @@ def add_owner():
         city                 = request.form.get('city',             '').strip(),
         city_ar              = request.form.get('city_ar',          '').strip(),
         postal_code          = request.form.get('postal_code',      '').strip(),
+        short_address        = request.form.get('short_address',   '').strip(),
         country              = request.form.get('country', 'Saudi Arabia').strip(),
         country_ar           = request.form.get('country_ar',       '').strip(),
         second_language      = _resolve_second_language(),
@@ -513,8 +514,9 @@ def owner_json(id):
         'district_ar':          g('district_ar'),
         'city':                  g('city'),              
         'city_ar':              g('city_ar'),
-        'postal_code':           g('postal_code'),       
-        'country':               g('country'),           
+        'postal_code':           g('postal_code'),
+        'short_address':         g('short_address'),
+        'country':               g('country'),
         'country_ar':           g('country_ar'),
         'status':                g('status'),
         'second_language':       g('second_language') or 'Arabic',
@@ -562,6 +564,7 @@ def edit_owner(id):
     owner.city                 = request.form.get('city',             '').strip()
     owner.city_ar              = request.form.get('city_ar',          '').strip()
     owner.postal_code          = request.form.get('postal_code',      '').strip()
+    owner.short_address        = request.form.get('short_address',    '').strip()
     owner.country              = request.form.get('country',          '').strip()
     owner.country_ar           = request.form.get('country_ar',       '').strip()
     owner.second_language      = _resolve_second_language(owner.second_language)

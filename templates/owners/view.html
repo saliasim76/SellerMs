@@ -252,6 +252,10 @@
         <span class="sv-info-value">{{ owner.postal_code or '—' }}</span>
       </div>
       <div class="sv-info-row">
+        <span class="sv-info-label">{{ t('short_address') }}</span>
+        <span class="sv-info-value">{{ owner.short_address or '—' }}</span>
+      </div>
+      <div class="sv-info-row">
         <span class="sv-info-label">{{ t('country') }}</span>
         <span class="sv-info-value">{{ owner.country or '—' }}</span>
       </div>
@@ -292,6 +296,10 @@
       <div class="sv-info-row" style="direction:rtl;">
         <span class="sv-info-label" style="text-align:right;">{{ t('postal_code') }}</span>
         <span class="sv-info-value">{{ owner.postal_code or '—' }}</span>
+      </div>
+      <div class="sv-info-row" style="direction:rtl;">
+        <span class="sv-info-label" style="text-align:right;">{{ t('short_address') }}</span>
+        <span class="sv-info-value">{{ owner.short_address or '—' }}</span>
       </div>
       <div class="sv-info-row" style="direction:rtl;">
         <span class="sv-info-label" style="text-align:right;">{{ t('country') }}</span>
