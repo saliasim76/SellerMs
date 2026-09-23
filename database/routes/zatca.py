@@ -121,6 +121,22 @@ def zatca_generate_csr():
             'A CSR already exists. Onboarding does not support regenerating it once issued.',
             'توجد بالفعل طلب توقيع شهادة (CSR). لا يمكن إعادة إنشائه بعد إصداره.')}), 400
 
+    # ZATCA's organizationIdentifier (the CSR's UID attribute, OID
+    # 0.9.2342.19200300.100.1.1 -- see engine.py) must be exactly the
+    # 15-digit VAT registration number, or ZATCA's Compliance CSID endpoint
+    # rejects the CSR outright. Caught here, before a keypair/CSR is even
+    # generated, rather than surfacing as a confusing 'Invalid-CSR' only
+    # once request-compliance-csid is called with an OTP.
+    org_id = (settings.csr_organization_identity or '').strip()
+    if not (len(org_id) == 15 and org_id.isdigit()):
+        return jsonify({'ok': False, 'error': _t(
+            f'The organization identifier (VAT number) must be exactly 15 digits to generate a valid CSR '
+            f'-- currently "{org_id or "(empty)"}" ({len(org_id)} character(s)). '
+            f'Fix the VAT Number on the Owner record, then save the environment/CSR subject fields again.',
+            f'يجب أن يتكون الرقم التعريفي للمنشأة (الرقم الضريبي) من 15 رقمًا بالضبط لإنشاء CSR صالح '
+            f'-- القيمة الحالية "{org_id or "(فارغ)"}" ({len(org_id)} رقم/حرف). '
+            f'يرجى تصحيح الرقم الضريبي في سجل المنشأة، ثم حفظ بيانات البيئة وموضوع الشهادة مرة أخرى.')}), 400
+
     # EGS serial number is ZATCA's own auto-generated device identifier
     # (its spec: "Automatically filled and not by the taxpayer"), format
     # "1-<solution name>|2-<version>|3-<uuid>" -- generated once and then
