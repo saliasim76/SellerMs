@@ -145,6 +145,38 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
   </div>
 
   <div class="zs-card">
+    <div class="zs-hdr">{% if ar %}شهادة الامتثال (Compliance CSID){% else %}Compliance CSID{% endif %}</div>
+    <div class="zs-body">
+      {% if settings.has_compliance_csid %}
+        <p style="font-size:12.5px;color:#15803d;"><i class="fas fa-check-circle me-1"></i>{% if ar %}تم الحصول على شهادة الامتثال.{% else %}Compliance CSID has been issued.{% endif %}</p>
+      {% elif settings.has_csr %}
+        <p style="font-size:12.5px;color:#6b7280;">
+          {% if ar %}أدخل رمز التحقق (OTP) الذي حصلت عليه من بوابة فاتورة (Fatoora) لهذه البيئة.{% else %}Enter the OTP you obtained from the Fatoora portal for this environment.{% endif %}
+        </p>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div class="zs-item" style="max-width:220px;">
+            <label>OTP</label>
+            <input type="text" id="zs_otp" placeholder="000000">
+          </div>
+          <button type="button" class="zs-btn" onclick="requestComplianceCsid()"><i class="fas fa-certificate"></i>{% if ar %}طلب شهادة الامتثال{% else %}Request Compliance CSID{% endif %}</button>
+        </div>
+      {% else %}
+        <p style="font-size:12.5px;color:#9ca3af;">{% if ar %}أنشئ CSR أولاً.{% else %}Generate a CSR first.{% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="zs-card">
+    <div class="zs-hdr">{% if ar %}فحوصات الامتثال وشهادة الإنتاج{% else %}Compliance Checks &amp; Production CSID{% endif %}</div>
+    <div class="zs-body">
+      <p style="font-size:12.5px;color:#9ca3af;">
+        {% if ar %}هذه الخطوة جزء من المرحلة الثانية (الإرسال المباشر) ولم يتم تفعيلها بعد لهذا النظام.{% else %}This step is part of Phase 2 (live submission) and is not yet enabled for this deployment.{% endif %}
+      </p>
+      <button type="button" class="zs-btn" disabled><i class="fas fa-lock"></i>{% if ar %}معطل{% else %}Disabled until Phase 2{% endif %}</button>
+    </div>
+  </div>
+
+  <div class="zs-card">
     <button type="button" class="zs-hdr zs-hdr-collapsible" onclick="toggleZsSection(this)" style="width:100%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;text-align:left;">
       <span>{% if ar %}استيراد شهادة موجودة (شهادة فعلية/إنتاج){% else %}Import an Existing Certificate{% endif %}</span>
       <i class="fas fa-chevron-down" style="font-size:11px;transition:transform .15s;"></i>
@@ -207,38 +239,6 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
           <i class="fas fa-file-import"></i>{% if ar %}استيراد الشهادة{% else %}Import Certificate{% endif %}
         </button>
       </div>
-    </div>
-  </div>
-
-  <div class="zs-card">
-    <div class="zs-hdr">{% if ar %}شهادة الامتثال (Compliance CSID){% else %}Compliance CSID{% endif %}</div>
-    <div class="zs-body">
-      {% if settings.has_compliance_csid %}
-        <p style="font-size:12.5px;color:#15803d;"><i class="fas fa-check-circle me-1"></i>{% if ar %}تم الحصول على شهادة الامتثال.{% else %}Compliance CSID has been issued.{% endif %}</p>
-      {% elif settings.has_csr %}
-        <p style="font-size:12.5px;color:#6b7280;">
-          {% if ar %}أدخل رمز التحقق (OTP) الذي حصلت عليه من بوابة فاتورة (Fatoora) لهذه البيئة.{% else %}Enter the OTP you obtained from the Fatoora portal for this environment.{% endif %}
-        </p>
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-          <div class="zs-item" style="max-width:220px;">
-            <label>OTP</label>
-            <input type="text" id="zs_otp" placeholder="000000">
-          </div>
-          <button type="button" class="zs-btn" onclick="requestComplianceCsid()"><i class="fas fa-certificate"></i>{% if ar %}طلب شهادة الامتثال{% else %}Request Compliance CSID{% endif %}</button>
-        </div>
-      {% else %}
-        <p style="font-size:12.5px;color:#9ca3af;">{% if ar %}أنشئ CSR أولاً.{% else %}Generate a CSR first.{% endif %}</p>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="zs-card">
-    <div class="zs-hdr">{% if ar %}فحوصات الامتثال وشهادة الإنتاج{% else %}Compliance Checks &amp; Production CSID{% endif %}</div>
-    <div class="zs-body">
-      <p style="font-size:12.5px;color:#9ca3af;">
-        {% if ar %}هذه الخطوة جزء من المرحلة الثانية (الإرسال المباشر) ولم يتم تفعيلها بعد لهذا النظام.{% else %}This step is part of Phase 2 (live submission) and is not yet enabled for this deployment.{% endif %}
-      </p>
-      <button type="button" class="zs-btn" disabled><i class="fas fa-lock"></i>{% if ar %}معطل{% else %}Disabled until Phase 2{% endif %}</button>
     </div>
   </div>
 
