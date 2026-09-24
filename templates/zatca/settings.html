@@ -57,7 +57,7 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
     <div class="zs-step {{ 'done' if stage != 'not_started' else 'active' }}">1. {% if ar %}إنشاء CSR{% else %}Generate CSR{% endif %}</div>
     <div class="zs-step {{ 'done' if stage in ('compliance_checks_passed','production_csid_issued') else ('active' if stage=='csr_generated' else '') }}">2. {% if ar %}شهادة الامتثال{% else %}Compliance CSID{% endif %}</div>
     <div class="zs-step {{ 'done' if stage=='production_csid_issued' else ('active' if stage=='compliance_csid_issued' else '') }}">3. {% if ar %}فحوصات الامتثال{% else %}Compliance Checks{% endif %}</div>
-    <div class="zs-step {{ 'active' if stage=='production_csid_issued' else '' }}">4. {% if ar %}شهادة الإنتاج{% else %}Production CSID{% endif %}</div>
+    <div class="zs-step {{ 'done' if stage=='production_csid_issued' else '' }}">4. {% if ar %}شهادة الإنتاج{% else %}Production CSID{% endif %}</div>
   </div>
 
   <div class="zs-card">
@@ -137,6 +137,11 @@ table.zs-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;}
           <a href="{{ url_for('zatca.zatca_csr_download') }}" class="zs-btn" style="background:#374151;text-decoration:none;"><i class="fas fa-download"></i>{% if ar %}تنزيل CSR{% else %}Download CSR{% endif %}</a>
           <button type="button" class="zs-btn" style="background:#b91c1c;" onclick="clearCsr()"><i class="fas fa-trash-alt"></i>{% if ar %}مسح CSR{% else %}Clear CSR{% endif %}</button>
         </div>
+      {% elif settings.has_private_key %}
+        <p style="font-size:12.5px;color:#6b7280;">
+          {% if ar %}يوجد مفتاح خاص محفوظ (من شهادة مستوردة عبر "استيراد شهادة موجودة")، لكن لا يوجد طلب توقيع شهادة (CSR) مطابق له -- وهذا لا يمنع توقيع الفواتير. لا تُنشئ مفتاحاً جديداً هنا، لأن ذلك سيستبدل المفتاح الحالي ويُعطّل الشهادة المستوردة.
+          {% else %}A private key is on file (from an imported certificate via "Import an Existing Certificate"), but there's no matching CSR for it -- that's fine, it doesn't stop invoices from signing. Don't generate a new keypair here; it would replace the current key and break the imported certificate.{% endif %}
+        </p>
       {% else %}
         <p style="font-size:12.5px;color:#6b7280;">{% if ar %}احفظ الحقول أعلاه ثم أنشئ المفتاح وطلب توقيع الشهادة (CSR). يمكنك مسحه لاحقاً وإعادة إنشائه إذا احتجت.{% else %}Save the fields above, then generate the keypair and CSR. You can clear it and generate a fresh one later if you need to.{% endif %}</p>
         <button type="button" class="zs-btn" onclick="generateCsr()"><i class="fas fa-key"></i>{% if ar %}إنشاء المفتاح وCSR{% else %}Generate Keypair &amp; CSR{% endif %}</button>

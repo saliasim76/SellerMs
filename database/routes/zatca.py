@@ -144,6 +144,21 @@ def zatca_generate_csr():
         return jsonify({'ok': False, 'error': _t(
             'A CSR already exists. Onboarding does not support regenerating it once issued.',
             'توجد بالفعل طلب توقيع شهادة (CSR). لا يمكن إعادة إنشائه بعد إصداره.')}), 400
+    if settings.private_key_pem_enc:
+        # A private key already on file (from "Import an Existing
+        # Certificate") with no matching CSR is a perfectly valid, working
+        # state -- the certificate that key was issued against still signs
+        # invoices fine without one. Generating a fresh keypair here would
+        # silently REPLACE that private key with an unrelated new one,
+        # breaking every certificate already issued against the imported
+        # key with no warning at all.
+        return jsonify({'ok': False, 'error': _t(
+            'A private key already exists on file (from an imported certificate). '
+            'Generating a new keypair here would replace it and break that certificate. '
+            'Clear the imported certificate first if you really want to start over with a new CSR.',
+            'يوجد مفتاح خاص محفوظ مسبقًا (من شهادة مستوردة). سيؤدي إنشاء زوج مفاتيح جديد هنا إلى '
+            'استبداله وتعطيل تلك الشهادة. احذف الشهادة المستوردة أولاً إذا كنت تريد بالفعل البدء من جديد '
+            'بطلب توقيع شهادة (CSR) جديد.')}), 400
 
     # ZATCA's organizationIdentifier (the CSR's UID attribute, OID
     # 0.9.2342.19200300.100.1.1 -- see engine.py) must be exactly the

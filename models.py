@@ -328,6 +328,10 @@ class ZatcaSettings(db.Model):
     def has_production_csid(self):
         return bool(self.production_csid_binary)
 
+    @property
+    def has_private_key(self):
+        return bool(self.private_key_pem_enc)
+
     def to_dict(self):
         cert_type, _, _ = self.active_csid()
         return {
@@ -342,6 +346,7 @@ class ZatcaSettings(db.Model):
             'csr_location': self.csr_location or '',
             'csr_industry': self.csr_industry or '',
             'has_csr': self.has_csr,
+            'has_private_key': self.has_private_key,
             'has_compliance_csid': self.has_compliance_csid,
             'has_production_csid': self.has_production_csid,
             'active_csid_type': cert_type,
