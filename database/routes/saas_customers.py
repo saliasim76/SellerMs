@@ -130,8 +130,18 @@ def add_saas_customer():
     email = (f.get('email') or '').strip().lower()
     mobile = (f.get('mobile') or '').strip()
     is_trial = f.get('is_trial') == 'on'
+    is_lifetime = f.get('lifetime') == 'on'
     billing_cycle = 'trial' if is_trial else (f.get('billing_cycle') or 'monthly')
-    end_date = (datetime.utcnow() + timedelta(days=14)) if is_trial else _parse_date(f.get('end_date'))
+    # Lifetime means end_date=None explicitly (see customer_active_rbac_modules/
+    # customer_module_expiry_info in rbac.py -- a None end_date already means
+    # "never expires" there) -- checked here rather than inferred from a blank
+    # date field, so it's a deliberate choice, not an accidental omission.
+    if is_trial:
+        end_date = datetime.utcnow() + timedelta(days=14)
+    elif is_lifetime:
+        end_date = None
+    else:
+        end_date = _parse_date(f.get('end_date'))
     access_mode = f.get('access_mode') if f.get('access_mode') in ('basic', 'expert') else 'expert'
     custom_db_name = (f.get('database_name') or '').strip()
     # Creating the customer and creating its physical database are two separate
@@ -364,7 +374,16 @@ def edit_saas_customer(id):
     subscription = Subscription.query.filter_by(customer_id=customer.id).order_by(Subscription.id.desc()).first()
     if subscription:
         subscription.billing_cycle = f.get('billing_cycle') or subscription.billing_cycle
-        subscription.end_date = _parse_date(f.get('end_date')) or subscription.end_date
+        # Lifetime is a deliberate, explicit choice (the checkbox), not
+        # inferred from a blank date field -- otherwise there'd be no way
+        # to convert an existing dated subscription TO lifetime here: a
+        # blank end_date on its own falls back to keeping whatever end_date
+        # was already there, so an accidentally-cleared field never
+        # silently wipes out a real expiry.
+        if f.get('lifetime') == 'on':
+            subscription.end_date = None
+        else:
+            subscription.end_date = _parse_date(f.get('end_date')) or subscription.end_date
         _set_subscription_modules(subscription, f)
         subscription.total_amount = sum(
             (sm.price or 0) for sm in SubscriptionModule.query.filter_by(subscription_id=subscription.id).all()

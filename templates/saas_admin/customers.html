@@ -69,7 +69,7 @@
             </div>
             {% endif %}
           </td>
-          <td>{{ d.end_date or '—' }}</td>
+          <td>{{ d.end_date or (('مدى الحياة' if ar else 'Lifetime') if d.billing_cycle != 'trial' else '—') }}</td>
           <td style="font-size:12px;color:#6b7280;">{{ d.modules|length }}</td>
           <td>
             <form method="POST" action="{{ url_for('saas_customers.toggle_saas_customer_status', id=c.id) }}" class="d-inline">
@@ -199,6 +199,12 @@
             <div class="col-md-6">
               <label class="form-label fw-semibold">{% if ar %}تاريخ الانتهاء{% else %}Subscription Expiry{% endif %}</label>
               <input type="date" name="end_date" id="sc_end_date" class="form-control">
+              <div class="form-check mt-1">
+                <input class="form-check-input" type="checkbox" name="lifetime" id="sc_lifetime" onchange="onLifetimeToggle()">
+                <label class="form-check-label" for="sc_lifetime" style="font-size:12px;">
+                  {% if ar %}مدى الحياة (بدون تاريخ انتهاء){% else %}Lifetime (no expiry){% endif %}
+                </label>
+              </div>
             </div>
             <div class="col-12" id="sc_db_setup">
               <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;">
@@ -429,6 +435,19 @@ async function testDbConnection() {
   }
 }
 
+// Lifetime just disables/clears the Subscription Expiry date -- a blank,
+// enabled date field looks unset by accident; a disabled one makes "this
+// subscription never expires" unambiguous. The backend only ever treats
+// end_date as None (lifetime) when this checkbox is actually submitted
+// checked, never merely because the date field happens to be blank (see
+// add_saas_customer/edit_saas_customer).
+function onLifetimeToggle() {
+  const cb = document.getElementById('sc_lifetime');
+  const dateEl = document.getElementById('sc_end_date');
+  dateEl.disabled = cb.checked;
+  if (cb.checked) dateEl.value = '';
+}
+
 function openAdd() {
   document.getElementById('scModalTitle').textContent = IS_AR ? 'إضافة عميل' : 'Add Customer';
   document.getElementById('scForm').action = '{{ url_for("saas_customers.add_saas_customer") }}';
@@ -442,6 +461,7 @@ function openAdd() {
   document.getElementById('sc_db_name_custom').checked = false;
   onDbMethodChange();
   toggleTrialMode(false);
+  onLifetimeToggle();
   _resetModules();
 }
 
@@ -454,6 +474,8 @@ function openEdit(id, c) {
   document.getElementById('sc_mobile').value = c.mobile;
   document.getElementById('sc_cycle').value = c.billing_cycle || 'monthly';
   document.getElementById('sc_end_date').value = c.end_date || '';
+  document.getElementById('sc_lifetime').checked = !c.end_date;
+  onLifetimeToggle();
   document.getElementById('sc_access_mode').value = c.access_mode || 'expert';
   document.getElementById('sc_trial_field').style.display = 'none';
   // Database Setup: the creation method is fixed once the customer exists (so
